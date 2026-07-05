@@ -1,0 +1,26 @@
+# Python bytecode
+__pycache__/
+*.pyc
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Simulation outputs — generated at runtime, do not track
+**/logs/
+**/plots/
+*.log
+
+# Repo-specific exclusions
+reference/
+trained_models/
+user_environment/
+homework/
+homework2/
+circuitikz/
+验收标准.md
+validation/
+
+
+CLAUDE.md
+.claude/
