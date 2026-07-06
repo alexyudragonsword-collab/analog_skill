@@ -29,7 +29,9 @@ def repo_root() -> Path:
 
 
 def is_frozen() -> bool:
-    return getattr(sys, 'frozen', False)
+    # sys.frozen: PyInstaller and Nuitka standalone both set it;
+    # __compiled__ exists in every Nuitka-compiled module as a fallback.
+    return bool(getattr(sys, 'frozen', False)) or '__compiled__' in globals()
 
 
 def _bundle_skill_dir() -> Path:

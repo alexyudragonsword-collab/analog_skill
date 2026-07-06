@@ -1,0 +1,137 @@
+name: Build Windows executables
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────────────
+  # Variant 1: PyInstaller (onedir, uses the repo's app.spec)
+  # ───────────────────────────────────────────────────────────────────────────
+  pyinstaller:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build with PyInstaller
+        run: pyinstaller app.spec --noconfirm
+
+      - name: Smoke test (offscreen)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        shell: pwsh
+        run: |
+          # windowed (console=False) exe: PowerShell does not wait for GUI
+          # subsystem binaries, so use Start-Process -Wait to get the exit code
+          $p = Start-Process -FilePath ".\dist\AnalogStudio\AnalogStudio.exe" `
+                             -ArgumentList "--smoke" -Wait -PassThru
+          if ($p.ExitCode -ne 0) {
+            Write-Error "smoke test failed with exit code $($p.ExitCode)"
+            exit 1
+          }
+
+      - name: Package zip
+        shell: pwsh
+        run: Compress-Archive -Path dist\AnalogStudio -DestinationPath AnalogStudio-windows-pyinstaller.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AnalogStudio-windows-pyinstaller
+          path: AnalogStudio-windows-pyinstaller.zip
+          if-no-files-found: error
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Variant 2: Nuitka (standalone, compiled to C)
+  # ───────────────────────────────────────────────────────────────────────────
+  nuitka:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install nuitka
+
+      - name: Cache Nuitka compilation
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\Nuitka\Nuitka\Cache
+          key: nuitka-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: nuitka-${{ runner.os }}-
+
+      - name: Build with Nuitka
+        shell: pwsh
+        # The skill asset trees are NOT passed via --include-data-dir:
+        # Nuitka refuses to ship .py files as data, and the trees are pure
+        # runtime source (imported from the synced workspace via sys.path).
+        # They are copied into the dist verbatim in the next step instead.
+        run: |
+          python -m nuitka `
+            --standalone `
+            --assume-yes-for-downloads `
+            --msvc=latest `
+            --enable-plugin=pyside6 `
+            --include-module=matplotlib.backends.backend_agg `
+            --include-module=matplotlib.backends.backend_qtagg `
+            --include-module=scipy.stats `
+            --include-package-data=matplotlib `
+            --windows-console-mode=disable `
+            --output-filename=AnalogStudio.exe `
+            --output-dir=build-nuitka `
+            app/main.py
+
+      - name: Bundle skill assets
+        shell: pwsh
+        # app/paths.py looks for <exe dir>/skill/{ngspice_assets,gmoverid_assets}
+        # and syncs them to a writable per-user workspace on first launch.
+        run: |
+          $dist = "build-nuitka\main.dist"
+          New-Item -ItemType Directory -Force -Path "$dist\skill" | Out-Null
+          Copy-Item -Recurse ngspice\assets  "$dist\skill\ngspice_assets"
+          Copy-Item -Recurse gmoverid\assets "$dist\skill\gmoverid_assets"
+          Get-ChildItem -Recurse "$dist\skill" -Include __pycache__,logs,plots -Directory |
+            Remove-Item -Recurse -Force
+          Rename-Item "$dist" "AnalogStudio"
+
+      - name: Smoke test (offscreen)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath ".\build-nuitka\AnalogStudio\AnalogStudio.exe" `
+                             -ArgumentList "--smoke" -Wait -PassThru
+          if ($p.ExitCode -ne 0) {
+            Write-Error "smoke test failed with exit code $($p.ExitCode)"
+            exit 1
+          }
+
+      - name: Package zip
+        shell: pwsh
+        run: Compress-Archive -Path build-nuitka\AnalogStudio -DestinationPath AnalogStudio-windows-nuitka.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AnalogStudio-windows-nuitka
+          path: AnalogStudio-windows-nuitka.zip
+          if-no-files-found: error
