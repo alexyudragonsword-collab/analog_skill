@@ -24,3 +24,8 @@ validation/
 
 CLAUDE.md
 .claude/
+# Analog Studio app
+app_output/
+build/
+dist/
+.pytest_cache/

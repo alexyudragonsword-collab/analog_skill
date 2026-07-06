@@ -4,7 +4,7 @@
 * Vds sweep: {vds_start} to {vds_stop} V  step {vds_step} V
 * ============================================================
 
-.include {model_path}
+.include "{model_path}"
 
 Vgs vgs 0 DC {vgs_v}
 Vds vds 0 DC 0
@@ -17,7 +17,7 @@ M1 vds vgs 0 0 {model} W={w_um}u L={l_um}u
 
 .control
   dc Vds {vds_start} {vds_stop} {vds_step}
-  wrdata {dat_path} v(vds) i(Vds)
+  wrdata '{dat_path}' v(vds) i(Vds)
   quit
 .endc
 

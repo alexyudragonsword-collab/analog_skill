@@ -5,7 +5,7 @@
 * Python computes |Vsd| = VDD - Vdrain
 * ============================================================
 
-.include {model_path}
+.include "{model_path}"
 
 * VDD rail (PMOS source and bulk)
 VDD  vdd   0   DC {vdd_v}
@@ -24,7 +24,7 @@ M1 drain gate vdd vdd {model} W={w_um}u L={l_um}u
 
 .control
   dc Vdrain {vd_start} {vd_stop} {vd_step}
-  wrdata {dat_path} v(drain) i(Vdrain)
+  wrdata '{dat_path}' v(drain) i(Vdrain)
   quit
 .endc
 
