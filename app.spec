@@ -33,6 +33,7 @@ def collect_tree(src: Path, dest_prefix: str):
 datas = (
     collect_tree(REPO / 'ngspice' / 'assets', 'skill/ngspice_assets')
     + collect_tree(REPO / 'gmoverid' / 'assets', 'skill/gmoverid_assets')
+    + collect_tree(REPO / 'app' / 'resources', 'app_resources')
 )
 
 a = Analysis(

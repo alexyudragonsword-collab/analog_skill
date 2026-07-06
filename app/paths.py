@@ -61,6 +61,21 @@ def _sync_tree(src: Path, dst: Path):
         ignore=shutil.ignore_patterns('__pycache__', 'logs', 'plots'))
 
 
+def resources_dir() -> Path:
+    """Location of app/resources (manual HTML + images).
+
+    Dev: next to this file.  Frozen: bundled as data under 'app_resources'
+    (PyInstaller: _internal/; Nuitka: next to the executable).
+    """
+    if is_frozen():
+        base = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
+        for cand in (base / 'app_resources',
+                     Path(sys.executable).parent / '_internal' / 'app_resources'):
+            if cand.is_dir():
+                return cand
+    return Path(__file__).resolve().parent / 'resources'
+
+
 def init_runtime():
     """Resolve asset roots, sync workspace if frozen, extend sys.path."""
     global _initialized, NGSPICE_ASSETS, GMOVERID_ASSETS, BROWSER_PLOTS

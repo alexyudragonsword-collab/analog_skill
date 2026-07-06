@@ -1,0 +1,163 @@
+<h1>Analog Studio User Manual</h1>
+
+<p><b>Analog Studio</b> is an analog IC design and simulation workbench built on
+the ngspice simulator and PTM (Predictive Technology Model) process models.
+It provides three tools: the gm/ID Designer, ngspice teaching examples, and a
+characteristic-curve browser.</p>
+
+<hr>
+
+<h2>1. Prerequisite: installing ngspice</h2>
+
+<p>The application relies on a system-installed <b>ngspice</b> simulator:</p>
+<ul>
+  <li><b>Windows</b>: download the zip from
+      <a href="https://ngspice.sourceforge.io">ngspice.sourceforge.io</a> and
+      extract the <code>Spice64/</code> folder next to the application exe
+      (zero configuration); or extract anywhere and set the path to
+      <code>ngspice.exe</code> in <b>Settings</b></li>
+  <li><b>Linux</b>: <code>sudo apt install ngspice</code></li>
+  <li><b>macOS</b>: <code>brew install ngspice</code></li>
+</ul>
+
+<p>After launching, check the <b>status bar at the bottom right</b>:</p>
+<ul>
+  <li><font color="#3fb950"><b>ngspice ✓</b></font> green — detected, ready to go</li>
+  <li><font color="#f85149"><b>ngspice ✗</b></font> red — not found; a red banner
+      appears at the top and run buttons are disabled. Click the indicator or
+      the <b>Locate…</b> button to open Settings and point to the executable</li>
+</ul>
+
+<hr>
+
+<h2>2. gm/ID Designer (first tab)</h2>
+
+<p align="center"><img src="img/tab1_gmid_designer.png" width="820"></p>
+
+<p>A transistor sizing tool based on the <b>gm/ID methodology</b>: the
+transconductance efficiency gm/ID is the pivot variable, and sizing is done
+with simulation-generated lookup tables instead of long-channel equations —
+accurate even in advanced nodes.</p>
+
+<h3>2.1 Building a lookup table</h3>
+<ol>
+  <li>In <b>Lookup table</b>, pick a process model (nmos180 / pmos180 /
+      nmos45hp / pmos45hp / nmos22hp / pmos22hp; VDD is shown in the
+      dropdown)</li>
+  <li>Set the reference width W (results are W-independent; the default
+      10 um is fine), channel length L, and Vds (check <b>auto</b> for
+      VDD/2)</li>
+  <li>Click <b>Build / Load Table</b>. The <b>first</b> build runs ngspice
+      sweeps (seconds to tens of seconds; progress streams into the log
+      panel). Results are cached — <b>subsequent</b> builds with the same
+      parameters load instantly (the log shows <code>[cache]</code>)</li>
+</ol>
+<p>Once built, the label below the button shows the table's valid range:
+gm/ID span, maximum fT, and gm·ro at gm/ID = 15. The right side displays four
+design charts — fT, Id/W (log scale), gm·ro, and Vgs &amp; Vov — all versus
+gm/ID.</p>
+
+<h3>2.2 Computing an operating point (sizing)</h3>
+<p>Pick one of three modes in the <b>Sizing</b> box:</p>
+<ul>
+  <li><b>Size by gm/ID</b>: specify gm/ID, then fix exactly one of Id, W, or
+      gm; the rest is solved. Example: gm/ID = 15, Id = 100 uA →
+      W ≈ 10 um</li>
+  <li><b>Size for fT ≥ target</b>: given a minimum fT, automatically selects
+      the <b>highest</b> gm/ID that still meets it — i.e. the lowest-power
+      operating point. Suited to bandwidth-constrained designs</li>
+  <li><b>Size for gm·ro ≥ target</b>: given a minimum intrinsic gain, again
+      picks the most power-efficient point. Suited to high-gain stages</li>
+</ul>
+<p>Click <b>Compute Operating Point</b>. The result appears in engineering
+units in the table at the bottom left (W, Id, gm, Vgs, Vov, fT, gm·ro, Id/W),
+and the operating point is marked on all four charts with a
+<font color="crimson"><b>red dashed line and dot</b></font>.
+<b>Copy as text</b> puts the result on the clipboard.</p>
+<p>If a target exceeds what the table can deliver (e.g. fT above the maximum),
+the error is shown inline in red — nothing crashes.</p>
+
+<hr>
+
+<h2>3. ngspice Examples (second tab)</h2>
+
+<p align="center"><img src="img/tab2_examples.png" width="820"></p>
+
+<p>Nine standard SPICE teaching examples covering DC, AC, transient and noise
+analyses:</p>
+<ol>
+  <li>Tran — RC charging (voltage and current)</li>
+  <li>DC — NMOS Id-Vds family of curves</li>
+  <li>AC/Noise — RC low-pass frequency response and output noise</li>
+  <li>Tran — sample-and-hold switch comparison (real NMOS vs ideal switch)</li>
+  <li>Tran — kT/C noise time-domain statistics (histogram + Gaussian fit)</li>
+  <li>DC — NMOS current mirror output characteristics</li>
+  <li>AC — common-source amplifier Bode plot</li>
+  <li>DC — transmission-gate on-resistance (180/45/22nm comparison)</li>
+</ol>
+
+<p><b>Usage</b>: select an example in the left list → adjust parameters in
+the form (resistances, capacitances, device sizes, bias voltages;
+<b>Reset defaults</b> restores them) → click <b>Run simulation</b>. The run
+executes in the background with live progress in the log panel; the resulting
+plot appears on the right when done.</p>
+<p>The plot viewer supports <b>wheel zoom</b> and <b>drag panning</b>;
+<b>Fit</b> refits the view, <b>Save as…</b> exports the PNG and
+<b>Open folder</b> reveals the output directory.</p>
+
+<hr>
+
+<h2>4. Curve Browser (third tab)</h2>
+
+<p align="center"><img src="img/tab3_browser.png" width="820"></p>
+
+<p>Generates standard characterization plots for any process model — useful
+for node comparison and device evaluation before design:</p>
+<ul>
+  <li><b>gm/ID four-quadrant</b>: gm/ID vs Vov (with the BJT limit and the
+      2/Vov asymptote), Id/W vs gm/ID, fT vs gm/ID, and gm·ro vs gm/ID, with
+      multiple Vds curves overlaid</li>
+  <li><b>IV characteristics</b>: Id-Vov in linear/log scale, full Id-Vgs
+      sweep, and the Id-Vds output family</li>
+  <li><b>Gate capacitances</b>: Cgg/Cgs/Cgd/Cgb vs Vgs (analytical model,
+      fast)</li>
+</ul>
+<p>Choose model, plot type, W and L, then click <b>Generate / Show</b>.
+Plots are cached per parameter set within the session;
+<b>Regenerate</b> forces a fresh simulation.</p>
+
+<hr>
+
+<h2>5. Log panel and job queue</h2>
+<p>The <b>Simulation log</b> panel at the bottom streams all simulation
+progress and ngspice output in real time; on failure it includes the error
+details plus the tail of the latest ngspice log file. The panel can be docked
+to the right or floated.</p>
+<p>All simulation jobs go through a single background queue and run
+<b>serially</b>: launching several jobs queues them in order, the UI stays
+responsive throughout, and the currently running job is shown at the left of
+the status bar.</p>
+
+<hr>
+
+<h2>6. Troubleshooting</h2>
+<table border="1" cellpadding="6" cellspacing="0">
+  <tr><th>Symptom</th><th>Remedy</th></tr>
+  <tr><td>Red banner "ngspice not found"</td>
+      <td>Install ngspice (section 1), or click Locate… and set the path
+          manually</td></tr>
+  <tr><td>Table build is slow</td>
+      <td>The first build runs full sweeps — that is normal. Identical
+          parameters hit the cache from the second time on (instant)</td></tr>
+  <tr><td>Sizing shows a red error</td>
+      <td>The target exceeds what this model/length can deliver; increase L
+          (raises gm·ro) or relax the target</td></tr>
+  <tr><td>A simulation fails</td>
+      <td>Check the error details in the log panel; common causes are missing
+          model files or parameters far outside a reasonable range</td></tr>
+</table>
+
+<p><br>Output locations: in development mode, <code>plots/</code> and
+<code>logs/</code> inside each toolkit directory; in the packaged build,
+under <code>AnalogStudio/workspace/</code> in the per-user data directory —
+the installation directory is never written to.</p>

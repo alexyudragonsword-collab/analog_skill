@@ -96,6 +96,7 @@ jobs:
             --include-module=matplotlib.backends.backend_qtagg `
             --include-module=scipy.stats `
             --include-package-data=matplotlib `
+            --include-data-dir=app/resources=app_resources `
             --windows-console-mode=disable `
             --output-filename=AnalogStudio.exe `
             --output-dir=build-nuitka `

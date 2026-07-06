@@ -1,0 +1,138 @@
+<h1>Analog Studio 用户手册</h1>
+
+<p><b>Analog Studio</b> 是一个模拟集成电路设计与仿真工作台,基于 ngspice 仿真器与
+PTM(Predictive Technology Model)工艺模型,提供三大功能:gm/ID 设计器、ngspice
+教学案例、特性曲线浏览器。</p>
+
+<hr>
+
+<h2>1. 准备工作:安装 ngspice</h2>
+
+<p>本软件依赖系统中的 <b>ngspice</b> 仿真器,请先安装:</p>
+<ul>
+  <li><b>Windows</b>:从
+      <a href="https://ngspice.sourceforge.io">ngspice.sourceforge.io</a>
+      下载 zip 包,将其中的 <code>Spice64/</code> 文件夹解压到本程序 exe
+      同级目录(免配置);或解压到任意位置后在
+      <b>设置</b> 中指定 <code>ngspice.exe</code> 的路径</li>
+  <li><b>Linux</b>:<code>sudo apt install ngspice</code></li>
+  <li><b>macOS</b>:<code>brew install ngspice</code></li>
+</ul>
+
+<p>启动后请查看窗口<b>右下角状态栏</b>:</p>
+<ul>
+  <li><font color="#3fb950"><b>ngspice ✓</b></font> 绿色 —— 检测成功,一切就绪</li>
+  <li><font color="#f85149"><b>ngspice ✗</b></font> 红色 —— 未找到,窗口顶部会出现红色横幅,
+      仿真按钮被禁用。点击状态栏指示器或横幅上的 <b>Locate…</b> 按钮打开设置,
+      手动指定 ngspice 路径</li>
+</ul>
+
+<hr>
+
+<h2>2. gm/ID 设计器(第一个标签页)</h2>
+
+<p align="center"><img src="img/tab1_gmid_designer.png" width="820"></p>
+
+<p>基于 <b>gm/ID 方法学</b>的晶体管尺寸设计工具:以跨导效率 gm/ID 为核心变量,
+用仿真生成的查找表(而非长沟道公式)完成精确的尺寸计算。</p>
+
+<h3>2.1 构建查找表</h3>
+<ol>
+  <li>在 <b>Lookup table</b> 区域选择工艺模型(nmos180 / pmos180 / nmos45hp /
+      pmos45hp / nmos22hp / pmos22hp,下拉框中标注了各自的 VDD)</li>
+  <li>设置参考宽度 W(结果与 W 无关,默认 10 um 即可)、沟长 L、漏源电压
+      Vds(勾选 <b>auto</b> 则自动取 VDD/2)</li>
+  <li>点击 <b>Build / Load Table</b>。<b>首次</b>构建需要运行 ngspice 扫描
+      (约几秒到几十秒,进度显示在底部日志面板);结果自动缓存,
+      <b>之后</b>相同参数瞬间加载(日志中显示 <code>[cache]</code>)</li>
+</ol>
+<p>构建完成后,按钮下方显示该表的有效范围:gm/ID 区间、fT 最大值、gm·ro@15。
+右侧同时画出四张设计曲线:fT、Id/W(对数轴)、gm·ro、Vgs 与 Vov,
+横轴均为 gm/ID。</p>
+
+<h3>2.2 计算工作点(sizing)</h3>
+<p>在 <b>Sizing</b> 区域选择三种模式之一:</p>
+<ul>
+  <li><b>Size by gm/ID</b>:指定 gm/ID 值,再固定 Id、W、gm 三者之一,求其余参数。
+      例:gm/ID=15、Id=100uA → 求得 W ≈ 10 um</li>
+  <li><b>Size for fT ≥ target</b>:给定 fT 下限,自动选择满足条件的
+      <b>最高</b> gm/ID(即功耗最低的工作点)。适合带宽约束的场景</li>
+  <li><b>Size for gm·ro ≥ target</b>:给定本征增益下限,同样自动选最省电的点。
+      适合高增益级</li>
+</ul>
+<p>点击 <b>Compute Operating Point</b>,结果以工程单位显示在左下角表格中
+(W、Id、gm、Vgs、Vov、fT、gm·ro、Id/W),并在右侧四张曲线上以
+<font color="crimson"><b>红色虚线 + 圆点</b></font>标记该工作点。
+<b>Copy as text</b> 可将结果复制到剪贴板。</p>
+<p>若目标超出该表能力范围(如 fT 目标高于最大值),错误信息会以红字提示,
+不会中断程序。</p>
+
+<hr>
+
+<h2>3. ngspice 教学案例(第二个标签页)</h2>
+
+<p align="center"><img src="img/tab2_examples.png" width="820"></p>
+
+<p>内置 9 个标准 SPICE 教学案例,覆盖直流、交流、瞬态与噪声四类分析:</p>
+<ol>
+  <li>Tran — RC 充电(电压与电流)</li>
+  <li>DC — NMOS Id-Vds 特性曲线族</li>
+  <li>AC/Noise — RC 低通滤波器频响与输出噪声</li>
+  <li>Tran — 采样保持开关对比(真实 NMOS vs 理想开关)</li>
+  <li>Tran — kT/C 噪声时域统计(直方图 + 高斯拟合)</li>
+  <li>DC — NMOS 电流镜输出特性</li>
+  <li>AC — 共源放大器 Bode 图</li>
+  <li>DC — 传输门导通电阻(180/45/22nm 三节点对比)</li>
+</ol>
+
+<p><b>使用方法</b>:左侧列表选择案例 → 中部表单调整参数(电阻、电容、管子尺寸、
+偏置电压等,<b>Reset defaults</b> 恢复默认)→ 点击 <b>Run simulation</b>。
+仿真在后台运行,进度实时显示在日志面板,完成后右侧显示结果图。</p>
+<p>结果图支持<b>滚轮缩放</b>、<b>拖拽平移</b>;<b>Fit</b> 恢复适应窗口,
+<b>Save as…</b> 另存 PNG,<b>Open folder</b> 打开输出目录。</p>
+
+<hr>
+
+<h2>4. 特性曲线浏览器(第三个标签页)</h2>
+
+<p align="center"><img src="img/tab3_browser.png" width="820"></p>
+
+<p>为任意工艺模型生成标准特性图,用于工艺对比与设计前的器件评估:</p>
+<ul>
+  <li><b>gm/ID four-quadrant</b>:四象限特性图 —— gm/ID vs Vov(含 BJT 极限与
+      2/Vov 渐近线)、Id/W vs gm/ID、fT vs gm/ID、gm·ro vs gm/ID,
+      多条 Vds 曲线叠加</li>
+  <li><b>IV characteristics</b>:IV 特性 —— 线性/对数坐标的 Id-Vov、
+      Id-Vgs 全扫描、Id-Vds 输出特性曲线族</li>
+  <li><b>Gate capacitances</b>:栅电容 —— Cgg/Cgs/Cgd/Cgb vs Vgs
+      (解析模型,速度快)</li>
+</ul>
+<p>选择模型、图类型、W、L 后点击 <b>Generate / Show</b>。同参数的图会在会话内缓存,
+再次查看瞬间加载;<b>Regenerate</b> 强制重新仿真。</p>
+
+<hr>
+
+<h2>5. 日志面板与任务队列</h2>
+<p>窗口底部的 <b>Simulation log</b> 面板实时显示所有仿真进度与 ngspice 输出,
+出错时附带错误详情和最新日志文件的末尾内容。该面板可拖到窗口右侧或独立浮动。</p>
+<p>所有仿真任务经由单一后台队列<b>串行执行</b>:同时发起多个任务时会依次排队,
+界面始终保持响应,状态栏左侧显示当前正在运行的任务。</p>
+
+<hr>
+
+<h2>6. 常见问题</h2>
+<table border="1" cellpadding="6" cellspacing="0">
+  <tr><th>现象</th><th>处理</th></tr>
+  <tr><td>顶部红色横幅"ngspice not found"</td>
+      <td>安装 ngspice(见第 1 节),或点击 Locate… 手动指定路径</td></tr>
+  <tr><td>构建查找表很慢</td>
+      <td>首次构建需运行完整扫描属正常;相同参数第二次起走缓存,秒级完成</td></tr>
+  <tr><td>Sizing 报红字错误</td>
+      <td>目标超出该模型/沟长的能力范围;增大 L(提升 gm·ro)或放宽目标</td></tr>
+  <tr><td>仿真失败</td>
+      <td>查看日志面板中的错误详情;常见原因是模型文件缺失或参数超出合理范围</td></tr>
+</table>
+
+<p><br>输出文件位置:开发模式下在各工具目录的 <code>plots/</code> 与
+<code>logs/</code>;打包版在用户数据目录的 <code>AnalogStudio/workspace/</code> 下,
+安装目录不会被写入。</p>
