@@ -52,8 +52,11 @@ PTM(Predictive Technology Model)工艺模型,提供四大功能:gm/ID 设计器�
 
 <p><b>可选模型</b>:除内置的 180 / 45hp / 22hp 三节点外,应用还注册了完整的
 PTM <b>体硅(bulk)</b>节点——130 / 90 / 65nm、45nm LP、32nm HP/LP、22nm LP,
-nmos 与 pmos 共 20 个模型均可在下拉框中选择。<b>FinFET(7–20nm)本版暂不支持</b>
-(它用 BSIM-CMG 与 NFIN 建模,与当前基于 W 的 netlist/方法学不兼容,属后续工作)。</p>
+nmos 与 pmos 共 20 个模型均可在下拉框中选择。<b>FinFET(7–20nm)本版暂不支持</b>:
+其模型是 BSIM-CMG(SPICE level 72),而<b>主流预编译的 ngspice 通常未包含 BSIM-CMG</b>
+(如 Ubuntu/Debian 的 ngspice 42 仅支持 level 1-6/8-10/14/49/54-58/60/68/73),
+因此这些器件根本无法加载仿真;此外它以鳍数 NFIN 而非沟宽 W 为尺寸变量,需专门的流程。
+待有支持 BSIM-CMG 的 ngspice(或 OSDI 编译的模型)时再启用。</p>
 
 <h3>2.2 计算工作点(sizing)</h3>
 <p>在 <b>Sizing</b> 区域选择三种模式之一:</p>

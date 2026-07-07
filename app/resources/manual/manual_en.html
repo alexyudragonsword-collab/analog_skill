@@ -60,8 +60,13 @@ gm/ID.</p>
 <p><b>Available models</b>: beyond the three built-in nodes (180 / 45hp /
 22hp), the app registers the full PTM <b>bulk-CMOS</b> library — 130 / 90 /
 65 nm, 45 nm LP, 32 nm HP/LP, 22 nm LP — for 20 selectable nmos/pmos models.
-<b>FinFET (7–20 nm) is not supported in this version</b> (it uses BSIM-CMG
-with NFIN, incompatible with the current W-based netlists/flow — future work).</p>
+<b>FinFET (7–20 nm) is not supported in this version</b>: those models are
+BSIM-CMG (SPICE level 72), and <b>most prebuilt ngspice binaries do not
+include BSIM-CMG</b> (e.g. Ubuntu/Debian's ngspice 42 supports only levels
+1-6/8-10/14/49/54-58/60/68/73), so the devices cannot even be loaded. They
+also size by fin count NFIN rather than width W, which needs a dedicated
+flow. FinFET will be enabled once a BSIM-CMG-capable ngspice (or an
+OSDI-compiled model) is available.</p>
 
 <h3>2.2 Computing an operating point (sizing)</h3>
 <p>Pick one of three modes in the <b>Sizing</b> box:</p>
