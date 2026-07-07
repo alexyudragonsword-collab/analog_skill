@@ -47,3 +47,35 @@ def test_si_to_spice():
     assert si_to_spice(100e-6) == '100u'
     assert si_to_spice(2.2e3) == '2.2k'
     assert si_to_spice(0) == '0'
+
+
+def test_spice_to_si():
+    from app.core.examples import _spice_to_si
+    assert _spice_to_si('1Meg') == 1e6
+    assert _spice_to_si('10G') == 1e10
+    assert _spice_to_si('1p') == 1e-12
+    assert _spice_to_si('2.2k') == 2200.0
+
+
+def test_advanced_param_patch_and_restore():
+    """Advanced params (VDD, freq) patch module globals and restore after."""
+    import importlib
+    from app.core.examples import run_example
+
+    mod = importlib.import_module('simulate_ac_cs_amp')
+    vdd0, fs0, fstop0 = mod.VDD, mod.FREQ_START, mod.FREQ_STOP
+    pngs = run_example('ac_cs_amp', {
+        'W_UM': 10.0, 'L_UM': 0.18, 'VGS_BIAS': 0.6, 'RD_K': 2.0,
+        'CL_PF': 1.0, 'VDD': 2.0, 'FREQ_START': 1e4, 'FREQ_STOP': 50e9,
+    })
+    assert mod.VDD == vdd0 and mod.FREQ_START == fs0 and mod.FREQ_STOP == fstop0
+    assert pngs[0].exists()
+
+
+def test_all_specs_defaults_resolve():
+    import importlib
+    from app.core.examples import REGISTRY
+    for spec in REGISTRY.values():
+        mod = importlib.import_module(spec.sim_module)
+        for p in spec.params:
+            p.resolve_default(mod)   # must not raise

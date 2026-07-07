@@ -97,6 +97,7 @@ jobs:
             --include-module=scipy.stats `
             --include-package-data=matplotlib `
             --include-data-dir=app/resources=app_resources `
+            --include-data-dir=transistor-models/assets/models/bulk_cmos=bulk_models `
             --windows-console-mode=disable `
             --output-filename=AnalogStudio.exe `
             --output-dir=build-nuitka `

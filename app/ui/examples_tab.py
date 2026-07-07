@@ -35,7 +35,15 @@ class ExamplesTab(QWidget):
         self._desc.setWordWrap(True)
 
         self._form_box = QGroupBox('Parameters')
-        self._form = QFormLayout(self._form_box)
+        box_lay = QVBoxLayout(self._form_box)
+        self._form = QFormLayout()            # basic params
+        box_lay.addLayout(self._form)
+        self._adv_box = QGroupBox('Advanced parameters')
+        self._adv_box.setCheckable(True)
+        self._adv_box.setChecked(False)       # collapsed by default
+        self._adv_form = QFormLayout(self._adv_box)
+        self._adv_box.toggled.connect(self._adv_form_container_toggle)
+        box_lay.addWidget(self._adv_box)
 
         self._reset_btn = QPushButton('Reset defaults')
         self._reset_btn.clicked.connect(self._build_form)
@@ -80,29 +88,45 @@ class ExamplesTab(QWidget):
         self._desc.setText(self._spec.description)
         self._build_form()
 
+    def _adv_form_container_toggle(self, on: bool):
+        # checkable groupbox hides its child widgets when unchecked
+        for i in range(self._adv_form.count()):
+            item = self._adv_form.itemAt(i)
+            if item and item.widget():
+                item.widget().setVisible(on)
+
+    def _make_field(self, p, module):
+        default = p.resolve_default(module)
+        if p.kind == 'float':
+            w = QDoubleSpinBox()
+            w.setRange(p.minimum, p.maximum)
+            w.setDecimals(p.decimals)
+            w.setValue(float(default))
+        elif p.kind == 'int':
+            w = QSpinBox()
+            w.setRange(int(p.minimum), int(p.maximum))
+            w.setValue(int(default))
+        else:   # floatlist
+            w = QLineEdit(', '.join(f'{v:g}' for v in default))
+        return w
+
     def _build_form(self):
-        while self._form.rowCount():
-            self._form.removeRow(0)
+        for form in (self._form, self._adv_form):
+            while form.rowCount():
+                form.removeRow(0)
         self._fields.clear()
         if self._spec is None:
             return
         module = importlib.import_module(self._spec.sim_module)
+        has_adv = False
         for p in self._spec.params:
-            default = p.resolve_default(module)
-            if p.kind == 'float':
-                w = QDoubleSpinBox()
-                w.setRange(p.minimum, p.maximum)
-                w.setDecimals(p.decimals)
-                w.setValue(float(default))
-            elif p.kind == 'int':
-                w = QSpinBox()
-                w.setRange(int(p.minimum), int(p.maximum))
-                w.setValue(int(default))
-            else:   # floatlist
-                w = QLineEdit(', '.join(f'{v:g}' for v in default))
+            w = self._make_field(p, module)
             label = f'{p.label} [{p.unit}]' if p.unit else p.label
-            self._form.addRow(label, w)
+            (self._adv_form if p.advanced else self._form).addRow(label, w)
             self._fields[p.key] = w
+            has_adv = has_adv or p.advanced
+        self._adv_box.setVisible(has_adv)
+        self._adv_form_container_toggle(self._adv_box.isChecked())
 
     def _collect_values(self) -> dict | None:
         values = {}

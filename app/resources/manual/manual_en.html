@@ -2,8 +2,8 @@
 
 <p><b>Analog Studio</b> is an analog IC design and simulation workbench built on
 the ngspice simulator and PTM (Predictive Technology Model) process models.
-It provides three tools: the gm/ID Designer, ngspice teaching examples, and a
-characteristic-curve browser.</p>
+It provides four tools: the gm/ID Designer, ngspice teaching examples, a
+characteristic-curve browser, and comparison plots.</p>
 
 <hr>
 
@@ -57,6 +57,12 @@ gm/ID span, maximum fT, and gm·ro at gm/ID = 15. The right side displays four
 design charts — fT, Id/W (log scale), gm·ro, and Vgs &amp; Vov — all versus
 gm/ID.</p>
 
+<p><b>Available models</b>: beyond the three built-in nodes (180 / 45hp /
+22hp), the app registers the full PTM <b>bulk-CMOS</b> library — 130 / 90 /
+65 nm, 45 nm LP, 32 nm HP/LP, 22 nm LP — for 20 selectable nmos/pmos models.
+<b>FinFET (7–20 nm) is not supported in this version</b> (it uses BSIM-CMG
+with NFIN, incompatible with the current W-based netlists/flow — future work).</p>
+
 <h3>2.2 Computing an operating point (sizing)</h3>
 <p>Pick one of three modes in the <b>Sizing</b> box:</p>
 <ul>
@@ -76,6 +82,20 @@ and the operating point is marked on all four charts with a
 <b>Copy as text</b> puts the result on the clipboard.</p>
 <p>If a target exceeds what the table can deliver (e.g. fT above the maximum),
 the error is shown inline in red — nothing crashes.</p>
+
+<p align="center"><img src="img/v06_gmid_selfcheck.png" width="820"></p>
+
+<h3>2.3 Tools: quick lookup and self-check</h3>
+<ul>
+  <li><b>Quick lookup</b>: enter any gm/ID value, pick a quantity (Id/W, fT,
+      Vgs, Vov, gm·ro, gm, Id) and click <b>Look up</b> for the interpolated
+      scalar — no full sizing needed</li>
+  <li><b>Run self-check</b>: runs <b>5 physical-consistency tests</b> on the
+      current table (weak-inversion limit, Id/W monotonicity, channel-length
+      scaling, fT×gm/ID peak, Vds sensitivity), shown as a PASS/FAIL list with
+      the numbers in the log panel. Use it to confirm the model/simulation
+      data is physically sane</li>
+</ul>
 
 <hr>
 
@@ -105,6 +125,17 @@ plot appears on the right when done.</p>
 <b>Fit</b> refits the view, <b>Save as…</b> exports the PNG and
 <b>Open folder</b> reveals the output directory.</p>
 
+<p align="center"><img src="img/v06_examples_advanced.png" width="820"></p>
+
+<p><b>Advanced parameters</b>: each example shows its common parameters
+directly; expanding the collapsible <b>Advanced parameters</b> group exposes
+formerly hard-coded values — supply voltage VDD, sweep ranges and steps,
+frequency ranges, timing/clock, temperature, the sample-capacitor set, and
+more. (Note: the <b>number</b> of configurations per example — e.g. RC's two
+configs, the transmission gate's three nodes — is fixed by structure; the
+gate's Vpass sweep step lives inside a source function and is not tunable in
+this version.)</p>
+
 <hr>
 
 <h2>4. Curve Browser (third tab)</h2>
@@ -128,7 +159,29 @@ Plots are cached per parameter set within the session;
 
 <hr>
 
-<h2>5. Log panel and job queue</h2>
+<h2>5. Comparison plots (fourth tab)</h2>
+
+<p align="center"><img src="img/v06_comparison.png" width="820"></p>
+
+<p>Overlays several gm/ID curves on one four-quadrant figure for direct
+comparison. Three modes:</p>
+<ul>
+  <li><b>Channel-length comparison</b>: pick one model and enter several
+      lengths in <b>L list</b> (comma-separated, e.g. <code>0.18, 0.36,
+      1.0</code>) to show the fT-down / gm·ro-up trade-off as L grows</li>
+  <li><b>Cross-node comparison</b>: multi-select several <b>same-polarity</b>
+      models (e.g. nmos180 / nmos45hp / nmos22hp) to compare the speed–gain
+      characteristics across technology generations</li>
+  <li><b>Gate-capacitance comparison</b>: multi-select models for a
+      side-by-side gate-capacitance comparison</li>
+</ul>
+<p>Results are session-cached and support zoom/save. Cross-node and
+capacitance comparisons require all selected models to share one polarity
+(all nmos or all pmos), otherwise an inline red error is shown.</p>
+
+<hr>
+
+<h2>6. Log panel and job queue</h2>
 <p>The <b>Simulation log</b> panel at the bottom streams all simulation
 progress and ngspice output in real time; on failure it includes the error
 details plus the tail of the latest ngspice log file. The panel can be docked
@@ -140,7 +193,7 @@ the status bar.</p>
 
 <hr>
 
-<h2>6. Troubleshooting</h2>
+<h2>7. Troubleshooting</h2>
 <table border="1" cellpadding="6" cellspacing="0">
   <tr><th>Symptom</th><th>Remedy</th></tr>
   <tr><td>Red banner "ngspice not found"</td>

@@ -61,6 +61,23 @@ def _sync_tree(src: Path, dst: Path):
         ignore=shutil.ignore_patterns('__pycache__', 'logs', 'plots'))
 
 
+def bulk_models_dir() -> Path:
+    """Directory holding the full PTM bulk-CMOS .lib library.
+
+    Dev: transistor-models/assets/models/bulk_cmos in the repo.
+    Frozen: bundled read-only copy (the .lib files are only read, never
+    written, so no workspace sync is needed).
+    """
+    if is_frozen():
+        base = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
+        for cand in (base / 'bulk_models',
+                     Path(sys.executable).parent / '_internal' / 'bulk_models'):
+            if cand.is_dir():
+                return cand
+    return (repo_root() / 'transistor-models' / 'assets' / 'models'
+            / 'bulk_cmos')
+
+
 def resources_dir() -> Path:
     """Location of app/resources (manual HTML + images).
 

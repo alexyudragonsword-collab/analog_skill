@@ -16,12 +16,9 @@ def model_infos() -> dict:
 
 
 def default_L(model: str) -> float:
-    """Minimum/typical L per node family [um]."""
-    if '45' in model:
-        return 0.045
-    if '22' in model:
-        return 0.022
-    return 0.18
+    """Nominal/minimum L per node family [um]."""
+    from app.core.model_registry import nominal_L
+    return nominal_L(model)
 
 
 def build_table(model: str, W: float, L: float, vds: float | None,

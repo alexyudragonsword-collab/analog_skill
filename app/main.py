@@ -18,6 +18,9 @@ def main() -> int:
     from app import paths
     paths.init_runtime()
 
+    from app.core.model_registry import register_extra_models
+    register_extra_models()
+
     from app.ui.main_window import MainWindow
     win = MainWindow()
     win.show()

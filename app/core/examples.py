@@ -35,6 +35,21 @@ def si_to_spice(value: float) -> str:
     return f'{value:.6g}'
 
 
+_SUFFIX_SI = {
+    'g': 1e9, 'meg': 1e6, 'k': 1e3, '': 1.0,
+    'm': 1e-3, 'u': 1e-6, 'n': 1e-9, 'p': 1e-12, 'f': 1e-15,
+}
+
+
+def _spice_to_si(text) -> float:
+    """Parse a SPICE magnitude string: '1Meg' → 1e6, '10G' → 1e10, '1p' → 1e-12."""
+    s = str(text).strip().lower()
+    for suffix in ('meg', 'g', 'k', 'm', 'u', 'n', 'p', 'f'):
+        if s.endswith(suffix):
+            return float(s[:-len(suffix)]) * _SUFFIX_SI[suffix]
+    return float(s)
+
+
 @dataclass
 class ParamSpec:
     key: str                        # form-field id
@@ -46,6 +61,9 @@ class ParamSpec:
     maximum: float = 1e12
     decimals: int = 3
     to_attrs: Callable[[Any], dict] | None = None   # value -> module attrs
+    advanced: bool = False          # place under a collapsible "Advanced" group
+    override_only: bool = False      # consumed solely by build_overrides;
+                                     # do not apply as a direct module attr
 
     def resolve_default(self, module):
         return self.default(module) if callable(self.default) else self.default
@@ -68,12 +86,14 @@ class ExampleSpec:
     build_overrides: Callable[[dict, Any], dict] | None = None
 
     def overrides(self, values: dict, module) -> dict:
-        if self.build_overrides is not None:
-            return self.build_overrides(values, module)
+        # direct params first (skip those consumed only by build_overrides),
+        # then let build_overrides augment/override
         out = {}
         for p in self.params:
-            if p.key in values:
+            if p.key in values and not p.override_only:
                 out.update(p.attrs_for(values[p.key]))
+        if self.build_overrides is not None:
+            out.update(self.build_overrides(values, module))
         return out
 
 
@@ -109,10 +129,10 @@ def _rc_pair_params(unit_r='Ohm', c_defaults=(1.0, 1.0), r_defaults=(1e3, 1e4)):
     for i in (1, 2):
         out.append(ParamSpec(f'R{i}', f'R (config {i})', 'float', unit_r,
                              default=r_defaults[i - 1], minimum=1,
-                             maximum=1e9, decimals=0))
+                             maximum=1e9, decimals=0, override_only=True))
         out.append(ParamSpec(f'C{i}', f'C (config {i})', 'float', 'pF',
                              default=c_defaults[i - 1], minimum=0.001,
-                             maximum=1e6, decimals=3))
+                             maximum=1e6, decimals=3, override_only=True))
     return out
 
 
@@ -132,7 +152,10 @@ _reg(ExampleSpec(
     description='RC charging voltage and current; two R/C configs.',
     sim_module='simulate_tran_rc_charging',
     plot_module='plot_tran_rc_charging',
-    params=_rc_pair_params(),
+    params=_rc_pair_params() + [
+        ParamSpec('VIN', 'Input step Vin', 'float', 'V',
+                  lambda m: m.VIN, 0.01, 10, 3, advanced=True),
+    ],
     build_overrides=_rc_charging_overrides,
 ))
 
@@ -147,6 +170,10 @@ _reg(ExampleSpec(
         ParamSpec('L_UM', 'L', 'float', 'um', lambda m: m.L_UM, 0.018, 10, 3),
         ParamSpec('VGS_LIST', 'Vgs list', 'floatlist', 'V',
                   lambda m: list(m.VGS_LIST), 0, 1.8),
+        ParamSpec('VDS_STOP', 'Vds sweep stop', 'float', 'V',
+                  lambda m: m.VDS_STOP, 0.1, 5, 2, advanced=True),
+        ParamSpec('VDS_STEP', 'Vds sweep step', 'float', 'V',
+                  lambda m: m.VDS_STEP, 0.001, 0.5, 3, advanced=True),
     ],
 ))
 
@@ -156,7 +183,16 @@ _reg(ExampleSpec(
     description='Frequency response and output noise density.',
     sim_module='simulate_ac_rc_filter',
     plot_module='plot_ac_rc_filter',
-    params=_rc_pair_params(),
+    params=_rc_pair_params() + [
+        ParamSpec('FREQ_START', 'Freq start', 'float', 'Hz',
+                  lambda m: _spice_to_si(m.FREQ_START), 1, 1e12, 0,
+                  to_attrs=lambda v: {'FREQ_START': si_to_spice(v)},
+                  advanced=True),
+        ParamSpec('FREQ_STOP', 'Freq stop', 'float', 'Hz',
+                  lambda m: _spice_to_si(m.FREQ_STOP), 1, 1e12, 0,
+                  to_attrs=lambda v: {'FREQ_STOP': si_to_spice(v)},
+                  advanced=True),
+    ],
     build_overrides=_rc_filter_overrides,
 ))
 
@@ -178,9 +214,47 @@ _reg(ExampleSpec(
                   lambda m: m.W_UM, 0.2, 100, 2),
         ParamSpec('L_UM', 'Switch L', 'float', 'um',
                   lambda m: m.L_UM, 0.18, 10, 3),
+        ParamSpec('VDD', 'VDD', 'float', 'V', lambda m: m.VDD, 0.3, 5, 2,
+                  advanced=True),
+        ParamSpec('RON_IDEAL', 'Ideal switch Ron', 'float', 'Ohm',
+                  lambda m: m.RON_IDEAL, 1, 10000, 0, advanced=True),
+        ParamSpec('CSAMP', 'Sample cap', 'float', 'F',
+                  lambda m: _spice_to_si(m.CSAMP), 1e-15, 1e-9, 15,
+                  to_attrs=lambda v: {'CSAMP': si_to_spice(v)}, advanced=True),
+        ParamSpec('FIN', 'Input freq', 'float', 'Hz',
+                  lambda m: _spice_to_si(m.FIN), 1e3, 1e10, 0,
+                  to_attrs=lambda v: {'FIN': si_to_spice(v)}, advanced=True),
+        ParamSpec('FCLK', 'Clock freq', 'float', 'Hz',
+                  lambda m: _spice_to_si(m.FCLK), 1e3, 1e10, 0,
+                  to_attrs=lambda v: {'FCLK': si_to_spice(v)}, advanced=True),
+        ParamSpec('TSTOP', 'Sim stop time', 'float', 's',
+                  lambda m: _spice_to_si(m.TSTOP), 1e-9, 1e-3, 12,
+                  to_attrs=lambda v: {'TSTOP': si_to_spice(v)}, advanced=True),
     ],
     build_overrides=_sample_hold_overrides,
 ))
+
+def _ktc_caps_override(values, module):
+    caps_ff = values.get('CAPS_FF')
+    if not caps_ff:
+        return {}
+    configs = []
+    for c_ff in caps_ff:
+        c_si = c_ff * 1e-15
+        cval = si_to_spice(c_si)
+        configs.append({
+            'label':  f'C = {cval}',
+            'C_val':  cval,
+            'C_si':   c_si,
+            'color':  None,          # plot module assigns if None-safe; keep key
+            'log':    module.LOG_DIR / f'tran_ktc_{cval}.log',
+            'wrdata': module.LOG_DIR / f'tran_ktc_{cval}.txt',
+        })
+    # preserve original colors where possible
+    for i, cfg in enumerate(configs):
+        cfg['color'] = module.CONFIGS[i % len(module.CONFIGS)]['color']
+    return {'CONFIGS': configs}
+
 
 _reg(ExampleSpec(
     key='tran_ktc_noise',
@@ -191,7 +265,18 @@ _reg(ExampleSpec(
     params=[
         ParamSpec('N_SAMPLES', 'Samples', 'int', '',
                   lambda m: m.N_SAMPLES, 100, 100000),
+        ParamSpec('T', 'Temperature', 'float', 'K',
+                  lambda m: m.T, 4, 500, 1, advanced=True),
+        ParamSpec('VDC', 'DC input', 'float', 'V',
+                  lambda m: m.VDC, 0, 5, 3, advanced=True),
+        ParamSpec('TAU_TARGET_PS', 'RC tau', 'float', 'ps',
+                  lambda m: m.TAU_TARGET * 1e12, 1, 10000, 1,
+                  to_attrs=lambda v: {'TAU_TARGET': v * 1e-12}, advanced=True),
+        ParamSpec('CAPS_FF', 'Sample caps', 'floatlist', 'fF',
+                  lambda m: [c['C_si'] * 1e15 for c in m.CONFIGS],
+                  advanced=True, override_only=True),
     ],
+    build_overrides=_ktc_caps_override,
 ))
 
 _reg(ExampleSpec(
@@ -206,6 +291,12 @@ _reg(ExampleSpec(
         ParamSpec('IREF_UA', 'Iref', 'float', 'uA', 100.0, 1, 10000, 1,
                   to_attrs=lambda v: {'IREF': si_to_spice(v * 1e-6),
                                       'IREF_SI': v * 1e-6}),
+        ParamSpec('VDD', 'VDD', 'float', 'V', lambda m: m.VDD, 0.3, 5, 2,
+                  advanced=True),
+        ParamSpec('VOUT_STOP', 'Vout sweep stop', 'float', 'V',
+                  lambda m: m.VOUT_STOP, 0.1, 5, 2, advanced=True),
+        ParamSpec('VOUT_STEP', 'Vout sweep step', 'float', 'V',
+                  lambda m: m.VOUT_STEP, 0.001, 0.5, 3, advanced=True),
     ],
 ))
 
@@ -226,6 +317,16 @@ _reg(ExampleSpec(
         ParamSpec('CL_PF', 'CL', 'float', 'pF', 1.0, 0.01, 1000, 2,
                   to_attrs=lambda v: {'CL': si_to_spice(v * 1e-12),
                                       'CL_SI': v * 1e-12}),
+        ParamSpec('VDD', 'VDD', 'float', 'V', lambda m: m.VDD, 0.3, 5, 2,
+                  advanced=True),
+        ParamSpec('FREQ_START', 'Freq start', 'float', 'Hz',
+                  lambda m: _spice_to_si(m.FREQ_START), 1, 1e12, 0,
+                  to_attrs=lambda v: {'FREQ_START': si_to_spice(v)},
+                  advanced=True),
+        ParamSpec('FREQ_STOP', 'Freq stop', 'float', 'Hz',
+                  lambda m: _spice_to_si(m.FREQ_STOP), 1, 1e12, 0,
+                  to_attrs=lambda v: {'FREQ_STOP': si_to_spice(v)},
+                  advanced=True),
     ],
 ))
 
@@ -238,6 +339,8 @@ _reg(ExampleSpec(
     params=[
         ParamSpec('WL_RATIO', 'W/L ratio', 'int', '',
                   lambda m: m.WL_RATIO, 1, 10000),
+        ParamSpec('DELTA_V', 'Test voltage', 'float', 'V',
+                  lambda m: m.DELTA_V, 0.001, 0.1, 3, advanced=True),
     ],
 ))
 

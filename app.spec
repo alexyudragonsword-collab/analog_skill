@@ -34,6 +34,9 @@ datas = (
     collect_tree(REPO / 'ngspice' / 'assets', 'skill/ngspice_assets')
     + collect_tree(REPO / 'gmoverid' / 'assets', 'skill/gmoverid_assets')
     + collect_tree(REPO / 'app' / 'resources', 'app_resources')
+    # full PTM bulk-CMOS library for the extra registered nodes
+    + collect_tree(REPO / 'transistor-models' / 'assets' / 'models'
+                   / 'bulk_cmos', 'bulk_models')
 )
 
 a = Analysis(

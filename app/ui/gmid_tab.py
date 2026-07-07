@@ -2,6 +2,7 @@
 design charts with the chosen operating point marked."""
 
 import numpy as np
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QButtonGroup, QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout,
     QGroupBox, QHBoxLayout, QLabel, QPushButton, QRadioButton, QSplitter,
@@ -13,12 +14,24 @@ from app.core.worker import Job, SimWorker
 from app.ui.widgets.mpl_canvas import MplCanvas
 from app.ui.widgets.op_result_view import OpResultView
 
+# quantity key -> (label, unit, scale to display)
+_LOOKUP_QTYS = [
+    ('id_w', 'Id/W', 'uA/um', 1.0),
+    ('ft',   'fT',   'GHz',   1e-9),
+    ('vgs',  'Vgs',  'V',     1.0),
+    ('vov',  'Vov',  'V',     1.0),
+    ('gmro', 'gm*ro', '',     1.0),
+    ('gm',   'gm',   'mS',    1e3),
+    ('id',   'Id',   'uA',    1e6),
+]
+
 
 class GmIdTab(QWidget):
     def __init__(self, worker: SimWorker, parent=None):
         super().__init__(parent)
         self._worker = worker
         self._pending_job: str | None = None
+        self._check_job: str | None = None
         self._tbl = None
         self._curves = None
 
@@ -179,12 +192,45 @@ class GmIdTab(QWidget):
         sv.addWidget(self.size_btn)
         sv.addWidget(self._err_lbl)
 
+        # ── Tools: quick lookup + self-check ──────────────────────────────
+        self.lk_gmid = QDoubleSpinBox()
+        self.lk_gmid.setRange(2.0, 40.0)
+        self.lk_gmid.setValue(15.0)
+        self.lk_gmid.setSuffix(' V^-1')
+        self.lk_qty = QComboBox()
+        for key, label, unit, _s in _LOOKUP_QTYS:
+            self.lk_qty.addItem(f'{label} [{unit}]' if unit else label, key)
+        self.lk_btn = QPushButton('Look up')
+        self.lk_btn.clicked.connect(self._quick_lookup)
+        self.lk_btn.setEnabled(False)
+        self.lk_result = QLabel('—')
+        lk_row = QHBoxLayout()
+        lk_row.addWidget(self.lk_gmid)
+        lk_row.addWidget(self.lk_qty)
+        lk_row.addWidget(self.lk_btn)
+
+        self.check_btn = QPushButton('Run self-check (5 physics tests)')
+        self.check_btn.clicked.connect(self._run_selfcheck)
+        self.check_btn.setEnabled(False)
+        self._check_lbl = QLabel('')
+        self._check_lbl.setWordWrap(True)
+        self._check_lbl.setTextFormat(Qt.TextFormat.RichText)
+
+        tools_box = QGroupBox('Tools')
+        tv = QVBoxLayout(tools_box)
+        tv.addWidget(QLabel('Quick lookup at a gm/ID:'))
+        tv.addLayout(lk_row)
+        tv.addWidget(self.lk_result)
+        tv.addWidget(self.check_btn)
+        tv.addWidget(self._check_lbl)
+
         self._op_view = OpResultView()
 
         left = QWidget()
         left_lay = QVBoxLayout(left)
         left_lay.addWidget(build_box)
         left_lay.addWidget(size_box)
+        left_lay.addWidget(tools_box)
         left_lay.addWidget(self._op_view, stretch=1)
 
         # ── right: 2x2 design charts ──────────────────────────────────────
@@ -255,6 +301,18 @@ class GmIdTab(QWidget):
         self._err_lbl.setText('')
 
     def _on_finished(self, job_id, result):
+        if job_id == self._check_job:
+            self._check_job = None
+            self.check_btn.setEnabled(True)
+            n_pass = sum(1 for r in result if r['ok'])
+            rows = ''.join(
+                f'<tr><td>{"✓" if r["ok"] else "✗"}</td>'
+                f'<td><font color="{"#3fb950" if r["ok"] else "#f85149"}">'
+                f'{r["name"]}</font></td></tr>' for r in result)
+            self._check_lbl.setText(
+                f'<b>{n_pass}/{len(result)} passed</b>'
+                f'<table>{rows}</table>')
+            return
         if job_id != self._pending_job:
             return
         self._pending_job = None
@@ -267,16 +325,55 @@ class GmIdTab(QWidget):
             f"V^-1 · fT max {rng['ft_max_Hz'] / 1e9:.1f} GHz · "
             f"gm*ro@15 {rng['gmro_at_15']:.1f}")
         self.size_btn.setEnabled(True)
+        self.lk_btn.setEnabled(True)
+        self.check_btn.setEnabled(True)
         self._plot_curves()
 
     def _on_failed(self, job_id, err):
+        last = err.strip().splitlines()[-1] if err.strip() else 'failed'
+        if job_id == self._check_job:
+            self._check_job = None
+            self.check_btn.setEnabled(True)
+            self._check_lbl.setText(
+                f'<font color="red">Self-check failed: {last}</font>')
+            return
         if job_id != self._pending_job:
             return
         self._pending_job = None
         self.build_btn.setEnabled(True)
-        last = err.strip().splitlines()[-1] if err.strip() else 'failed'
         self._range_lbl.setText(
             f'<font color="red">Build failed: {last} (see log panel)</font>')
+
+    # ── tools: quick lookup + self-check ──────────────────────────────────
+    def _quick_lookup(self):
+        if self._tbl is None:
+            return
+        key, label, unit, scale = _LOOKUP_QTYS[self.lk_qty.currentIndex()]
+        try:
+            val = self._tbl.lookup(key, self.lk_gmid.value()) * scale
+        except Exception as exc:
+            self.lk_result.setText(f'<font color="red">{exc}</font>')
+            return
+        self.lk_result.setText(
+            f'{label} @ gm/ID={self.lk_gmid.value():g} = '
+            f'<b>{val:.4g} {unit}</b>')
+
+    def _run_selfcheck(self):
+        if self._tbl is None or self._check_job:
+            return
+        from app.core import validate_service
+        model, L = self._tbl.model, self._tbl.L
+        vds = self._tbl.vds
+        tbl = self._tbl
+        job = Job(
+            kind='validate',
+            fn=lambda: validate_service.run_validation(model, L, vds, tbl),
+            label=f'self-check: {model} L={L}um',
+            log_dir=gmid_service.gmid_log_dir(),
+        )
+        self._check_job = self._worker.submit(job)
+        self.check_btn.setEnabled(False)
+        self._check_lbl.setText('Running 5 physics self-checks …')
 
     # ── sizing ────────────────────────────────────────────────────────────
     def _compute_op(self):

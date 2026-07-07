@@ -1,0 +1,167 @@
+"""Tab: cross-parameter comparison plots (channel-length / node / caps)."""
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QAbstractItemView, QComboBox, QFormLayout, QGroupBox, QHBoxLayout,
+    QLabel, QLineEdit, QListWidget, QPushButton, QSplitter, QStackedWidget,
+    QVBoxLayout, QWidget,
+)
+
+from app import paths
+from app.core import browser_service, gmid_service
+from app.core.worker import Job, SimWorker
+from app.ui.widgets.png_viewer import PngViewer
+
+
+class ComparisonTab(QWidget):
+    def __init__(self, worker: SimWorker, parent=None):
+        super().__init__(parent)
+        self._worker = worker
+        self._pending_job: str | None = None
+        self._cache: dict[tuple, object] = {}
+
+        self._models = list(gmid_service.model_infos().keys())
+
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItem('Channel-length comparison', 'length')
+        self.mode_combo.addItem('Cross-node comparison', 'node')
+        self.mode_combo.addItem('Gate-capacitance comparison', 'caps')
+        self.mode_combo.currentIndexChanged.connect(self._on_mode)
+
+        # ── page 0: channel-length (one model + L list) ──
+        self.len_model = QComboBox()
+        self.len_model.addItems(self._models)
+        self.len_list = QLineEdit('0.18, 0.36, 1.0')
+        page_len = QWidget()
+        fl = QFormLayout(page_len)
+        fl.addRow('Model', self.len_model)
+        fl.addRow('L list [um]', self.len_list)
+
+        # ── page 1 & 2: multi-select models (node / caps) ──
+        self.node_list = self._make_model_list()
+        page_node = QWidget()
+        nl = QVBoxLayout(page_node)
+        nl.addWidget(QLabel('Select 2+ models of the same polarity:'))
+        nl.addWidget(self.node_list)
+
+        self.caps_list = self._make_model_list()
+        page_caps = QWidget()
+        cl = QVBoxLayout(page_caps)
+        cl.addWidget(QLabel('Select 2+ models of the same polarity:'))
+        cl.addWidget(self.caps_list)
+
+        self._stack = QStackedWidget()
+        for p in (page_len, page_node, page_caps):
+            self._stack.addWidget(p)
+
+        self.gen_btn = QPushButton('Generate')
+        self.gen_btn.clicked.connect(self._generate)
+        self._status = QLabel('')
+        self._status.setWordWrap(True)
+
+        box = QGroupBox('Comparison')
+        bl = QVBoxLayout(box)
+        bl.addWidget(self.mode_combo)
+        bl.addWidget(self._stack)
+        bl.addWidget(self.gen_btn)
+        bl.addWidget(self._status)
+
+        left = QWidget()
+        left_lay = QVBoxLayout(left)
+        left_lay.addWidget(box)
+        left_lay.addStretch(1)
+
+        self._viewer = PngViewer()
+        split = QSplitter()
+        split.addWidget(left)
+        split.addWidget(self._viewer)
+        split.setStretchFactor(0, 1)
+        split.setStretchFactor(1, 3)
+        lay = QHBoxLayout(self)
+        lay.addWidget(split)
+
+        worker.job_finished.connect(self._on_finished)
+        worker.job_failed.connect(self._on_failed)
+
+    def _make_model_list(self) -> QListWidget:
+        w = QListWidget()
+        w.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        for m in self._models:
+            w.addItem(m)
+        return w
+
+    def _on_mode(self, idx):
+        self._stack.setCurrentIndex(idx)
+
+    # ── run ───────────────────────────────────────────────────────────────
+    def _generate(self):
+        if self._pending_job:
+            return
+        mode = self.mode_combo.currentData()
+        try:
+            fn, key = self._build_job(mode)
+        except ValueError as exc:
+            self._status.setText(f'<font color="red">{exc}</font>')
+            return
+        if key in self._cache:
+            self._viewer.show_pngs([self._cache[key]])
+            self._status.setText('Loaded from session cache.')
+            return
+        self._pending_key = key
+        job = Job(kind='comparison', fn=fn, label=f'comparison: {mode}',
+                  log_dir=gmid_service.gmid_log_dir())
+        self._pending_job = self._worker.submit(job)
+        self.gen_btn.setEnabled(False)
+        self._status.setText(f'Generating {mode} comparison …')
+
+    def _build_job(self, mode):
+        out = paths.BROWSER_PLOTS
+        if mode == 'length':
+            model = self.len_model.currentText()
+            try:
+                L_list = [float(t) for t in
+                          self.len_list.text().replace(',', ' ').split()]
+            except ValueError:
+                raise ValueError('L list must be numbers')
+            if len(L_list) < 2:
+                raise ValueError('need at least 2 L values')
+            key = ('length', model, tuple(L_list))
+            return (lambda: browser_service.generate_length_comparison(
+                model, L_list, out)), key
+
+        selected = [i.text() for i in
+                    (self.node_list if mode == 'node'
+                     else self.caps_list).selectedItems()]
+        if len(selected) < 2:
+            raise ValueError('select at least 2 models')
+        pols = {browser_service._polarity(m) for m in selected}
+        if len(pols) > 1:
+            raise ValueError('all models must be the same polarity '
+                             '(all nmos or all pmos)')
+        key = (mode, tuple(selected))
+        if mode == 'node':
+            return (lambda: browser_service.generate_node_comparison(
+                selected, out)), key
+        return (lambda: browser_service.generate_caps_comparison(
+            selected, out)), key
+
+    def _on_finished(self, job_id, result):
+        if job_id != self._pending_job:
+            return
+        self._pending_job = None
+        self.gen_btn.setEnabled(True)
+        self._cache[self._pending_key] = result
+        self._status.setText('Done.')
+        self._viewer.show_pngs([result])
+
+    def _on_failed(self, job_id, err):
+        if job_id != self._pending_job:
+            return
+        self._pending_job = None
+        self.gen_btn.setEnabled(True)
+        last = err.strip().splitlines()[-1] if err.strip() else 'failed'
+        self._status.setText(
+            f'<font color="red">Failed: {last} (see log panel)</font>')
+
+    def set_sim_enabled(self, enabled: bool):
+        self.gen_btn.setEnabled(enabled and not self._pending_job)

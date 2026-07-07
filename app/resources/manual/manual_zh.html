@@ -1,8 +1,8 @@
 <h1>Analog Studio 用户手册</h1>
 
 <p><b>Analog Studio</b> 是一个模拟集成电路设计与仿真工作台,基于 ngspice 仿真器与
-PTM(Predictive Technology Model)工艺模型,提供三大功能:gm/ID 设计器、ngspice
-教学案例、特性曲线浏览器。</p>
+PTM(Predictive Technology Model)工艺模型,提供四大功能:gm/ID 设计器、ngspice
+教学案例、特性曲线浏览器、对比图。</p>
 
 <hr>
 
@@ -50,6 +50,11 @@ PTM(Predictive Technology Model)工艺模型,提供三大功能:gm/ID 设计器�
 右侧同时画出四张设计曲线:fT、Id/W(对数轴)、gm·ro、Vgs 与 Vov,
 横轴均为 gm/ID。</p>
 
+<p><b>可选模型</b>:除内置的 180 / 45hp / 22hp 三节点外,应用还注册了完整的
+PTM <b>体硅(bulk)</b>节点——130 / 90 / 65nm、45nm LP、32nm HP/LP、22nm LP,
+nmos 与 pmos 共 20 个模型均可在下拉框中选择。<b>FinFET(7–20nm)本版暂不支持</b>
+(它用 BSIM-CMG 与 NFIN 建模,与当前基于 W 的 netlist/方法学不兼容,属后续工作)。</p>
+
 <h3>2.2 计算工作点(sizing)</h3>
 <p>在 <b>Sizing</b> 区域选择三种模式之一:</p>
 <ul>
@@ -66,6 +71,17 @@ PTM(Predictive Technology Model)工艺模型,提供三大功能:gm/ID 设计器�
 <b>Copy as text</b> 可将结果复制到剪贴板。</p>
 <p>若目标超出该表能力范围(如 fT 目标高于最大值),错误信息会以红字提示,
 不会中断程序。</p>
+
+<p align="center"><img src="img/v06_gmid_selfcheck.png" width="820"></p>
+
+<h3>2.3 工具:快速查询与自检(Tools 面板)</h3>
+<ul>
+  <li><b>Quick lookup</b>:输入任一 gm/ID 值,选择要查的量(Id/W、fT、Vgs、
+      Vov、gm·ro、gm、Id),点 <b>Look up</b> 立即得到插值标量——无需做完整 sizing</li>
+  <li><b>Run self-check</b>:对当前构建的表跑 <b>5 项物理一致性自检</b>
+      (弱反型极限、Id/W 单调性、沟长加倍缩放、fT×gm/ID 峰值、Vds 敏感度),
+      以 PASS/FAIL 列表显示,详细数值进日志面板。用于验证模型/仿真数据是否物理合理</li>
+</ul>
 
 <hr>
 
@@ -91,6 +107,14 @@ PTM(Predictive Technology Model)工艺模型,提供三大功能:gm/ID 设计器�
 <p>结果图支持<b>滚轮缩放</b>、<b>拖拽平移</b>;<b>Fit</b> 恢复适应窗口,
 <b>Save as…</b> 另存 PNG,<b>Open folder</b> 打开输出目录。</p>
 
+<p align="center"><img src="img/v06_examples_advanced.png" width="820"></p>
+
+<p><b>Advanced parameters(高级参数)</b>:每个案例的常用参数直接显示;
+点开可折叠的 <b>Advanced parameters</b> 分组可进一步调节供电电压 VDD、扫描范围与
+步长、频率范围、时序/时钟、温度、采样电容组等原本硬编码的量。
+(注:各案例的<b>配置条数</b>——如 RC 的两组、传输门的三个节点——由结构固定;
+传输门的 Vpass 扫描步长在源码函数内部,本版不可调。)</p>
+
 <hr>
 
 <h2>4. 特性曲线浏览器(第三个标签页)</h2>
@@ -112,7 +136,25 @@ PTM(Predictive Technology Model)工艺模型,提供三大功能:gm/ID 设计器�
 
 <hr>
 
-<h2>5. 日志面板与任务队列</h2>
+<h2>5. 对比图(第四个标签页 Comparison)</h2>
+
+<p align="center"><img src="img/v06_comparison.png" width="820"></p>
+
+<p>把多条 gm/ID 曲线叠加在同一张四象限图上,用于直观对比。三种模式:</p>
+<ul>
+  <li><b>Channel-length comparison(沟长对比)</b>:选一个模型,在 <b>L list</b>
+      里填多个沟长(逗号分隔,如 <code>0.18, 0.36, 1.0</code>),叠加显示 L 增大时
+      fT 下降、gm·ro(本征增益)上升的权衡</li>
+  <li><b>Cross-node comparison(跨节点对比)</b>:在模型列表里多选<b>同极性</b>的
+      若干模型(如 nmos180 / nmos45hp / nmos22hp),对比不同工艺代的速度-增益特性</li>
+  <li><b>Gate-capacitance comparison(栅电容对比)</b>:多选模型,并排对比栅电容分布</li>
+</ul>
+<p>结果同样进会话缓存,支持缩放/另存。跨节点/电容对比要求所选模型极性一致
+(全 nmos 或全 pmos),否则会红字提示。</p>
+
+<hr>
+
+<h2>6. 日志面板与任务队列</h2>
 <p>窗口底部的 <b>Simulation log</b> 面板实时显示所有仿真进度与 ngspice 输出,
 出错时附带错误详情和最新日志文件的末尾内容。该面板可拖到窗口右侧或独立浮动。</p>
 <p>所有仿真任务经由单一后台队列<b>串行执行</b>:同时发起多个任务时会依次排队,
@@ -120,7 +162,7 @@ PTM(Predictive Technology Model)工艺模型,提供三大功能:gm/ID 设计器�
 
 <hr>
 
-<h2>6. 常见问题</h2>
+<h2>7. 常见问题</h2>
 <table border="1" cellpadding="6" cellspacing="0">
   <tr><th>现象</th><th>处理</th></tr>
   <tr><td>顶部红色横幅"ngspice not found"</td>
