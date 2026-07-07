@@ -49,7 +49,12 @@ def _probe(exe: str) -> str | None:
 
 
 def _prepend_path(directory: str):
-    if directory and directory not in os.environ.get('PATH', ''):
+    if not directory:
+        return
+    # element-wise check: substring matching would wrongly skip a directory
+    # that happens to be a substring of an existing PATH entry
+    entries = os.environ.get('PATH', '').split(os.pathsep)
+    if directory not in entries:
         os.environ['PATH'] = directory + os.pathsep + os.environ.get('PATH', '')
 
 

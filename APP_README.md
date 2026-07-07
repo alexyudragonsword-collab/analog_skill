@@ -1,15 +1,19 @@
-# Analog Studio — PySide6 桌面应用
+# Analog Studio — PySide6 桌面应用(v0.7)
 
 基于本仓库三个 skill(ngspice 教学案例 / gm/ID 设计 / PTM 模型)的统一桌面工作台。
 Skill 目录(`ngspice/`、`gmoverid/`、`transistor-models/`)保持原样未修改;应用代码全部在 `app/`。
 
-## 功能
+## 功能(四个标签页)
 
 | 标签页 | 功能 |
 |---|---|
-| **gm/ID Designer** | 选择模型(nmos180/pmos180/nmos45hp/pmos45hp/nmos22hp/pmos22hp)、W/L/Vds,构建 `GmIdTable` 查找表(首次跑 ngspice 仿真并缓存,之后秒开);三种 sizing 模式(按 gm/ID + Id/W/gm 约束、fT ≥ 目标、gm·ro ≥ 目标);工程单位结果表格 + 2×2 原生设计图(fT、Id/W、gm·ro、Vgs&Vov vs gm/ID),工作点在图上以红点标记,支持缩放/平移 |
-| **ngspice Examples** | 9 个教学案例一键运行,关键参数(R/C、W/L、Vgs 列表、Iref 等)可在表单里调整(通过临时 monkey-patch 实现,不改 skill 文件);结果 PNG 支持滚轮缩放、拖拽、另存 |
+| **gm/ID Designer** | 20 个 PTM 体硅模型可选(180/130/90/65nm、45/32/22nm 的 HP/LP,nmos+pmos),设 W/L/Vds 构建 `GmIdTable` 查找表(首次跑 ngspice 仿真并缓存,之后秒开);三种 sizing 模式(按 gm/ID + Id/W/gm 约束、fT ≥ 目标、gm·ro ≥ 目标);Tools 面板提供任意 gm/ID 的单量快速查询与 5 项物理自检(self-check);工程单位结果表格 + 2×2 原生设计图,工作点红点标记,支持缩放/平移。参数变化会自动使旧表失效,防止误用 |
+| **ngspice Examples** | 9 个教学案例一键运行;常用参数直显,VDD/扫描范围/频率/时序/温度等归入可折叠 Advanced 分组(通过临时 monkey-patch 实现,不改 skill 文件);结果 PNG 支持滚轮缩放、拖拽、另存 |
 | **Curve Browser** | 按模型/L/W 生成并浏览特性图:IV 特性、gm/ID 四象限、栅电容;会话内缓存,可强制重新生成 |
+| **Comparison** | 对比图:同一模型多沟长对比(如 L=180/360/1000nm)、跨节点对比(多选同极性模型)、跨节点栅电容对比 |
+
+菜单栏 Help 提供中英双语图文用户手册(F1)与 About。FinFET(7–20nm)暂不支持
+——主流预编译 ngspice 不含 BSIM-CMG(level 72),详见手册。
 
 所有仿真任务经过单一后台线程串行执行(避免 gm/ID sweep 的 scratch 文件冲突),
 skill 代码的 print 进度实时转发到底部日志面板。
@@ -17,14 +21,16 @@ skill 代码的 print 进度实时转发到底部日志面板。
 ## 运行(源码方式)
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt          # 运行依赖
+pip install -r requirements-dev.txt      # 开发/打包才需要
 # 系统需安装 ngspice: apt install ngspice / brew install ngspice
 python -m app.main
 ```
 
 无显示环境下冒烟测试:`QT_QPA_PLATFORM=offscreen python -m app.main --smoke`
 
-测试:`python -m pytest app/tests/ -v`(examples 集成测试需要 ngspice)
+测试:`python -m pytest app/tests/ -v`(仿真类测试需要 ngspice;push/PR 会触发
+`.github/workflows/test.yml` 在 ubuntu 上全量运行)
 
 ## ngspice 检测
 
@@ -68,9 +74,12 @@ app/
 │   ├── worker.py            # SimWorker 单线程任务队列 + stdout 捕获
 │   ├── ngspice_locator.py   # ngspice 三级检测(不会 sys.exit)
 │   ├── gmid_service.py      # GmIdTable 适配(私有数组访问集中在此)
+│   ├── model_registry.py    # 注入 PTM bulk 全节点到 MODEL_INFO(20 模型)
+│   ├── validate_service.py  # 封装 validate_gmoverid 的 5 项物理自检
 │   ├── examples.py          # 9 案例注册表 + monkey-patch 运行器
-│   └── browser_service.py   # 特性图编排(复刻 run_gmoverid/run_multinode 逻辑)
-├── ui/                      # main_window + 三个 tab + settings 对话框
+│   ├── render_lock.py       # 进程级 matplotlib 渲染锁(GUI/worker 互斥)
+│   └── browser_service.py   # 特性图/对比图编排(复刻 run_gmoverid/run_multinode 逻辑)
+├── ui/                      # main_window + 四个 tab + settings/manual 对话框
 │   └── widgets/             # png_viewer / mpl_canvas / log_panel / op_result_view
 └── tests/                   # pytest(worker 单测 + examples 集成测试)
 ```

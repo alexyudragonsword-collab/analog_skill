@@ -11,8 +11,12 @@ from PySide6.QtWidgets import (
 
 from app.core import gmid_service
 from app.core.worker import Job, SimWorker
+from app.ui.job_mixin import JobTabMixin, error_summary
 from app.ui.widgets.mpl_canvas import MplCanvas
 from app.ui.widgets.op_result_view import OpResultView
+
+# gm/ID display window on the design charts [V^-1]
+GMID_XLIM = (4, 24)
 
 # quantity key -> (label, unit, scale to display)
 _LOOKUP_QTYS = [
@@ -26,22 +30,17 @@ _LOOKUP_QTYS = [
 ]
 
 
-class GmIdTab(QWidget):
+class GmIdTab(QWidget, JobTabMixin):
     def __init__(self, worker: SimWorker, parent=None):
         super().__init__(parent)
-        self._worker = worker
-        self._pending_job: str | None = None
-        self._check_job: str | None = None
+        self.init_job_runner(worker)
         self._tbl = None
         self._curves = None
 
-        infos = gmid_service.model_infos()
-
         # ── table-build form ──────────────────────────────────────────────
         self.model_combo = QComboBox()
-        for name, info in infos.items():
-            self.model_combo.addItem(
-                f"{name}  (VDD {info.get('vdd', 1.8)} V)", userData=name)
+        for label, name in gmid_service.model_choices():
+            self.model_combo.addItem(label, userData=name)
         self.model_combo.currentIndexChanged.connect(self._on_model_change)
 
         self.w_spin = QDoubleSpinBox()
@@ -68,6 +67,12 @@ class GmIdTab(QWidget):
         vds_row = QHBoxLayout()
         vds_row.addWidget(self.vds_spin)
         vds_row.addWidget(self.vds_auto)
+
+        # any device-parameter change makes a built table stale
+        self.w_spin.valueChanged.connect(self._invalidate_table)
+        self.l_spin.valueChanged.connect(self._invalidate_table)
+        self.vds_spin.valueChanged.connect(self._invalidate_table)
+        self.vds_auto.toggled.connect(self._invalidate_table)
 
         self.build_btn = QPushButton('Build / Load Table')
         self.build_btn.clicked.connect(self._build_table)
@@ -244,8 +249,6 @@ class GmIdTab(QWidget):
         lay = QHBoxLayout(self)
         lay.addWidget(split)
 
-        worker.job_finished.connect(self._on_finished)
-        worker.job_failed.connect(self._on_failed)
         self._on_model_change()
 
     # ── model/L defaults ──────────────────────────────────────────────────
@@ -259,6 +262,20 @@ class GmIdTab(QWidget):
         self.l_spin.setValue(gmid_service.default_L(model))
         if self.vds_auto.isChecked():
             self.vds_spin.setValue(round(vdd / 2, 3))
+        self._invalidate_table()
+
+    def _invalidate_table(self, *_):
+        """Any model/W/L/Vds change makes a built table stale — drop it so
+        sizing/lookup/self-check cannot silently answer for the old device."""
+        if self._tbl is None:
+            return
+        self._tbl = None
+        self._curves = None
+        self.size_btn.setEnabled(False)
+        self.lk_btn.setEnabled(False)
+        self.check_btn.setEnabled(False)
+        self._range_lbl.setText(
+            'Parameters changed — click "Build / Load Table" to rebuild.')
 
     def _on_mode_change(self, idx):
         self._mode_stack.setCurrentIndex(idx)
@@ -282,27 +299,25 @@ class GmIdTab(QWidget):
 
     # ── table build ───────────────────────────────────────────────────────
     def _build_table(self):
-        if self._pending_job:
+        if self.has_job('build'):
             return
         model = self._current_model()
         W = self.w_spin.value()
         L = self.l_spin.value()
         vds = None if self.vds_auto.isChecked() else self.vds_spin.value()
-        job = Job(
+        self.submit_job('build', Job(
             kind='gmid_table',
             fn=lambda: gmid_service.build_table(model, W, L, vds),
             label=f'gm/ID table: {model} L={L}um',
             log_dir=gmid_service.gmid_log_dir(),
-        )
-        self._pending_job = self._worker.submit(job)
+        ))
         self.build_btn.setEnabled(False)
         self._range_lbl.setText('Building table … (first run needs ngspice '
                                 'sweeps; cached rebuilds are instant)')
         self._err_lbl.setText('')
 
-    def _on_finished(self, job_id, result):
-        if job_id == self._check_job:
-            self._check_job = None
+    def on_job_finished(self, slot, result):
+        if slot == 'check':
             self.check_btn.setEnabled(True)
             n_pass = sum(1 for r in result if r['ok'])
             rows = ''.join(
@@ -313,10 +328,19 @@ class GmIdTab(QWidget):
                 f'<b>{n_pass}/{len(result)} passed</b>'
                 f'<table>{rows}</table>')
             return
-        if job_id != self._pending_job:
-            return
-        self._pending_job = None
         self.build_btn.setEnabled(True)
+        # user may have changed parameters while the build ran — a table for
+        # the old parameters must not be installed as if it were current
+        vds_now = (None if self.vds_auto.isChecked()
+                   else round(self.vds_spin.value(), 3))
+        if (result.model != self._current_model()
+                or abs(result.W - self.w_spin.value()) > 1e-9
+                or abs(result.L - self.l_spin.value()) > 1e-9
+                or (vds_now is not None and abs(result.vds - vds_now) > 1e-9)):
+            self._range_lbl.setText(
+                'Parameters changed during build — click "Build / Load '
+                'Table" again.')
+            return
         self._tbl = result
         self._curves = gmid_service.extract_curves(result)
         rng = result.operating_range()
@@ -326,21 +350,24 @@ class GmIdTab(QWidget):
             f"gm*ro@15 {rng['gmro_at_15']:.1f}")
         self.size_btn.setEnabled(True)
         self.lk_btn.setEnabled(True)
-        self.check_btn.setEnabled(True)
+        # keep disabled if a self-check is still in flight
+        self.check_btn.setEnabled(not self.has_job('check'))
         self._plot_curves()
 
-    def _on_failed(self, job_id, err):
-        last = err.strip().splitlines()[-1] if err.strip() else 'failed'
-        if job_id == self._check_job:
-            self._check_job = None
+    def on_job_failed(self, slot, err):
+        last = error_summary(err)
+        if slot == 'check':
             self.check_btn.setEnabled(True)
             self._check_lbl.setText(
                 f'<font color="red">Self-check failed: {last}</font>')
             return
-        if job_id != self._pending_job:
-            return
-        self._pending_job = None
         self.build_btn.setEnabled(True)
+        # a failed rebuild must not leave the previous table answering
+        self._tbl = None
+        self._curves = None
+        self.size_btn.setEnabled(False)
+        self.lk_btn.setEnabled(False)
+        self.check_btn.setEnabled(False)
         self._range_lbl.setText(
             f'<font color="red">Build failed: {last} (see log panel)</font>')
 
@@ -359,19 +386,18 @@ class GmIdTab(QWidget):
             f'<b>{val:.4g} {unit}</b>')
 
     def _run_selfcheck(self):
-        if self._tbl is None or self._check_job:
+        if self._tbl is None or self.has_job('check'):
             return
         from app.core import validate_service
         model, L = self._tbl.model, self._tbl.L
         vds = self._tbl.vds
         tbl = self._tbl
-        job = Job(
+        self.submit_job('check', Job(
             kind='validate',
             fn=lambda: validate_service.run_validation(model, L, vds, tbl),
             label=f'self-check: {model} L={L}um',
             log_dir=gmid_service.gmid_log_dir(),
-        )
-        self._check_job = self._worker.submit(job)
+        ))
         self.check_btn.setEnabled(False)
         self._check_lbl.setText('Running 5 physics self-checks …')
 
@@ -435,7 +461,7 @@ class GmIdTab(QWidget):
             ax.set_xlabel('$g_m/I_D$ [$V^{-1}$]')
             ax.set_ylabel(ylabel)
             ax.grid(True, alpha=0.3)
-            ax.set_xlim(4, 24)
+            ax.set_xlim(*GMID_XLIM)
             if mark_gmid is not None:
                 ax.axvline(mark_gmid, color='crimson', ls=':', lw=1.2)
         if mark_gmid is not None:

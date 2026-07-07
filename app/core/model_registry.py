@@ -35,8 +35,12 @@ NODE_L_UM = {
 }
 
 
+# PTM convention: sweep stop voltage = 1.2 x VDD (matches the built-ins)
+PTM_HEADROOM = 1.2
+
+
 def _stop(vdd: float) -> float:
-    return round(vdd * 1.2, 3)
+    return round(vdd * PTM_HEADROOM, 3)
 
 
 def build_extra_models() -> dict:

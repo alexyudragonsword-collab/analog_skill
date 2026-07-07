@@ -28,13 +28,14 @@ def test_run_dc_nmos_iv_with_patched_params():
     original_list = sim.VGS_LIST
 
     start = time.time()
-    pngs = run_example('dc_nmos_iv', {
+    render = run_example('dc_nmos_iv', {
         'W_UM': 10.0, 'L_UM': 0.18, 'VGS_LIST': [0.8],
     })
 
     # module global restored after the run
     assert sim.VGS_LIST is original_list
 
+    pngs = render()          # render closure (GUI thread in the app)
     assert len(pngs) == 1
     assert pngs[0].exists()
     assert pngs[0].stat().st_mtime >= start
@@ -64,12 +65,12 @@ def test_advanced_param_patch_and_restore():
 
     mod = importlib.import_module('simulate_ac_cs_amp')
     vdd0, fs0, fstop0 = mod.VDD, mod.FREQ_START, mod.FREQ_STOP
-    pngs = run_example('ac_cs_amp', {
+    render = run_example('ac_cs_amp', {
         'W_UM': 10.0, 'L_UM': 0.18, 'VGS_BIAS': 0.6, 'RD_K': 2.0,
         'CL_PF': 1.0, 'VDD': 2.0, 'FREQ_START': 1e4, 'FREQ_STOP': 50e9,
     })
     assert mod.VDD == vdd0 and mod.FREQ_START == fs0 and mod.FREQ_STOP == fstop0
-    assert pngs[0].exists()
+    assert render()[0].exists()
 
 
 def test_all_specs_defaults_resolve():

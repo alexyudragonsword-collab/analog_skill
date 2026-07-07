@@ -2,6 +2,12 @@
 
 Uses matplotlib.figure.Figure directly (no pyplot), so the skill modules'
 import-time ``matplotlib.use('Agg')`` has no effect on these canvases.
+
+Thread policy: ALL matplotlib rendering in this app happens on the GUI
+thread — worker jobs return render closures that the tabs execute in their
+finished handlers.  matplotlib's process-global font objects are not safe to
+use from more than one thread (crashes were observed even for sequential
+cross-thread use), so no locking scheme can substitute for this policy.
 """
 
 from matplotlib.backends.backend_qtagg import (

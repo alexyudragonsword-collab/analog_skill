@@ -1,4 +1,4 @@
-"""Analog Studio main window: three tabs, log dock, ngspice status bar."""
+"""Analog Studio main window: four tabs, log dock, ngspice status bar."""
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -155,6 +155,11 @@ class MainWindow(QMainWindow):
 
     # ── shutdown ──────────────────────────────────────────────────────────
     def closeEvent(self, event):
+        # stop() drains queued jobs, so at most the in-flight one remains
         self.worker.stop()
-        self.worker.wait(3000)
+        if not self.worker.wait(10000):
+            # last resort at shutdown: better than Qt aborting on a QThread
+            # destroyed while still running
+            self.worker.terminate()
+            self.worker.wait(2000)
         super().closeEvent(event)

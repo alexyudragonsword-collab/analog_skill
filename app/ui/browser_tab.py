@@ -8,20 +8,20 @@ from PySide6.QtWidgets import (
 from app import paths
 from app.core import browser_service, gmid_service
 from app.core.worker import Job, SimWorker
+from app.ui.job_mixin import JobTabMixin, fail_text
 from app.ui.widgets.png_viewer import PngViewer
 
 
-class BrowserTab(QWidget):
+class BrowserTab(QWidget, JobTabMixin):
     def __init__(self, worker: SimWorker, parent=None):
         super().__init__(parent)
-        self._worker = worker
-        self._pending_job: str | None = None
+        self.init_job_runner(worker)
+        self._pending_key: tuple | None = None
         self._cache: dict[tuple, object] = {}   # (type, model, W, L) -> Path
 
         self.model_combo = QComboBox()
-        for name, info in gmid_service.model_infos().items():
-            self.model_combo.addItem(
-                f"{name}  (VDD {info.get('vdd', 1.8)} V)", userData=name)
+        for label, name in gmid_service.model_choices():
+            self.model_combo.addItem(label, userData=name)
         self.model_combo.currentIndexChanged.connect(self._on_model_change)
 
         self.type_combo = QComboBox()
@@ -74,8 +74,6 @@ class BrowserTab(QWidget):
         lay = QHBoxLayout(self)
         lay.addWidget(split)
 
-        worker.job_finished.connect(self._on_finished)
-        worker.job_failed.connect(self._on_failed)
         self._on_model_change()
 
     def _on_model_change(self, *_):
@@ -89,7 +87,7 @@ class BrowserTab(QWidget):
                 round(self.l_spin.value(), 4))
 
     def _generate(self, force: bool):
-        if self._pending_job:
+        if self.has_job('gen'):
             return
         key = self._key()
         if not force and key in self._cache:
@@ -97,39 +95,38 @@ class BrowserTab(QWidget):
             self._status.setText('Loaded from session cache.')
             return
         ptype, model, W, L = key
-        job = Job(
+        self._pending_key = key
+        self.submit_job('gen', Job(
             kind='browser_plot',
             fn=lambda: browser_service.generate_plot(
                 ptype, model, W, L, paths.BROWSER_PLOTS),
             label=f'characterization: {ptype} {model}',
             log_dir=gmid_service.gmid_log_dir(),
-        )
-        self._pending_key = key
-        self._pending_job = self._worker.submit(job)
+        ))
         self.gen_btn.setEnabled(False)
         self.regen_btn.setEnabled(False)
         self._status.setText(f'Generating {ptype} for {model} …')
 
-    def _on_finished(self, job_id, result):
-        if job_id != self._pending_job:
-            return
-        self._pending_job = None
+    def on_job_finished(self, slot, render):
+        # render closure executes here, on the GUI thread — matplotlib is
+        # not safe to use from more than one thread
         self.gen_btn.setEnabled(True)
         self.regen_btn.setEnabled(True)
-        self._cache[self._pending_key] = result
+        try:
+            png = render()
+        except Exception as exc:
+            self._status.setText(f'<font color="red">Plot failed: {exc}</font>')
+            return
+        self._cache[self._pending_key] = png
         self._status.setText('Done.')
-        self._viewer.show_pngs([result])
+        self._viewer.show_pngs([png])
 
-    def _on_failed(self, job_id, err):
-        if job_id != self._pending_job:
-            return
-        self._pending_job = None
+    def on_job_failed(self, slot, err):
         self.gen_btn.setEnabled(True)
         self.regen_btn.setEnabled(True)
-        last = err.strip().splitlines()[-1] if err.strip() else 'failed'
-        self._status.setText(
-            f'<font color="red">Failed: {last} (see log panel)</font>')
+        self._status.setText(fail_text(err))
 
     def set_sim_enabled(self, enabled: bool):
-        self.gen_btn.setEnabled(enabled and not self._pending_job)
-        self.regen_btn.setEnabled(enabled and not self._pending_job)
+        idle = not self.has_job('gen')
+        self.gen_btn.setEnabled(enabled and idle)
+        self.regen_btn.setEnabled(enabled and idle)

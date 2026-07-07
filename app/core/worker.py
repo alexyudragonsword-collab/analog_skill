@@ -86,6 +86,17 @@ class SimWorker(QThread):
         return job.job_id
 
     def stop(self):
+        """Request shutdown: drop jobs that have not started, then signal.
+
+        Without the drain, every queued simulation would still run before the
+        sentinel is seen, and closeEvent's bounded wait() would tear down the
+        QThread mid-job.
+        """
+        try:
+            while True:
+                self._queue.get_nowait()
+        except queue.Empty:
+            pass
         self._queue.put(None)
 
     def run(self):
@@ -101,7 +112,10 @@ class SimWorker(QThread):
                     result = job.fn()
                 stream.flush()
                 self.job_finished.emit(job.job_id, result)
-            except Exception:
+            # BaseException: a job calling sys.exit() must not kill the
+            # worker loop (that would leave the submitting tab's buttons
+            # disabled forever)
+            except BaseException:
                 stream.flush()
                 err = traceback.format_exc()
                 if job.log_dir is not None:

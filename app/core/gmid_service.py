@@ -15,6 +15,12 @@ def model_infos() -> dict:
     return MODEL_INFO
 
 
+def model_choices() -> list[tuple[str, str]]:
+    """(display label, model key) pairs for model dropdowns."""
+    return [(f"{name}  (VDD {info.get('vdd', 1.8)} V)", name)
+            for name, info in model_infos().items()]
+
+
 def default_L(model: str) -> float:
     """Nominal/minimum L per node family [um]."""
     from app.core.model_registry import nominal_L

@@ -1,0 +1,26 @@
+NOTICE — Third-party transistor model files
+
+The PTM (Predictive Technology Model) SPICE model files bundled in this
+repository are copyrighted by the Predictive Technology Model project at
+Arizona State University (https://ptm.asu.edu, mirrored at
+https://mec.umn.edu/ptm) and are free for academic research use. They are
+NOT covered by this repository's MIT license.
+
+Affected files:
+  - gmoverid/assets/models/*.lib
+  - ngspice/assets/models/*.lib
+  - transistor-models/assets/models/bulk_cmos/*.lib
+  - transistor-models/assets/models/finfet/** (.pm, models, param.inc)
+
+When publishing results obtained with these models, please cite:
+
+  Bulk CMOS nodes:
+    W. Zhao and Y. Cao, "New Generation of Predictive Technology Model for
+    Sub-45 nm Early Design Exploration," IEEE Transactions on Electron
+    Devices, vol. 53, no. 11, pp. 2816-2823, Nov. 2006.
+    doi: 10.1109/TED.2006.884077
+
+  PTM-MG FinFET nodes (7-20 nm):
+    S. Sinha, G. Yeric, V. Chandra, B. Cline and Y. Cao, "Exploring
+    sub-20nm FinFET design with Predictive Technology Models," DAC 2012,
+    pp. 283-288. doi: 10.1145/2228360.2228414

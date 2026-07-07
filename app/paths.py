@@ -10,6 +10,7 @@ user-writable workspace and *that* copy is imported — no patching of skill
 code is needed for the write paths to land somewhere writable.
 """
 
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -52,13 +53,32 @@ def _workspace_root() -> Path:
 
 
 def _sync_tree(src: Path, dst: Path):
-    """Copy src → dst once (skipped when dst already exists)."""
+    """Copy src → dst once, atomically.
+
+    The copy lands in a sibling .tmp directory first and is renamed into
+    place, so an interrupted first launch can never leave a half-copied tree
+    that a later `dst.exists()` check would mistake for a complete one.
+    """
     if dst.exists():
         return
     dst.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dst.with_name(dst.name + '.tmp')
+    if tmp.exists():                       # stale leftover from a crash
+        shutil.rmtree(tmp)
     shutil.copytree(
-        src, dst,
+        src, tmp,
         ignore=shutil.ignore_patterns('__pycache__', 'logs', 'plots'))
+    os.replace(tmp, dst)
+
+
+def _prune_old_workspaces(ws_version_dir: Path):
+    """Delete workspace dirs left over from previous app versions."""
+    parent = ws_version_dir.parent
+    if not parent.is_dir():
+        return
+    for entry in parent.iterdir():
+        if entry.is_dir() and entry != ws_version_dir:
+            shutil.rmtree(entry, ignore_errors=True)
 
 
 def bulk_models_dir() -> Path:
@@ -102,6 +122,7 @@ def init_runtime():
     if is_frozen():
         bundle = _bundle_skill_dir()
         ws = _workspace_root()
+        _prune_old_workspaces(ws)
         _sync_tree(bundle / 'ngspice_assets', ws / 'ngspice_assets')
         _sync_tree(bundle / 'gmoverid_assets', ws / 'gmoverid_assets')
         NGSPICE_ASSETS = ws / 'ngspice_assets'

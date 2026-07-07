@@ -11,14 +11,14 @@ from PySide6.QtWidgets import (
 
 from app.core.examples import REGISTRY, run_example, example_log_dir
 from app.core.worker import Job, SimWorker
+from app.ui.job_mixin import JobTabMixin, fail_text
 from app.ui.widgets.png_viewer import PngViewer
 
 
-class ExamplesTab(QWidget):
+class ExamplesTab(QWidget, JobTabMixin):
     def __init__(self, worker: SimWorker, parent=None):
         super().__init__(parent)
-        self._worker = worker
-        self._pending_job: str | None = None
+        self.init_job_runner(worker)
         self._fields: dict[str, QWidget] = {}
         self._spec = None
 
@@ -76,8 +76,6 @@ class ExamplesTab(QWidget):
         lay = QHBoxLayout(self)
         lay.addWidget(split)
 
-        worker.job_finished.connect(self._on_finished)
-        worker.job_failed.connect(self._on_failed)
         self._list.setCurrentRow(0)
 
     # ── form handling ─────────────────────────────────────────────────────
@@ -154,38 +152,35 @@ class ExamplesTab(QWidget):
 
     # ── run / results ─────────────────────────────────────────────────────
     def _run(self):
-        if self._spec is None or self._pending_job:
+        if self._spec is None or self.has_job('run'):
             return
         values = self._collect_values()
         if values is None:
             return
         key = self._spec.key
-        job = Job(
+        self.submit_job('run', Job(
             kind='example',
             fn=lambda: run_example(key, values),
             label=f'example: {key}',
             log_dir=example_log_dir(),
-        )
-        self._pending_job = self._worker.submit(job)
+        ))
         self.run_btn.setEnabled(False)
         self._status.setText(f'Running {key} …')
 
-    def _on_finished(self, job_id, result):
-        if job_id != self._pending_job:
-            return
-        self._pending_job = None
+    def on_job_finished(self, slot, render):
+        # render closure executes on the GUI thread (matplotlib single-thread)
         self.run_btn.setEnabled(True)
+        try:
+            pngs = render()
+        except Exception as exc:
+            self._status.setText(f'<font color="red">Plot failed: {exc}</font>')
+            return
         self._status.setText('Done.')
-        self._viewer.show_pngs(result)
+        self._viewer.show_pngs(pngs)
 
-    def _on_failed(self, job_id, err):
-        if job_id != self._pending_job:
-            return
-        self._pending_job = None
+    def on_job_failed(self, slot, err):
         self.run_btn.setEnabled(True)
-        first = err.strip().splitlines()[-1] if err.strip() else 'failed'
-        self._status.setText(
-            f'<font color="red">Failed: {first} (see log panel)</font>')
+        self._status.setText(fail_text(err))
 
     def set_sim_enabled(self, enabled: bool):
-        self.run_btn.setEnabled(enabled and not self._pending_job)
+        self.run_btn.setEnabled(enabled and not self.has_job('run'))

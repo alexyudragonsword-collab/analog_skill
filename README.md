@@ -20,6 +20,12 @@
 
 Three skill packages that give an Agent the ability to design and simulate analog circuits: **ngspice basics** / **gm/ID design** / **PTM model library**.
 
+> **Desktop app**: this repository also ships **Analog Studio** — a PySide6
+> desktop workbench built on these skills (gm/ID designer, the nine ngspice
+> examples, a characterization browser and comparison plots, with all PTM
+> bulk nodes selectable). See [`APP_README.md`](./APP_README.md) for usage,
+> Windows packaging (PyInstaller/Nuitka) and architecture.
+
 > **If you are human**: the examples below include images that show each skill's output at a glance.
 
 > **If you are an AI Agent**: skip the images and go directly to [Installation](#installation). The full instructions for each skill are in its own `SKILL.md`; runnable scripts and model files are in the `assets/` directories.

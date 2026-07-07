@@ -10,14 +10,15 @@ from PySide6.QtWidgets import (
 from app import paths
 from app.core import browser_service, gmid_service
 from app.core.worker import Job, SimWorker
+from app.ui.job_mixin import JobTabMixin, fail_text
 from app.ui.widgets.png_viewer import PngViewer
 
 
-class ComparisonTab(QWidget):
+class ComparisonTab(QWidget, JobTabMixin):
     def __init__(self, worker: SimWorker, parent=None):
         super().__init__(parent)
-        self._worker = worker
-        self._pending_job: str | None = None
+        self.init_job_runner(worker)
+        self._pending_key: tuple | None = None
         self._cache: dict[tuple, object] = {}
 
         self._models = list(gmid_service.model_infos().keys())
@@ -80,9 +81,6 @@ class ComparisonTab(QWidget):
         lay = QHBoxLayout(self)
         lay.addWidget(split)
 
-        worker.job_finished.connect(self._on_finished)
-        worker.job_failed.connect(self._on_failed)
-
     def _make_model_list(self) -> QListWidget:
         w = QListWidget()
         w.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
@@ -95,7 +93,7 @@ class ComparisonTab(QWidget):
 
     # ── run ───────────────────────────────────────────────────────────────
     def _generate(self):
-        if self._pending_job:
+        if self.has_job('gen'):
             return
         mode = self.mode_combo.currentData()
         try:
@@ -108,9 +106,9 @@ class ComparisonTab(QWidget):
             self._status.setText('Loaded from session cache.')
             return
         self._pending_key = key
-        job = Job(kind='comparison', fn=fn, label=f'comparison: {mode}',
-                  log_dir=gmid_service.gmid_log_dir())
-        self._pending_job = self._worker.submit(job)
+        self.submit_job('gen', Job(
+            kind='comparison', fn=fn, label=f'comparison: {mode}',
+            log_dir=gmid_service.gmid_log_dir()))
         self.gen_btn.setEnabled(False)
         self._status.setText(f'Generating {mode} comparison …')
 
@@ -145,23 +143,21 @@ class ComparisonTab(QWidget):
         return (lambda: browser_service.generate_caps_comparison(
             selected, out)), key
 
-    def _on_finished(self, job_id, result):
-        if job_id != self._pending_job:
-            return
-        self._pending_job = None
+    def on_job_finished(self, slot, render):
+        # render closure executes on the GUI thread (matplotlib single-thread)
         self.gen_btn.setEnabled(True)
-        self._cache[self._pending_key] = result
+        try:
+            png = render()
+        except Exception as exc:
+            self._status.setText(f'<font color="red">Plot failed: {exc}</font>')
+            return
+        self._cache[self._pending_key] = png
         self._status.setText('Done.')
-        self._viewer.show_pngs([result])
+        self._viewer.show_pngs([png])
 
-    def _on_failed(self, job_id, err):
-        if job_id != self._pending_job:
-            return
-        self._pending_job = None
+    def on_job_failed(self, slot, err):
         self.gen_btn.setEnabled(True)
-        last = err.strip().splitlines()[-1] if err.strip() else 'failed'
-        self._status.setText(
-            f'<font color="red">Failed: {last} (see log panel)</font>')
+        self._status.setText(fail_text(err))
 
     def set_sim_enabled(self, enabled: bool):
-        self.gen_btn.setEnabled(enabled and not self._pending_job)
+        self.gen_btn.setEnabled(enabled and not self.has_job('gen'))

@@ -1,0 +1,4 @@
+# development / packaging only — end users do not need these
+pytest>=7
+pyinstaller>=6
+nuitka>=2

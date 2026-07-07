@@ -7,6 +7,23 @@ and the 180nm constants in run_gmoverid.py.
 """
 
 from pathlib import Path
+from typing import Callable
+
+# All functions here run their ngspice sweeps on the worker thread but return
+# a zero-argument RENDER CLOSURE instead of plotting directly: matplotlib
+# font objects are cached process-globally and are not safe to use from more
+# than one thread (even sequentially), so every render must happen on the GUI
+# thread — the tab executes the closure in its job-finished handler.
+
+# reference width for characterization sweeps [um] (results are W-independent)
+REF_W_UM = 10.0
+
+# VDD fractions used to derive sweep configs for nodes without a hand-tuned
+# table (single source of truth — keep NODE_PARAMS visually consistent)
+BIAS_FRACTIONS = (0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95)
+VDS_LIST_FRACTIONS = (0.25, 0.5, 0.9)
+VDS_GDS_FRACTIONS = (0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
+VGS_IV_FRACTIONS = (0.4, 0.5, 0.6, 0.7, 0.8)
 
 # Sweep configuration per node family (mirrors run_gmoverid / run_multinode)
 NODE_PARAMS = {
@@ -37,11 +54,18 @@ PLOT_TYPES = {
 }
 
 
-def node_key(model: str) -> str:
-    for key in ('45hp', '22hp'):
+def node_key(model: str) -> str | None:
+    """Hand-tuned config key for a model, or None → derive from VDD.
+
+    Only the three tuned families map to NODE_PARAMS; every other node
+    (130/90/65/32/LP…) must take the VDD-scaled branch — falling back to the
+    180 nm table would sweep those devices beyond their supply (e.g. 1.5 V
+    onto a 1.0 V node).
+    """
+    for key in ('45hp', '22hp', '180'):
         if key in model:
             return key
-    return '180'
+    return None
 
 
 def node_params_for(model: str) -> dict:
@@ -52,20 +76,17 @@ def node_params_for(model: str) -> dict:
     (130/90/65/32/…/LP) work without a bespoke table.
     """
     key = node_key(model)
-    if key in NODE_PARAMS:
+    if key is not None and key in NODE_PARAMS:
         return NODE_PARAMS[key]
 
     from simulate_gmoverid import MODEL_INFO
     vdd = float(MODEL_INFO[model].get('vdd', 1.8))
-    # 9 gate biases spanning ~0.15·VDD .. 0.95·VDD; Vds fractions in saturation
-    vgs_bias = [round(vdd * f, 3) for f in
-                (0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95)]
+    scale = lambda fracs: [round(vdd * f, 3) for f in fracs]
     return dict(
-        vds_list=[round(vdd * f, 3) for f in (0.25, 0.5, 0.9)],
-        vds_gds=[round(vdd * f, 3) for f in
-                 (0.5, 0.6, 0.7, 0.8, 0.9, 1.0)],
-        vgs_bias=vgs_bias,
-        vgs_iv=[round(vdd * f, 3) for f in (0.4, 0.5, 0.6, 0.7, 0.8)],
+        vds_list=scale(VDS_LIST_FRACTIONS),
+        vds_gds=scale(VDS_GDS_FRACTIONS),
+        vgs_bias=scale(BIAS_FRACTIONS),
+        vgs_iv=scale(VGS_IV_FRACTIONS),
     )
 
 
@@ -75,8 +96,8 @@ def _polarity(model: str) -> str:
 
 
 def generate_plot(plot_type: str, model: str, W: float, L: float,
-                  out_dir: Path) -> Path:
-    """Run the sweeps for one plot type and save the PNG.  Worker thread."""
+                  out_dir: Path) -> Callable[[], Path]:
+    """Run the sweeps (worker thread) and return a GUI-thread render closure."""
     from simulate_gmoverid import (
         run_vgs_sweeps, run_vds_sweeps, run_vsg_sweeps, run_vsd_sweeps)
     from plot_gmoverid import plot_main, plot_iv, plot_caps
@@ -100,7 +121,7 @@ def generate_plot(plot_type: str, model: str, W: float, L: float,
 
     if plot_type == 'caps':
         out = out_dir / f'caps_{stem}.png'
-        return Path(plot_caps(W, L, model, out_path=out))
+        return lambda: Path(plot_caps(W, L, model, out_path=out))
 
     if plot_type == 'iv':
         vg = vgs_sweeps(cfg['vds_list'][-1:])
@@ -109,8 +130,8 @@ def generate_plot(plot_type: str, model: str, W: float, L: float,
         w_iv = round(10 * L, 3)              # W/L = 10 output curves
         vd_iv = vds_sweeps(cfg['vgs_iv'], w=w_iv)
         out = out_dir / f'iv_{stem}.png'
-        return Path(plot_iv(vg, vd_iv, W, L, w_iv_um=w_iv, model=model,
-                            out_path=out))
+        return lambda: Path(plot_iv(vg, vd_iv, W, L, w_iv_um=w_iv,
+                                    model=model, out_path=out))
 
     if plot_type == 'main':
         vg = vgs_sweeps(cfg['vds_list'])
@@ -119,8 +140,8 @@ def generate_plot(plot_type: str, model: str, W: float, L: float,
         vd = vds_sweeps(cfg['vgs_bias'])
         vg_gds = vgs_sweeps(cfg['vds_gds'])
         out = out_dir / f'main_{stem}.png'
-        return Path(plot_main(vg, vd, W, L, model, out_path=out,
-                              vgs_gds_results=vg_gds))
+        return lambda: Path(plot_main(vg, vd, W, L, model, out_path=out,
+                                      vgs_gds_results=vg_gds))
 
     raise ValueError(f'Unknown plot type: {plot_type!r}')
 
@@ -138,18 +159,22 @@ def _run_comp(model, L):
     cfg = node_params_for(model)
     vds_comp = [cfg['vds_list'][-1]]         # single Vds ~ saturation
     if _polarity(model) == 'pmos':
-        vg = run_vsg_sweeps(10.0, L, model=model, vsd_list=vds_comp)
-        vd = run_vsd_sweeps(10.0, L, model=model, vsg_bias_list=cfg['vgs_bias'])
-        vg_gds = run_vsg_sweeps(10.0, L, model=model, vsd_list=cfg['vds_gds'])
+        vg = run_vsg_sweeps(REF_W_UM, L, model=model, vsd_list=vds_comp)
+        vd = run_vsd_sweeps(REF_W_UM, L, model=model,
+                            vsg_bias_list=cfg['vgs_bias'])
+        vg_gds = run_vsg_sweeps(REF_W_UM, L, model=model,
+                                vsd_list=cfg['vds_gds'])
     else:
-        vg = run_vgs_sweeps(10.0, L, model=model, vds_list=vds_comp)
-        vd = run_vds_sweeps(10.0, L, model=model, vgs_bias_list=cfg['vgs_bias'])
-        vg_gds = run_vgs_sweeps(10.0, L, model=model, vds_list=cfg['vds_gds'])
+        vg = run_vgs_sweeps(REF_W_UM, L, model=model, vds_list=vds_comp)
+        vd = run_vds_sweeps(REF_W_UM, L, model=model,
+                            vgs_bias_list=cfg['vgs_bias'])
+        vg_gds = run_vgs_sweeps(REF_W_UM, L, model=model,
+                                vds_list=cfg['vds_gds'])
     return vg, vd, vg_gds
 
 
-def generate_length_comparison(model, L_list, out_dir: Path) -> Path:
-    """Overlay gm/ID four-quadrant curves for one model at several L values."""
+def generate_length_comparison(model, L_list, out_dir: Path) -> Callable[[], Path]:
+    """Sweeps on worker; returns a GUI-thread render closure."""
     from plot_gmoverid import plot_comparison
     pol = _polarity(model)
     sweeps, vds_sweeps_list, gds_sweeps, labels = [], [], [], []
@@ -164,16 +189,15 @@ def generate_length_comparison(model, L_list, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     ls = '_'.join(str(round(L * 1000)) for L in L_list)
     out = out_dir / f'cmp_length_{model}_{ls}nm.png'
-    return Path(plot_comparison(
-        sweep_list=sweeps, vds_list=vds_sweeps_list, vgs_gds_list=gds_sweeps,
-        param_labels=labels, polarity=pol,
+    return lambda: Path(plot_comparison(
+        sweep_list=sweeps, vds_list=vds_sweeps_list,
+        vgs_gds_list=gds_sweeps, param_labels=labels, polarity=pol,
         title=f'{model} Channel-Length Comparison',
         out_path=out))
 
 
-def generate_node_comparison(models, out_dir: Path) -> Path:
-    """Overlay gm/ID four-quadrant curves across several models (each at its
-    nominal L)."""
+def generate_node_comparison(models, out_dir: Path) -> Callable[[], Path]:
+    """Sweeps on worker; returns a GUI-thread render closure."""
     from plot_gmoverid import plot_comparison
     from app.core.model_registry import nominal_L
     pol = _polarity(models[0])
@@ -191,19 +215,20 @@ def generate_node_comparison(models, out_dir: Path) -> Path:
         labels.append(model)
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f'cmp_node_{pol}_{"_".join(models)}.png'
-    return Path(plot_comparison(
-        sweep_list=sweeps, vds_list=vds_sweeps_list, vgs_gds_list=gds_sweeps,
-        param_labels=labels, polarity=pol,
+    return lambda: Path(plot_comparison(
+        sweep_list=sweeps, vds_list=vds_sweeps_list,
+        vgs_gds_list=gds_sweeps, param_labels=labels, polarity=pol,
         title=f'{pol.upper()} Node Comparison',
         out_path=out))
 
 
-def generate_caps_comparison(models, out_dir: Path) -> Path:
-    """Cross-node gate-capacitance comparison (analytical, fast)."""
+def generate_caps_comparison(models, out_dir: Path) -> Callable[[], Path]:
+    """Analytical caps comparison; returns a GUI-thread render closure."""
     from plot_gmoverid import plot_caps_comparison
     from app.core.model_registry import nominal_L
     pol = _polarity(models[0])
-    node_configs = [(m, 10.0, nominal_L(m)) for m in models]
+    node_configs = [(m, REF_W_UM, nominal_L(m)) for m in models]
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f'cmp_caps_{pol}_{"_".join(models)}.png'
-    return Path(plot_caps_comparison(node_configs, polarity=pol, out_path=out))
+    return lambda: Path(plot_caps_comparison(node_configs, polarity=pol,
+                                             out_path=out))

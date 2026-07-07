@@ -360,16 +360,23 @@ def patched(module, overrides: dict):
             setattr(module, k, v)
 
 
-def run_example(key: str, values: dict) -> list[Path]:
-    """Import, patch, simulate, plot; return the produced PNG paths."""
+def run_example(key: str, values: dict):
+    """Import, patch, simulate (worker thread); return a render closure.
+
+    The closure runs plot_all and returns the PNG paths — it must be executed
+    on the GUI thread (matplotlib is single-thread-only in this app).
+    """
     spec = REGISTRY[key]
     sim = importlib.import_module(spec.sim_module)
     plot = importlib.import_module(spec.plot_module)
     overrides = spec.overrides(values, sim)
     with patched(sim, overrides):
         results = sim.simulate_all()
-    plot.plot_all(results)
-    return [Path(plot.OUT_PNG)]
+
+    def render() -> list[Path]:
+        plot.plot_all(results)
+        return [Path(plot.OUT_PNG)]
+    return render
 
 
 def example_log_dir() -> Path:

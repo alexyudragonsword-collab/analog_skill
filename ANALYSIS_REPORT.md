@@ -1,5 +1,10 @@
 # gmoverid-skill 仓库分析报告
 
+> **历史文档**:本报告分析的是 vendor 时点(2026-07-05)的上游仓库
+> `Arcadia-1/gmoverid-skill`,不反映本仓库当前状态——本仓库此后新增了
+> Analog Studio 桌面应用(`app/`,见 `APP_README.md`)、pytest 测试与
+> CI、LICENSE 等;文中"无自动化测试/CI"等结论对当前仓库已不成立。
+
 来源仓库：https://github.com/Arcadia-1/gmoverid-skill
 分析日期：2026-07-05
 
