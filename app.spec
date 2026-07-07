@@ -47,6 +47,10 @@ a = Analysis(
     hiddenimports=[
         'scipy.stats',
         'scipy.special',
+        # skill code (loaded at runtime via sys.path, invisible to analysis)
+        # uses scipy.signal.medfilt in plot_gmoverid's four-quadrant/comparison
+        # gm*ro smoothing — must be forced in
+        'scipy.signal',
         'matplotlib.backends.backend_qtagg',
         'matplotlib.backends.backend_agg',
     ],

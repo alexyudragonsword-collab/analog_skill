@@ -95,6 +95,7 @@ jobs:
             --include-module=matplotlib.backends.backend_agg `
             --include-module=matplotlib.backends.backend_qtagg `
             --include-module=scipy.stats `
+            --include-module=scipy.signal `
             --include-package-data=matplotlib `
             --include-data-dir=app/resources=app_resources `
             --include-data-dir=transistor-models/assets/models/bulk_cmos=bulk_models `

@@ -120,7 +120,9 @@ def init_runtime():
             sys.path.insert(0, p)
 
     # Only the skill code uses scipy; import it here so PyInstaller's
-    # analysis of app/ pulls it into the bundle.
-    import scipy.stats  # noqa: F401
+    # analysis of app/ pulls it into the bundle (scipy.signal.medfilt is
+    # used by plot_gmoverid's four-quadrant/comparison plots).
+    import scipy.stats   # noqa: F401
+    import scipy.signal  # noqa: F401
 
     _initialized = True
