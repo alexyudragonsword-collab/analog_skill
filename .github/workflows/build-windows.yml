@@ -4,6 +4,14 @@ on:
   workflow_dispatch:
   push:
     tags: ['v*']
+    branches: ['claude/gmoverid-skill-analysis-7ron1c']
+    paths:
+      - 'app/**'
+      - 'gmoverid/**'
+      - 'ngspice/**'
+      - 'requirements*.txt'
+      - 'app.spec'
+      - '.github/workflows/build-windows.yml'
 
 env:
   PYTHON_VERSION: '3.11'
