@@ -63,6 +63,88 @@ jobs:
           if-no-files-found: error
 
   # ───────────────────────────────────────────────────────────────────────────
+  # Diagnostic spikes: isolate the Windows-only access violation seen when
+  # the Nuitka-built app executes `import scipy.stats`. Three minimal
+  # console-mode binaries partition the failure space: numpy alone,
+  # scipy alone, and Qt-then-scipy (the app's import order).
+  # Remove this job once the nuitka smoke test is green.
+  # ───────────────────────────────────────────────────────────────────────────
+  nuitka-spike:
+    runs-on: windows-latest
+    env:
+      PYTHONFAULTHANDLER: 1
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy scipy PySide6 "nuitka>=2.8,<3"
+
+      - name: Restore Nuitka compilation cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~\AppData\Local\Nuitka\Nuitka\Cache
+          key: nuitka-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-spike-${{ github.run_id }}
+          restore-keys: |
+            nuitka-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-
+            nuitka-${{ runner.os }}-
+
+      - name: Spike 1 — numpy only
+        shell: pwsh
+        run: |
+          Set-Content spike1.py "import numpy; print('numpy', numpy.__version__, 'OK')"
+          python -m nuitka --standalone --assume-yes-for-downloads --msvc=latest `
+            --output-dir=s1 spike1.py
+          $site = python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
+          Get-ChildItem -Path $site -Directory -Filter '*.libs' |
+            ForEach-Object { Get-ChildItem "$($_.FullName)\*.dll" | Copy-Item -Force -Destination s1\spike1.dist }
+          & .\s1\spike1.dist\spike1.exe
+          if ($LASTEXITCODE -ne 0) { Write-Error "spike1 (numpy) failed: $LASTEXITCODE"; exit 1 }
+
+      - name: Spike 2 — scipy.stats + scipy.signal
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          Set-Content spike2.py "import scipy.stats, scipy.signal; print('scipy OK')"
+          python -m nuitka --standalone --assume-yes-for-downloads --msvc=latest `
+            --output-dir=s2 spike2.py
+          $site = python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
+          Get-ChildItem -Path $site -Directory -Filter '*.libs' |
+            ForEach-Object { Get-ChildItem "$($_.FullName)\*.dll" | Copy-Item -Force -Destination s2\spike2.dist }
+          & .\s2\spike2.dist\spike2.exe
+          if ($LASTEXITCODE -ne 0) { Write-Error "spike2 (scipy) failed: $LASTEXITCODE"; exit 1 }
+
+      - name: Spike 3 — QApplication then scipy (app's order)
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          @'
+          from PySide6.QtWidgets import QApplication
+          app = QApplication([])
+          import scipy.stats
+          import scipy.signal
+          print('qt-then-scipy OK')
+          '@ -replace '(?m)^          ', '' | Set-Content spike3.py
+          python -m nuitka --standalone --assume-yes-for-downloads --msvc=latest `
+            --enable-plugin=pyside6 --output-dir=s3 spike3.py
+          $site = python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
+          Get-ChildItem -Path $site -Directory -Filter '*.libs' |
+            ForEach-Object { Get-ChildItem "$($_.FullName)\*.dll" | Copy-Item -Force -Destination s3\spike3.dist }
+          & .\s3\spike3.dist\spike3.exe
+          if ($LASTEXITCODE -ne 0) { Write-Error "spike3 (qt+scipy) failed: $LASTEXITCODE"; exit 1 }
+
+      - name: Save Nuitka compilation cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~\AppData\Local\Nuitka\Nuitka\Cache
+          key: nuitka-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-spike-${{ github.run_id }}
+
+  # ───────────────────────────────────────────────────────────────────────────
   # Variant 2: Nuitka (standalone, compiled to C)
   # ───────────────────────────────────────────────────────────────────────────
   nuitka:

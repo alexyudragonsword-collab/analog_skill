@@ -7,6 +7,13 @@ import sys
 
 
 def main() -> int:
+    # Import scipy before any Qt module: the Nuitka Windows build dies with
+    # an access violation when scipy's extension modules load after Qt is
+    # already up, while the reverse order is fine (paths.init_runtime keeps
+    # its own scipy imports; they become no-ops here).
+    import scipy.stats   # noqa: F401
+    import scipy.signal  # noqa: F401
+
     from PySide6.QtWidgets import QApplication
     from PySide6.QtCore import QTimer
 
