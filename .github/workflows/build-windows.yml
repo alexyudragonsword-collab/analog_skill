@@ -91,6 +91,8 @@ jobs:
             --assume-yes-for-downloads `
             --msvc=latest `
             --enable-plugin=pyside6 `
+            --include-qt-plugins=all `
+            --include-module=PySide6.QtSvg `
             --include-module=matplotlib.backends.backend_agg `
             --include-module=matplotlib.backends.backend_qtagg `
             --include-module=scipy.stats `
@@ -99,6 +101,8 @@ jobs:
             --include-data-dir=app/resources=app_resources `
             --include-data-dir=transistor-models/assets/models/bulk_cmos=bulk_models `
             --windows-console-mode=disable `
+            --force-stderr-spec="{PROGRAM_BASE}.err.txt" `
+            --force-stdout-spec="{PROGRAM_BASE}.out.txt" `
             --output-filename=AnalogStudio.exe `
             --output-dir=build-nuitka `
             app/main.py
@@ -127,6 +131,15 @@ jobs:
             Write-Error "smoke test failed with exit code $($p.ExitCode)"
             exit 1
           }
+
+      - name: Dump app output on failure
+        if: failure()
+        shell: pwsh
+        # the windowed exe writes stdout/stderr to *.txt via --force-std*-spec;
+        # print them so crashes show their traceback in the CI log
+        run: |
+          Get-ChildItem build-nuitka\AnalogStudio\AnalogStudio.*.txt -ErrorAction SilentlyContinue |
+            ForEach-Object { Write-Host "===== $($_.Name) ====="; Get-Content $_ }
 
       - name: Package zip
         shell: pwsh
