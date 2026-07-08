@@ -91,7 +91,6 @@ jobs:
             --assume-yes-for-downloads `
             --msvc=latest `
             --enable-plugin=pyside6 `
-            --include-qt-plugins=all `
             --include-module=PySide6.QtSvg `
             --include-module=matplotlib.backends.backend_agg `
             --include-module=matplotlib.backends.backend_qtagg `
@@ -107,10 +106,17 @@ jobs:
             --output-dir=build-nuitka `
             app/main.py
 
-      - name: Bundle skill assets
+      - name: Bundle skill assets + wheel DLLs
         shell: pwsh
         # app/paths.py looks for <exe dir>/skill/{ngspice_assets,gmoverid_assets}
         # and syncs them to a writable per-user workspace on first launch.
+        #
+        # The *.libs dirs (numpy.libs, scipy.libs) hold the delvewheel-bundled
+        # OpenBLAS DLLs.  Nuitka's DLL scan misses them (they are found via
+        # os.add_dll_directory at runtime, not the import table search path),
+        # and without them `import scipy` segfaults at startup — they must sit
+        # next to the package dirs in the dist, where the delvewheel patch in
+        # numpy/__init__.py resolves `<pkg>/../numpy.libs`.
         run: |
           $dist = "build-nuitka\main.dist"
           New-Item -ItemType Directory -Force -Path "$dist\skill" | Out-Null
@@ -118,11 +124,19 @@ jobs:
           Copy-Item -Recurse gmoverid\assets "$dist\skill\gmoverid_assets"
           Get-ChildItem -Recurse "$dist\skill" -Include __pycache__,logs,plots -Directory |
             Remove-Item -Recurse -Force
+          $site = python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
+          Get-ChildItem -Path $site -Directory -Filter '*.libs' | ForEach-Object {
+            Write-Host "Bundling wheel DLL dir: $($_.Name)"
+            Copy-Item -Recurse -Force $_.FullName "$dist\$($_.Name)"
+          }
           Rename-Item "$dist" "AnalogStudio"
 
       - name: Smoke test (offscreen)
         env:
           QT_QPA_PLATFORM: offscreen
+          # crashes then dump a Python traceback into AnalogStudio.err.txt,
+          # which the failure step below prints
+          PYTHONFAULTHANDLER: 1
         shell: pwsh
         run: |
           $p = Start-Process -FilePath ".\build-nuitka\AnalogStudio\AnalogStudio.exe" `
