@@ -1,0 +1,63 @@
+name: Compile FinFET OSDI (Windows)
+description: >
+  Best-effort build of a Windows bsimcmg.osdi from the vendored BSIM-CMG
+  Verilog-A source, using the OpenVAF compiler, so the packaged app can run
+  FinFET simulations out of the box on Windows.  If the compiler cannot be
+  obtained or the compile fails, the produced file is simply absent and the
+  app disables FinFET on Windows (bulk is unaffected) — callers should mark
+  this step continue-on-error so it never breaks a build.
+
+runs:
+  using: composite
+  steps:
+    - name: Build Windows bsimcmg.osdi
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $repo = "transistor-models/assets/models/finfet/osdi"
+        $dst  = "$repo/windows_amd64"
+        $va   = "$repo/va_src"
+        New-Item -ItemType Directory -Force -Path $dst | Out-Null
+        $tmp = Join-Path $env:RUNNER_TEMP "ovf"
+        New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+
+        # Candidate OpenVAF Windows compiler downloads.  The CDN paths mirror
+        # the Linux artifact used to build the vendored linux .osdi; the
+        # GitHub release is queried dynamically as a version-agnostic fallback.
+        $urls = @(
+          'https://openva.fra1.cdn.digitaloceanspaces.com/openvaf_23_5_0_windows_amd64.zip',
+          'https://openva.fra1.cdn.digitaloceanspaces.com/openvaf_23_5_0_windows.zip',
+          'https://openva.fra1.cdn.digitaloceanspaces.com/openvaf_devel_windows_amd64.zip'
+        )
+        try {
+          $rel = Invoke-RestMethod 'https://api.github.com/repos/OpenVAF/OpenVAF-Reloaded/releases/latest' `
+                                   -Headers @{ 'User-Agent' = 'gh-actions' }
+          foreach ($a in $rel.assets) {
+            if ($a.name -match '(?i)win.*\.(zip|tar\.gz)$') { $urls += $a.browser_download_url }
+          }
+        } catch { Write-Host "OpenVAF release discovery failed: $_" }
+
+        $exe = $null
+        foreach ($u in $urls) {
+          try {
+            Write-Host "Trying OpenVAF download: $u"
+            $arc = Join-Path $tmp ([IO.Path]::GetFileName($u))
+            Invoke-WebRequest $u -OutFile $arc -UseBasicParsing -TimeoutSec 120
+            $ext = Join-Path $tmp 'extract'
+            New-Item -ItemType Directory -Force -Path $ext | Out-Null
+            if ($u -match '\.tar\.gz$') { tar -xzf $arc -C $ext } else { Expand-Archive -Force $arc $ext }
+            $found = Get-ChildItem -Recurse $ext -Filter 'openvaf.exe' | Select-Object -First 1
+            if ($found) { $exe = $found; break }
+          } catch { Write-Host "  download/extract failed: $_" }
+        }
+        if (-not $exe) { throw 'Could not obtain an OpenVAF Windows compiler' }
+
+        Write-Host "Using compiler: $($exe.FullName)"
+        Push-Location $va
+        try { & $exe.FullName bsimcmg.va } finally { Pop-Location }
+
+        $out = Join-Path $va 'bsimcmg.osdi'
+        if (-not (Test-Path $out)) { throw 'OpenVAF produced no bsimcmg.osdi' }
+        Copy-Item $out (Join-Path $dst 'bsimcmg.osdi') -Force
+        $sz = (Get-Item (Join-Path $dst 'bsimcmg.osdi')).Length
+        Write-Host "Windows bsimcmg.osdi built OK: $sz bytes"

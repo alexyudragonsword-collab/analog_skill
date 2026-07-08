@@ -35,6 +35,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
 
+      # best-effort: build a win64 bsimcmg.osdi so FinFET works out of the box;
+      # never fails the build (FinFET just stays disabled on Windows if it can't)
+      - name: Compile FinFET OSDI (Windows)
+        continue-on-error: true
+        uses: ./.github/actions/finfet-osdi-windows
+
       - name: Build with PyInstaller
         run: pyinstaller app.spec --noconfirm
 
@@ -91,6 +97,12 @@ jobs:
           restore-keys: |
             nuitka-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-
             nuitka-${{ runner.os }}-
+
+      # best-effort: build a win64 bsimcmg.osdi so FinFET works out of the box;
+      # never fails the build (FinFET just stays disabled on Windows if it can't)
+      - name: Compile FinFET OSDI (Windows)
+        continue-on-error: true
+        uses: ./.github/actions/finfet-osdi-windows
 
       - name: Build with Nuitka
         shell: pwsh
