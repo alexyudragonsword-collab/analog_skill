@@ -1,4 +1,7 @@
 # development / packaging only — end users do not need these
 pytest>=7
 pyinstaller>=6
-nuitka>=2
+# Nuitka 4.x's pyside6 plugin ships dists without any PySide6/shiboken6
+# extension modules (verified 4.1.3: loader then aborts/segfaults at
+# startup); the 2.x series packages PySide6 correctly — keep it pinned.
+nuitka>=2.8,<3
