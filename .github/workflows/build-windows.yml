@@ -80,12 +80,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
 
-      - name: Cache Nuitka compilation
-        uses: actions/cache@v4
+      # restore/save split so the compilation cache is saved even when a later
+      # step (smoke test) fails — otherwise every debug iteration recompiles
+      # all ~900 C files from scratch (~45 min)
+      - name: Restore Nuitka compilation cache
+        uses: actions/cache/restore@v4
         with:
           path: ~\AppData\Local\Nuitka\Nuitka\Cache
-          key: nuitka-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt') }}
-          restore-keys: nuitka-${{ runner.os }}-
+          key: nuitka-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-${{ github.run_id }}
+          restore-keys: |
+            nuitka-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-
+            nuitka-${{ runner.os }}-
 
       - name: Build with Nuitka
         shell: pwsh
@@ -114,6 +119,13 @@ jobs:
             --output-dir=build-nuitka `
             app/main.py
 
+      - name: Save Nuitka compilation cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~\AppData\Local\Nuitka\Nuitka\Cache
+          key: nuitka-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-${{ github.run_id }}
+
       - name: Bundle skill assets + wheel DLLs
         shell: pwsh
         # app/paths.py looks for <exe dir>/skill/{ngspice_assets,gmoverid_assets}
@@ -136,6 +148,11 @@ jobs:
           Get-ChildItem -Path $site -Directory -Filter '*.libs' | ForEach-Object {
             Write-Host "Bundling wheel DLL dir: $($_.Name)"
             Copy-Item -Recurse -Force $_.FullName "$dist\$($_.Name)"
+            # ...and flatten the DLLs into the exe dir: the application
+            # directory is always on the Windows DLL search path, whereas
+            # os.add_dll_directory (what the delvewheel patch uses to expose
+            # the *.libs dir) is not honoured by Nuitka's module loader
+            Get-ChildItem "$($_.FullName)\*.dll" | Copy-Item -Force -Destination $dist
           }
           Rename-Item "$dist" "AnalogStudio"
 
@@ -145,6 +162,8 @@ jobs:
           # crashes then dump a Python traceback into AnalogStudio.err.txt,
           # which the failure step below prints
           PYTHONFAULTHANDLER: 1
+          # stage-by-stage startup trace from app/paths.py, same destination
+          ANALOG_STUDIO_TRACE: 1
         shell: pwsh
         run: |
           $p = Start-Process -FilePath ".\build-nuitka\AnalogStudio\AnalogStudio.exe" `

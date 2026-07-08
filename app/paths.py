@@ -113,6 +113,18 @@ def resources_dir() -> Path:
     return Path(__file__).resolve().parent / 'resources'
 
 
+def _trace(stage: str):
+    """Optional startup tracing (set ANALOG_STUDIO_TRACE=1).
+
+    Frozen builds run windowed; with Nuitka's --force-stderr-spec these
+    lines land in AnalogStudio.err.txt, pinpointing the exact statement
+    when startup dies without a Python traceback (e.g. a hard crash while
+    an extension module loads).
+    """
+    if os.environ.get('ANALOG_STUDIO_TRACE'):
+        print(f'init_runtime: {stage}', file=sys.stderr, flush=True)
+
+
 def init_runtime():
     """Resolve asset roots, sync workspace if frozen, extend sys.path."""
     global _initialized, NGSPICE_ASSETS, GMOVERID_ASSETS, BROWSER_PLOTS
@@ -120,9 +132,12 @@ def init_runtime():
         return
 
     if is_frozen():
+        _trace('frozen mode, locating bundle')
         bundle = _bundle_skill_dir()
         ws = _workspace_root()
+        _trace(f'workspace {ws}')
         _prune_old_workspaces(ws)
+        _trace('syncing skill trees')
         _sync_tree(bundle / 'ngspice_assets', ws / 'ngspice_assets')
         _sync_tree(bundle / 'gmoverid_assets', ws / 'gmoverid_assets')
         NGSPICE_ASSETS = ws / 'ngspice_assets'
@@ -143,7 +158,10 @@ def init_runtime():
     # Only the skill code uses scipy; import it here so PyInstaller's
     # analysis of app/ pulls it into the bundle (scipy.signal.medfilt is
     # used by plot_gmoverid's four-quadrant/comparison plots).
+    _trace('importing scipy.stats')
     import scipy.stats   # noqa: F401
+    _trace('importing scipy.signal')
     import scipy.signal  # noqa: F401
+    _trace('done')
 
     _initialized = True
