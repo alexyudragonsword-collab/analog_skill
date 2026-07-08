@@ -97,7 +97,14 @@ def _polarity(model: str) -> str:
 
 def generate_plot(plot_type: str, model: str, W: float, L: float,
                   out_dir: Path) -> Callable[[], Path]:
-    """Run the sweeps (worker thread) and return a GUI-thread render closure."""
+    """Run the sweeps (worker thread) and return a GUI-thread render closure.
+
+    For FinFET models W carries NFIN and L is the node's fixed gate length.
+    """
+    from app.core.model_registry import is_finfet
+    if is_finfet(model):
+        return _generate_plot_finfet(plot_type, model, int(round(W)), L, out_dir)
+
     from simulate_gmoverid import (
         run_vgs_sweeps, run_vds_sweeps, run_vsg_sweeps, run_vsd_sweeps)
     from plot_gmoverid import plot_main, plot_iv, plot_caps
@@ -147,6 +154,74 @@ def generate_plot(plot_type: str, model: str, W: float, L: float,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# FinFET plots (BSIM-CMG/OSDI sweeps; reuse the skill's plotters)
+# ─────────────────────────────────────────────────────────────────────────────
+def _generate_plot_finfet(plot_type, model, nfin, L, out_dir):
+    from app.core import finfet_sim
+    from plot_gmoverid import plot_main, plot_iv
+
+    cfg = node_params_for(model)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    weff_um = nfin * finfet_sim.parse_fin_geom(
+        str(finfet_sim._model_entry(model)['file'])) * 1e6
+    l_nm = round(L * 1000)
+    stem = f'{model}_L{l_nm}nm_N{nfin}'
+
+    if plot_type == 'caps':
+        sweep = finfet_sim.sweep_vgs_finfet(cfg['vds_list'][-1], nfin, model, L)
+        out = out_dir / f'caps_{stem}.png'
+        return lambda: _plot_finfet_caps(sweep, model, nfin, out)
+
+    if plot_type == 'iv':
+        vg = finfet_sim.run_vgs_sweeps_finfet(nfin, model, L, cfg['vds_list'][-1:])
+        if not vg:
+            raise RuntimeError(f'FinFET Vgs sweep produced no data for {model}')
+        vd = finfet_sim.run_vds_sweeps_finfet(nfin, model, L, cfg['vgs_iv'])
+        out = out_dir / f'iv_{stem}.png'
+        return lambda: Path(plot_iv(vg, vd, weff_um, L, w_iv_um=weff_um,
+                                    model=model, out_path=out))
+
+    if plot_type == 'main':
+        vg = finfet_sim.run_vgs_sweeps_finfet(nfin, model, L, cfg['vds_list'])
+        if not vg:
+            raise RuntimeError(f'FinFET Vgs sweep produced no data for {model}')
+        vd = finfet_sim.run_vds_sweeps_finfet(nfin, model, L, cfg['vgs_bias'])
+        vg_gds = finfet_sim.run_vgs_sweeps_finfet(nfin, model, L, cfg['vds_gds'])
+        out = out_dir / f'main_{stem}.png'
+        return lambda: Path(plot_main(vg, vd, weff_um, L, model, out_path=out,
+                                      vgs_gds_results=vg_gds))
+
+    raise ValueError(f'Unknown plot type: {plot_type!r}')
+
+
+def _plot_finfet_caps(sweep, model, nfin, out_path):
+    """Real BSIM-CMG gate capacitances vs Vgs (planar Cox·W·L is invalid here)."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    vgs = np.asarray(sweep['vgs'])
+    fF = 1e15
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.plot(vgs, np.asarray(sweep['cgg']) * fF, lw=2.0, label='$C_{gg}$')
+    ax.plot(vgs, np.asarray(sweep['cgs']) * fF, lw=1.6, label='$C_{gs}$')
+    ax.plot(vgs, np.asarray(sweep['cgd']) * fF, lw=1.6, label='$C_{gd}$')
+    ax.plot(vgs, np.asarray(sweep['cgb']) * fF, lw=1.6, ls='--', label='$C_{gb}$')
+    xlbl = '$|V_{SG}|$ [V]' if sweep.get('pol') == 'pmos' else '$V_{GS}$ [V]'
+    ax.set_xlabel(xlbl)
+    ax.set_ylabel('Gate capacitance [fF]')
+    ax.set_title(f'{model}  NFIN={nfin}  —  BSIM-CMG intrinsic caps '
+                 f'(|Vds|={sweep["vds"]:.2f} V)')
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=110)
+    plt.close(fig)
+    return Path(out_path)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Comparison plots (mirror run_gmoverid / run_multinode orchestration)
 # ─────────────────────────────────────────────────────────────────────────────
 def _run_comp(model, L):
@@ -154,9 +229,18 @@ def _run_comp(model, L):
 
     Returns (vg, vd, vg_gds) — mirrors _run_comp in run_gmoverid/run_multinode.
     """
+    from app.core.model_registry import is_finfet
+    cfg = node_params_for(model)
+    if is_finfet(model):
+        from app.core import finfet_sim
+        nfin = 10
+        vg = finfet_sim.run_vgs_sweeps_finfet(nfin, model, L, [cfg['vds_list'][-1]])
+        vd = finfet_sim.run_vds_sweeps_finfet(nfin, model, L, cfg['vgs_bias'])
+        vg_gds = finfet_sim.run_vgs_sweeps_finfet(nfin, model, L, cfg['vds_gds'])
+        return vg, vd, vg_gds
+
     from simulate_gmoverid import (
         run_vgs_sweeps, run_vds_sweeps, run_vsg_sweeps, run_vsd_sweeps)
-    cfg = node_params_for(model)
     vds_comp = [cfg['vds_list'][-1]]         # single Vds ~ saturation
     if _polarity(model) == 'pmos':
         vg = run_vsg_sweeps(REF_W_UM, L, model=model, vsd_list=vds_comp)

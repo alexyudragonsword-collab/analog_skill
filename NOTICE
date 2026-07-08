@@ -24,3 +24,18 @@ When publishing results obtained with these models, please cite:
     S. Sinha, G. Yeric, V. Chandra, B. Cline and Y. Cao, "Exploring
     sub-20nm FinFET design with Predictive Technology Models," DAC 2012,
     pp. 283-288. doi: 10.1145/2228360.2228414
+
+
+BSIM-CMG compact model (FinFET simulation via OSDI)
+---------------------------------------------------
+FinFET nodes are simulated with the BSIM-CMG model (© The Regents of the
+University of California, Berkeley), loaded into ngspice through OSDI. The
+Verilog-A source and the compiled bsimcmg.osdi live under
+transistor-models/assets/models/finfet/osdi/ and are licensed under the
+Educational Community License, Version 2.0 (ECL-2.0) — see that directory's
+va_src/LICENSE.txt and va_src/NOTICE.txt. They are NOT covered by this
+repository's MIT license.
+
+  Cite:
+    BSIM-CMG Technical Manual, BSIM Group, UC Berkeley.
+    https://bsim.berkeley.edu/models/bsimcmg/

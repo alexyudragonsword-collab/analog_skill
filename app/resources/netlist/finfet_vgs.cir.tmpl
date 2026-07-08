@@ -1,0 +1,25 @@
+* ============================================================
+* FinFET gm/Id -- Vgs sweep at fixed Vds  (BSIM-CMG via OSDI)
+* L = {l_um} um   NFIN = {nfin}   Vds = {vds_v} V
+* ============================================================
+
+.include "{model_path}"
+
+Vgs vgs 0 DC 0
+Vds vds 0 DC {vds_v}
+
+* OSDI device (name must start with N).  Terminals: D G S E (thermal omitted, SHMOD=0)
+N1 vds vgs 0 0 {model} L={l_um}u NFIN={nfin}
+
+.options reltol=1e-6 vntol=1e-9 abstol=1e-13
+.temp 27
+
+.control
+  pre_osdi '{osdi_path}'
+  save all @n1[gm] @n1[gds] @n1[cgg] @n1[cgs] @n1[cgd]
+  dc Vgs {vgs_start} {vgs_stop} {vgs_step}
+  wrdata '{dat_path}' i(Vds) @n1[gm] @n1[gds] @n1[cgg] @n1[cgs] @n1[cgd]
+  quit
+.endc
+
+.end

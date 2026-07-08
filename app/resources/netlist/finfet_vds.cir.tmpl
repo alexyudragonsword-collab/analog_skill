@@ -1,0 +1,24 @@
+* ============================================================
+* FinFET output -- Vds sweep at fixed Vgs  (BSIM-CMG via OSDI)
+* L = {l_um} um   NFIN = {nfin}   Vgs = {vgs_v} V
+* ============================================================
+
+.include "{model_path}"
+
+Vgs vgs 0 DC {vgs_v}
+Vds vds 0 DC 0
+
+N1 vds vgs 0 0 {model} L={l_um}u NFIN={nfin}
+
+.options reltol=1e-6 vntol=1e-9 abstol=1e-13
+.temp 27
+
+.control
+  pre_osdi '{osdi_path}'
+  save all @n1[gds]
+  dc Vds {vds_start} {vds_stop} {vds_step}
+  wrdata '{dat_path}' i(Vds) @n1[gds]
+  quit
+.endc
+
+.end

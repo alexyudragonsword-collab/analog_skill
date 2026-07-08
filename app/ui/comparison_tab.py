@@ -140,6 +140,11 @@ class ComparisonTab(QWidget, JobTabMixin):
         if mode == 'node':
             return (lambda: browser_service.generate_node_comparison(
                 selected, out)), key
+        if any(gmid_service.is_finfet(m) for m in selected):
+            raise ValueError(
+                'Gate-capacitance comparison uses the planar analytical model, '
+                'which is invalid for FinFET.  Use the Browser tab\'s '
+                '"Gate capacitances" plot for real BSIM-CMG caps.')
         return (lambda: browser_service.generate_caps_comparison(
             selected, out)), key
 

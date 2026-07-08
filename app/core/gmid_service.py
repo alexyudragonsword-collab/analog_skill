@@ -27,9 +27,27 @@ def default_L(model: str) -> float:
     return nominal_L(model)
 
 
+def is_finfet(model: str) -> bool:
+    from app.core.model_registry import is_finfet as _isff
+    return _isff(model)
+
+
+def finfet_available() -> bool:
+    from app.core.model_registry import finfet_available as _avail
+    return _avail()
+
+
 def build_table(model: str, W: float, L: float, vds: float | None,
                 force_resim: bool = False):
-    """Runs in the worker thread — first build triggers ngspice sweeps."""
+    """Runs in the worker thread — first build triggers ngspice sweeps.
+
+    For FinFET models the size knob W carries NFIN (integer) and L is the
+    node's fixed gate length; dispatch to FinFetTable (BSIM-CMG/OSDI).
+    """
+    if is_finfet(model):
+        from app.core.finfet_table import FinFetTable
+        return FinFetTable(model, NFIN=int(round(W)), vds=vds,
+                           force_resim=force_resim, L=L)
     from design_gmoverid import GmIdTable
     return GmIdTable(model, W=W, L=L, vds=vds, force_resim=force_resim)
 

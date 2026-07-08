@@ -1,0 +1,27 @@
+* ============================================================
+* FinFET gm/Id -- PMOS |Vsg| sweep at fixed |Vsd|  (BSIM-CMG via OSDI)
+* L = {l_um} um   NFIN = {nfin}   |Vsd| = {vsd_v} V
+* Source tied to VDD; gate swept from VDD down to 0 so |Vsg| = VDD - Vg.
+* ============================================================
+
+.include "{model_path}"
+
+Vg  g 0 DC {vdd_v}
+Vs  s 0 DC {vdd_v}
+Vd  d 0 DC {vd_v}
+
+* OSDI device (name must start with N).  Terminals: D G S E
+N1 d g s s {model} L={l_um}u NFIN={nfin}
+
+.options reltol=1e-6 vntol=1e-9 abstol=1e-13
+.temp 27
+
+.control
+  pre_osdi '{osdi_path}'
+  save all @n1[gm] @n1[gds] @n1[cgg] @n1[cgs] @n1[cgd]
+  dc Vg {vdd_v} 0 {vg_step}
+  wrdata '{dat_path}' i(Vd) @n1[gm] @n1[gds] @n1[cgg] @n1[cgs] @n1[cgd]
+  quit
+.endc
+
+.end

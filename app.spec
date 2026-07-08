@@ -37,6 +37,9 @@ datas = (
     # full PTM bulk-CMOS library for the extra registered nodes
     + collect_tree(REPO / 'transistor-models' / 'assets' / 'models'
                    / 'bulk_cmos', 'bulk_models')
+    # PTM-MG FinFET modelcards + the BSIM-CMG OSDI model (per-platform .osdi)
+    + collect_tree(REPO / 'transistor-models' / 'assets' / 'models'
+                   / 'finfet', 'finfet_models')
 )
 
 a = Analysis(

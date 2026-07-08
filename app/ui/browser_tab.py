@@ -20,8 +20,14 @@ class BrowserTab(QWidget, JobTabMixin):
         self._cache: dict[tuple, object] = {}   # (type, model, W, L) -> Path
 
         self.model_combo = QComboBox()
+        ff_avail = gmid_service.finfet_available()
         for label, name in gmid_service.model_choices():
+            if gmid_service.is_finfet(name):
+                label = f'{label}  [FinFET]'
             self.model_combo.addItem(label, userData=name)
+            if gmid_service.is_finfet(name) and not ff_avail:
+                self.model_combo.model().item(
+                    self.model_combo.count() - 1).setEnabled(False)
         self.model_combo.currentIndexChanged.connect(self._on_model_change)
 
         self.type_combo = QComboBox()
@@ -32,9 +38,10 @@ class BrowserTab(QWidget, JobTabMixin):
         self.w_spin.setRange(0.1, 1000.0)
         self.w_spin.setValue(10.0)
         self.w_spin.setSuffix(' um')
+        self._w_label = QLabel('W')
 
         self.l_spin = QDoubleSpinBox()
-        self.l_spin.setRange(0.018, 10.0)
+        self.l_spin.setRange(0.005, 10.0)
         self.l_spin.setDecimals(3)
         self.l_spin.setValue(0.18)
         self.l_spin.setSuffix(' um')
@@ -54,7 +61,7 @@ class BrowserTab(QWidget, JobTabMixin):
         form = QFormLayout(box)
         form.addRow('Model', self.model_combo)
         form.addRow('Plot', self.type_combo)
-        form.addRow('W', self.w_spin)
+        form.addRow(self._w_label, self.w_spin)
         form.addRow('L', self.l_spin)
         form.addRow(btn_row)
         form.addRow(self._status)
@@ -78,6 +85,22 @@ class BrowserTab(QWidget, JobTabMixin):
 
     def _on_model_change(self, *_):
         model = self.model_combo.currentData()
+        finfet = gmid_service.is_finfet(model)
+        self.w_spin.blockSignals(True)
+        if finfet:
+            self._w_label.setText('NFIN')
+            self.w_spin.setDecimals(0)
+            self.w_spin.setRange(1, 400)
+            self.w_spin.setSuffix(' fins')
+            self.w_spin.setValue(max(1, round(self.w_spin.value())) or 10)
+            self.l_spin.setEnabled(False)
+        else:
+            self._w_label.setText('W')
+            self.w_spin.setDecimals(2)
+            self.w_spin.setRange(0.1, 1000.0)
+            self.w_spin.setSuffix(' um')
+            self.l_spin.setEnabled(True)
+        self.w_spin.blockSignals(False)
         self.l_spin.setValue(gmid_service.default_L(model))
 
     def _key(self):

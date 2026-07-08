@@ -59,14 +59,31 @@ gm/ID.</p>
 
 <p><b>Available models</b>: beyond the three built-in nodes (180 / 45hp /
 22hp), the app registers the full PTM <b>bulk-CMOS</b> library — 130 / 90 /
-65 nm, 45 nm LP, 32 nm HP/LP, 22 nm LP — for 20 selectable nmos/pmos models.
-<b>FinFET (7–20 nm) is not supported in this version</b>: those models are
-BSIM-CMG (SPICE level 72), and <b>most prebuilt ngspice binaries do not
-include BSIM-CMG</b> (e.g. Ubuntu/Debian's ngspice 42 supports only levels
-1-6/8-10/14/49/54-58/60/68/73), so the devices cannot even be loaded. They
-also size by fin count NFIN rather than width W, which needs a dedicated
-flow. FinFET will be enabled once a BSIM-CMG-capable ngspice (or an
-OSDI-compiled model) is available.</p>
+65 nm, 45 nm LP, 32 nm HP/LP, 22 nm LP — for 20 nmos/pmos models, plus the
+<b>PTM-MG FinFET</b> nodes (7 / 10 / 14 / 16 / 20 nm, in HP and LSTP flavours,
+20 nmos/pmos models tagged <b>[FinFET]</b> in the dropdown).</p>
+
+<h3 id="finfet">2.1a FinFET (BSIM-CMG, 7–20 nm)</h3>
+<p>FinFET devices use the BSIM-CMG model (SPICE level 72). Most prebuilt
+ngspice binaries do <b>not</b> compile BSIM-CMG in, but ngspice ≥ 38 supports
+runtime model loading via <b>OSDI</b>: the app ships a precompiled
+<code>bsimcmg.osdi</code> and loads it with <code>pre_osdi</code> before each
+simulation, so FinFET runs on a stock OSDI-capable ngspice.</p>
+<ul>
+  <li><b>The size variable is NFIN (fin count), not W</b>: selecting a FinFET
+      model turns the "W" field into an integer <b>NFIN</b> and locks L to the
+      node's fixed gate length (e.g. 11 nm at 7 nm, 24 nm at 20 nm). Effective
+      width Weff = NFIN×(2·HFIN+TFIN); sizing reports the required <b>NFIN</b>
+      and Weff, with current density as Id/Weff.</li>
+  <li><b>Real device capacitances</b>: gate caps are read from the BSIM-CMG
+      operating point (cgg/cgs/cgd), not the planar Cox·W·L approximation
+      (invalid for a tri-gate fin). The Browser's "Gate capacitances" plot
+      shows the real swept caps for FinFET.</li>
+  <li><b>Requirement</b>: your ngspice must support OSDI (official builds
+      generally do). If it does not, or no <code>.osdi</code> ships for your
+      platform, the FinFET entries are greyed out. Designer / Browser /
+      Comparison usage is otherwise identical to bulk.</li>
+</ul>
 
 <h3>2.2 Computing an operating point (sizing)</h3>
 <p>Pick one of three modes in the <b>Sizing</b> box:</p>

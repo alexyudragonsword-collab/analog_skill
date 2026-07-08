@@ -20,6 +20,22 @@ _ROWS = [
     ('id_w_Apm', 'Id/W',         lambda v: f'{v:.2f} uA/um'),
 ]
 
+# FinFET: width knob is NFIN (integer); id_w is per effective width
+_ROWS_FINFET = [
+    ('model',    'Model',        lambda v: str(v)),
+    ('L_um',     'L',            lambda v: f'{v * 1e3:.0f} nm'),
+    ('NFIN',     'NFIN',         lambda v: f'{int(v)} fins'),
+    ('Weff_um',  'Weff',         lambda v: f'{v:.3f} um'),
+    ('gmid',     'gm/ID',        lambda v: f'{v:.1f} V^-1'),
+    ('Id_A',     'Id',           lambda v: f'{v * 1e6:.2f} uA'),
+    ('gm_S',     'gm',           lambda v: f'{v * 1e3:.3f} mS'),
+    ('Vgs_V',    'Vgs',          lambda v: f'{v:.3f} V'),
+    ('Vov_V',    'Vov',          lambda v: f'{v:.3f} V'),
+    ('ft_Hz',    'fT',           lambda v: f'{v / 1e9:.2f} GHz'),
+    ('gmro',     'gm*ro',        lambda v: f'{v:.1f}'),
+    ('id_w_Apm', 'Id/Weff',      lambda v: f'{v:.2f} uA/um'),
+]
+
 
 class OpResultView(QWidget):
     def __init__(self, parent=None):
@@ -51,8 +67,10 @@ class OpResultView(QWidget):
         self._copy_btn.setEnabled(False)
 
     def show_op(self, op: dict):
+        rows = _ROWS_FINFET if op.get('kind') == 'finfet' else _ROWS
+        self._table.setRowCount(len(rows))
         lines = ['Transistor Operating Point', '-' * 34]
-        for i, (key, label, fmt) in enumerate(_ROWS):
+        for i, (key, label, fmt) in enumerate(rows):
             val = fmt(op[key]) if key in op else '—'
             self._table.setItem(i, 0, QTableWidgetItem(label))
             self._table.setItem(i, 1, QTableWidgetItem(val))

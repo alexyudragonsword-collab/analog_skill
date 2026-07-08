@@ -7,13 +7,15 @@ Skill 目录(`ngspice/`、`gmoverid/`、`transistor-models/`)保持原样未修�
 
 | 标签页 | 功能 |
 |---|---|
-| **gm/ID Designer** | 20 个 PTM 体硅模型可选(180/130/90/65nm、45/32/22nm 的 HP/LP,nmos+pmos),设 W/L/Vds 构建 `GmIdTable` 查找表(首次跑 ngspice 仿真并缓存,之后秒开);三种 sizing 模式(按 gm/ID + Id/W/gm 约束、fT ≥ 目标、gm·ro ≥ 目标);Tools 面板提供任意 gm/ID 的单量快速查询与 5 项物理自检(self-check);工程单位结果表格 + 2×2 原生设计图,工作点红点标记,支持缩放/平移。参数变化会自动使旧表失效,防止误用 |
+| **gm/ID Designer** | 40 个模型可选:20 个 PTM 体硅(180/130/90/65nm、45/32/22nm 的 HP/LP,nmos+pmos)+ 20 个 **PTM-MG FinFET**(7/10/14/16/20nm 的 HP/LSTP,经 OSDI 加载 BSIM-CMG,以 **NFIN** 为尺寸变量、真实器件电容);设 W(或 NFIN)/L/Vds 构建 `GmIdTable` 查找表(首次跑 ngspice 仿真并缓存,之后秒开);三种 sizing 模式(按 gm/ID + Id/W/gm 约束、fT ≥ 目标、gm·ro ≥ 目标);Tools 面板提供任意 gm/ID 的单量快速查询与 5 项物理自检(self-check);工程单位结果表格 + 2×2 原生设计图,工作点红点标记,支持缩放/平移。参数变化会自动使旧表失效,防止误用 |
 | **ngspice Examples** | 9 个教学案例一键运行;常用参数直显,VDD/扫描范围/频率/时序/温度等归入可折叠 Advanced 分组(通过临时 monkey-patch 实现,不改 skill 文件);结果 PNG 支持滚轮缩放、拖拽、另存 |
 | **Curve Browser** | 按模型/L/W 生成并浏览特性图:IV 特性、gm/ID 四象限、栅电容;会话内缓存,可强制重新生成 |
 | **Comparison** | 对比图:同一模型多沟长对比(如 L=180/360/1000nm)、跨节点对比(多选同极性模型)、跨节点栅电容对比 |
 
-菜单栏 Help 提供中英双语图文用户手册(F1)与 About。FinFET(7–20nm)暂不支持
-——主流预编译 ngspice 不含 BSIM-CMG(level 72),详见手册。
+菜单栏 Help 提供中英双语图文用户手册(F1)与 About。**FinFET(7–20nm)** 通过
+ngspice 的 OSDI 接口运行时加载随包携带的 `bsimcmg.osdi`(主流预编译 ngspice 不含
+BSIM-CMG level 72,但 ngspice ≥ 38 普遍支持 OSDI);若用户的 ngspice 不支持 OSDI
+或当前平台无对应 `.osdi`,FinFET 条目自动置灰。详见手册。
 
 所有仿真任务经过单一后台线程串行执行(避免 gm/ID sweep 的 scratch 文件冲突),
 skill 代码的 print 进度实时转发到底部日志面板。

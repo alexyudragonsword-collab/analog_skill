@@ -39,17 +39,25 @@ class GmIdTab(QWidget, JobTabMixin):
 
         # ── table-build form ──────────────────────────────────────────────
         self.model_combo = QComboBox()
+        ff_avail = gmid_service.finfet_available()
         for label, name in gmid_service.model_choices():
+            if gmid_service.is_finfet(name):
+                label = f'{label}  [FinFET]'
             self.model_combo.addItem(label, userData=name)
+            if gmid_service.is_finfet(name) and not ff_avail:
+                # ngspice lacks OSDI or the .osdi wasn't shipped → not runnable
+                item = self.model_combo.model().item(self.model_combo.count() - 1)
+                item.setEnabled(False)
         self.model_combo.currentIndexChanged.connect(self._on_model_change)
 
         self.w_spin = QDoubleSpinBox()
         self.w_spin.setRange(0.1, 1000.0)
         self.w_spin.setValue(10.0)
         self.w_spin.setSuffix(' um')
+        self._w_label = QLabel('W (ref)')
 
         self.l_spin = QDoubleSpinBox()
-        self.l_spin.setRange(0.018, 10.0)
+        self.l_spin.setRange(0.005, 10.0)     # FinFET Lg goes down to 11 nm
         self.l_spin.setDecimals(3)
         self.l_spin.setValue(0.18)
         self.l_spin.setSuffix(' um')
@@ -83,7 +91,7 @@ class GmIdTab(QWidget, JobTabMixin):
         build_box = QGroupBox('Lookup table')
         bf = QFormLayout(build_box)
         bf.addRow('Model', self.model_combo)
-        bf.addRow('W (ref)', self.w_spin)
+        bf.addRow(self._w_label, self.w_spin)
         bf.addRow('L', self.l_spin)
         bf.addRow('Vds', vds_row)
         bf.addRow(self.build_btn)
@@ -255,14 +263,43 @@ class GmIdTab(QWidget, JobTabMixin):
     def _current_model(self) -> str:
         return self.model_combo.currentData()
 
+    def _is_finfet(self) -> bool:
+        return gmid_service.is_finfet(self._current_model())
+
     def _on_model_change(self, *_):
         model = self._current_model()
         infos = gmid_service.model_infos()
         vdd = float(infos[model].get('vdd', 1.8))
+        self._apply_kind(gmid_service.is_finfet(model))
         self.l_spin.setValue(gmid_service.default_L(model))
         if self.vds_auto.isChecked():
             self.vds_spin.setValue(round(vdd / 2, 3))
         self._invalidate_table()
+
+    def _apply_kind(self, finfet: bool):
+        """Switch the size knob between W [µm] (bulk) and NFIN (FinFET)."""
+        self.w_spin.blockSignals(True)
+        if finfet:
+            self._w_label.setText('NFIN')
+            self.w_spin.setDecimals(0)
+            self.w_spin.setSingleStep(1)
+            self.w_spin.setRange(1, 400)
+            self.w_spin.setSuffix(' fins')
+            self.w_spin.setValue(max(1, round(self.w_spin.value())) or 10)
+            self.l_spin.setEnabled(False)   # Lg fixed per node
+            self.l_spin.setToolTip('Gate length is fixed by the FinFET node')
+        else:
+            self._w_label.setText('W (ref)')
+            self.w_spin.setDecimals(2)
+            self.w_spin.setSingleStep(1.0)
+            self.w_spin.setRange(0.1, 1000.0)
+            self.w_spin.setSuffix(' um')
+            self.l_spin.setEnabled(True)
+            self.l_spin.setToolTip('')
+        self.w_spin.blockSignals(False)
+        for rb in (self.rb_w, self._ft_rb_w, self._gr_rb_w):
+            rb.setText('NFIN' if finfet else 'W')
+        self._on_constraint_change()
 
     def _invalidate_table(self, *_):
         """Any model/W/L/Vds change makes a built table stale — drop it so
@@ -282,20 +319,21 @@ class GmIdTab(QWidget, JobTabMixin):
         self._on_constraint_change()
 
     def _on_constraint_change(self, *_):
+        w_sfx = ' fins' if self._is_finfet() else ' um'
         idx = self.mode_combo.currentIndex()
         if idx == 0:
             if self.rb_id.isChecked():
                 self.con_value.setSuffix(' uA')
             elif self.rb_w.isChecked():
-                self.con_value.setSuffix(' um')
+                self.con_value.setSuffix(w_sfx)
             else:
                 self.con_value.setSuffix(' mS')
         elif idx == 1:
             self.ft_con_value.setSuffix(
-                ' uA' if self._ft_rb_id.isChecked() else ' um')
+                ' uA' if self._ft_rb_id.isChecked() else w_sfx)
         else:
             self.gr_con_value.setSuffix(
-                ' uA' if self._gr_rb_id.isChecked() else ' um')
+                ' uA' if self._gr_rb_id.isChecked() else w_sfx)
 
     # ── table build ───────────────────────────────────────────────────────
     def _build_table(self):
@@ -471,8 +509,12 @@ class GmIdTab(QWidget, JobTabMixin):
                 yv = float(np.interp(mark_gmid, x, c[key]))
                 ax.plot([mark_gmid], [yv / 1e9 if key == 'ft' else yv],
                         'o', color='crimson', ms=6)
-        title = (f'{self._tbl.model}  W={self._tbl.W:g}um  '
-                 f'L={self._tbl.L * 1e3:.0f}nm  Vds={self._tbl.vds}V')
+        if gmid_service.is_finfet(self._tbl.model):
+            title = (f'{self._tbl.model}  NFIN={int(self._tbl.W)}  '
+                     f'L={self._tbl.L * 1e3:.0f}nm  Vds={self._tbl.vds}V')
+        else:
+            title = (f'{self._tbl.model}  W={self._tbl.W:g}um  '
+                     f'L={self._tbl.L * 1e3:.0f}nm  Vds={self._tbl.vds}V')
         self._canvas.figure.suptitle(title, fontsize=10)
         self._canvas.draw()
 

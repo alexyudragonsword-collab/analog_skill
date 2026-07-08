@@ -82,7 +82,79 @@ def register_extra_models() -> list[str]:
 
 def nominal_L(model: str) -> float:
     """Nominal channel length [um] for a model key, e.g. 'nmos130' -> 0.13."""
+    info = _finfet_info(model)
+    if info is not None:
+        return info['lg']
     for tag in ('180', '130', '90', '65', '45', '32', '22'):
         if tag in model:
             return NODE_L_UM[tag]
     return 0.18
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FinFET (BSIM-CMG via OSDI) nodes — PTM-MG 7–20 nm, HP and LSTP
+# ─────────────────────────────────────────────────────────────────────────────
+# node tag -> (VDD, Lg [nm])   (from transistor-models/.../finfet/param.inc)
+_FINFET_NODES = {
+    '20': (0.90, 24), '16': (0.85, 20), '14': (0.80, 18),
+    '10': (0.75, 14), '7': (0.70, 11),
+}
+_FINFET_VARIANTS = ('hp', 'lstp')
+
+
+def _finfet_info(model: str) -> dict | None:
+    """MODEL_INFO entry for a finfet model key, or None if not one."""
+    import simulate_gmoverid as sg
+    info = sg.MODEL_INFO.get(model)
+    if info and info.get('kind') == 'finfet':
+        return info
+    return None
+
+
+def build_finfet_models() -> dict:
+    """MODEL_INFO entries for all PTM-MG FinFET devices (paths resolved)."""
+    from app import paths
+    root = paths.finfet_models_dir()
+    extra = {}
+    for tag, (vdd, lg_nm) in _FINFET_NODES.items():
+        stop = _stop(vdd)
+        for variant in _FINFET_VARIANTS:
+            for pol, mname, pfx in (('nmos', 'nfet', 'nfin'),
+                                    ('pmos', 'pfet', 'pfin')):
+                pm = root / variant / f'{tag}{"n" if pol == "nmos" else "p"}fet.pm'
+                extra[f'{pfx}{tag}{variant}'] = dict(
+                    pol=pol, file=pm, model_name=mname, vdd=vdd,
+                    vgs_stop=stop, vds_stop=stop,
+                    kind='finfet', node=tag, variant=variant,
+                    lg=lg_nm / 1000.0,   # µm
+                )
+    return extra
+
+
+def register_finfet_models() -> list[str]:
+    """Inject FinFET nodes into simulate_gmoverid.MODEL_INFO.
+
+    Registered unconditionally (so the model list is stable); the GUI disables
+    them when finfet_available() is False.  Only adds entries whose .pm exists.
+    Idempotent.
+    """
+    import simulate_gmoverid as sg
+    added = []
+    for key, entry in build_finfet_models().items():
+        if key in sg.MODEL_INFO:
+            continue
+        if not entry['file'].exists():
+            continue
+        sg.MODEL_INFO[key] = entry
+        added.append(key)
+    return added
+
+
+def is_finfet(model: str) -> bool:
+    return _finfet_info(model) is not None
+
+
+def finfet_available() -> bool:
+    """True if FinFET sims can actually run (osdi shipped + ngspice has OSDI)."""
+    from app.core import finfet_sim
+    return finfet_sim.osdi_path() is not None and finfet_sim.ngspice_has_osdi()

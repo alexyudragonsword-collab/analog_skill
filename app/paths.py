@@ -98,6 +98,38 @@ def bulk_models_dir() -> Path:
             / 'bulk_cmos')
 
 
+def finfet_models_dir() -> Path:
+    """Directory holding the PTM-MG FinFET modelcards + the OSDI model.
+
+    Dev: transistor-models/assets/models/finfet in the repo.
+    Frozen: bundled read-only copy (modelcards and the compiled .osdi are
+    only read, never written).
+    """
+    if is_frozen():
+        base = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
+        for cand in (base / 'finfet_models',
+                     Path(sys.executable).parent / '_internal' / 'finfet_models'):
+            if cand.is_dir():
+                return cand
+    return (repo_root() / 'transistor-models' / 'assets' / 'models' / 'finfet')
+
+
+def finfet_osdi_path() -> Path | None:
+    """Path to the platform-appropriate compiled bsimcmg.osdi, or None.
+
+    FinFET simulation needs BSIM-CMG loaded into ngspice via OSDI; the .osdi
+    is a per-platform compiled binary.  Returns the file for this OS/arch if
+    it was shipped, else None (FinFET features then stay disabled).
+    """
+    import platform
+    machine = platform.machine().lower()
+    arch = 'amd64' if machine in ('x86_64', 'amd64') else machine
+    plat = {'linux': 'linux', 'win32': 'windows', 'darwin': 'macos'}.get(
+        sys.platform, sys.platform)
+    cand = finfet_models_dir() / 'osdi' / f'{plat}_{arch}' / 'bsimcmg.osdi'
+    return cand if cand.is_file() else None
+
+
 def resources_dir() -> Path:
     """Location of app/resources (manual HTML + images).
 

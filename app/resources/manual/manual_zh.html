@@ -52,11 +52,26 @@ PTM(Predictive Technology Model)工艺模型,提供四大功能:gm/ID 设计器�
 
 <p><b>可选模型</b>:除内置的 180 / 45hp / 22hp 三节点外,应用还注册了完整的
 PTM <b>体硅(bulk)</b>节点——130 / 90 / 65nm、45nm LP、32nm HP/LP、22nm LP,
-nmos 与 pmos 共 20 个模型均可在下拉框中选择。<b>FinFET(7–20nm)本版暂不支持</b>:
-其模型是 BSIM-CMG(SPICE level 72),而<b>主流预编译的 ngspice 通常未包含 BSIM-CMG</b>
-(如 Ubuntu/Debian 的 ngspice 42 仅支持 level 1-6/8-10/14/49/54-58/60/68/73),
-因此这些器件根本无法加载仿真;此外它以鳍数 NFIN 而非沟宽 W 为尺寸变量,需专门的流程。
-待有支持 BSIM-CMG 的 ngspice(或 OSDI 编译的模型)时再启用。</p>
+nmos 与 pmos 共 20 个模型;以及 <b>PTM-MG FinFET</b> 节点(7 / 10 / 14 / 16 / 20nm,
+HP 与 LSTP 两档,nmos/pmos 共 20 个,下拉框中标注 <b>[FinFET]</b>)。</p>
+
+<h3 id="finfet">2.1a FinFET(BSIM-CMG,7–20nm)</h3>
+<p>FinFET 器件用 BSIM-CMG 模型(SPICE level 72)。主流预编译的 ngspice
+<b>并未把 BSIM-CMG 编进二进制</b>,但 ngspice ≥ 38 普遍支持 <b>OSDI</b> 运行时加载:
+应用随包携带一份预编译的 <code>bsimcmg.osdi</code>,在仿真前用 <code>pre_osdi</code>
+动态载入,从而在标准 ngspice 上跑起 FinFET。</p>
+<ul>
+  <li><b>尺寸变量是 NFIN(鳍数)而非 W</b>:选中 FinFET 模型后,"W" 输入自动变为
+      整数 <b>NFIN</b>,栅长 L 锁定为该节点的固定值(如 7nm→11nm、20nm→24nm)。
+      有效宽度 Weff = NFIN×(2·HFIN+TFIN);sizing 结果给出所需 <b>NFIN</b> 与 Weff,
+      电流密度按 Id/Weff 计。</li>
+  <li><b>真实器件电容</b>:栅电容直接取自 BSIM-CMG 的工作点(cgg/cgs/cgd),
+      而非平面 MOS 的 Cox·W·L 解析近似(对三栅鳍结构无效)。浏览器的
+      "Gate capacitances" 图对 FinFET 画的即是真实扫描电容。</li>
+  <li><b>依赖</b>:需要你的 ngspice 支持 OSDI(官方构建一般都支持)。若不支持,
+      或当前平台没有随包的 <code>.osdi</code>,下拉框中的 FinFET 条目会自动置灰。
+      设计器/浏览器/对比图的用法与 bulk 完全一致。</li>
+</ul>
 
 <h3>2.2 计算工作点(sizing)</h3>
 <p>在 <b>Sizing</b> 区域选择三种模式之一:</p>
