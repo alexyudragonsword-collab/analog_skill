@@ -27,6 +27,9 @@ def test_registry_shape():
         assert d.is_dir(), d
         assert (d / f'{spec.common_mod}.py').exists(), spec.common_mod
         assert key in circuits._RUNNERS
+        # every circuit ships a pre-rendered schematic (tools/gen_schematics)
+        sch = circuits.schematic_path(key)
+        assert sch is not None and sch.suffix == '.png', key
 
 
 def test_param_attrs_exist_in_common():

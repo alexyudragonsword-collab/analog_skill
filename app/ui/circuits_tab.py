@@ -102,6 +102,10 @@ class CircuitsTab(QWidget, JobTabMixin):
             self.analysis_combo.addItem(ana.label, userData=key)
         self.analysis_combo.blockSignals(False)
         self._build_form()
+        # show the pre-rendered schematic immediately on selection
+        sch = circuits.schematic_path(self.circuit_combo.currentData())
+        if sch is not None:
+            self._viewer.show_pngs([sch])
 
     def _on_analysis(self, *_):
         self._build_form()
@@ -160,7 +164,13 @@ class CircuitsTab(QWidget, JobTabMixin):
         self._status.setText('Done.')
         self._report.setPlainText(report)
         if pngs:
-            self._viewer.show_pngs(pngs)
+            # keep the schematic first in the thumbnail strip, but focus the
+            # first fresh result
+            sch = circuits.schematic_path(self.circuit_combo.currentData())
+            if sch is not None:
+                self._viewer.show_pngs([sch] + pngs, current=1)
+            else:
+                self._viewer.show_pngs(pngs)
 
     def on_job_failed(self, slot, err):
         self.run_btn.setEnabled(True)

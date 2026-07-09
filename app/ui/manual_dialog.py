@@ -32,8 +32,10 @@ class ManualDialog(QDialog):
 
         self._browser = QTextBrowser()
         self._browser.setOpenExternalLinks(True)
-        # resolve relative img src against the manual directory
-        self._browser.setSearchPaths([str(self._manual_dir)])
+        # resolve relative img src against the manual directory (img/...)
+        # and the resources root (schematics/...)
+        self._browser.setSearchPaths([str(self._manual_dir),
+                                      str(paths.resources_dir())])
 
         lay = QVBoxLayout(self)
         lay.addLayout(top)

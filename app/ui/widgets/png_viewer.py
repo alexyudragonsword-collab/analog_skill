@@ -65,7 +65,8 @@ class PngViewer(QWidget):
         self._view.hide()
 
     # ── public ────────────────────────────────────────────────────────────
-    def show_pngs(self, paths: list[Path]):
+    def show_pngs(self, paths: list[Path], current: int = 0):
+        """Show a set of PNGs; `current` selects the one displayed first."""
         self._paths = [Path(p) for p in paths if Path(p).exists()]
         self._thumbs.clear()
         if not self._paths:
@@ -80,7 +81,7 @@ class PngViewer(QWidget):
             self._thumbs.show()
         else:
             self._thumbs.hide()
-        self._show(self._paths[0])
+        self._show(self._paths[min(max(current, 0), len(self._paths) - 1)])
 
     def fit(self):
         if self._current:
