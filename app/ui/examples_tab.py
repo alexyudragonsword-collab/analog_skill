@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 from app.core.examples import REGISTRY, run_example, example_log_dir
 from app.core.worker import Job, SimWorker
 from app.ui.job_mixin import JobTabMixin, fail_text
+from app.ui.layout_util import scroll_wrap
 from app.ui.widgets.png_viewer import PngViewer
 
 
@@ -68,7 +69,7 @@ class ExamplesTab(QWidget, JobTabMixin):
         self._viewer = PngViewer()
 
         split = QSplitter()
-        split.addWidget(left)
+        split.addWidget(scroll_wrap(left))
         split.addWidget(self._viewer)
         split.setStretchFactor(0, 1)
         split.setStretchFactor(1, 2)

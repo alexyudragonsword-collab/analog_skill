@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 from app.core import gmid_service
 from app.core.worker import Job, SimWorker
 from app.ui.job_mixin import JobTabMixin, error_summary
+from app.ui.layout_util import scroll_wrap
 from app.ui.widgets.mpl_canvas import MplCanvas
 from app.ui.widgets.op_result_view import OpResultView
 
@@ -247,10 +248,10 @@ class GmIdTab(QWidget, JobTabMixin):
         left_lay.addWidget(self._op_view, stretch=1)
 
         # ── right: 2x2 design charts ──────────────────────────────────────
-        self._canvas = MplCanvas(2, 2, figsize=(9, 7))
+        self._canvas = MplCanvas(2, 2, figsize=(6.4, 5.0))
 
         split = QSplitter()
-        split.addWidget(left)
+        split.addWidget(scroll_wrap(left))
         split.addWidget(self._canvas)
         split.setStretchFactor(0, 1)
         split.setStretchFactor(1, 2)

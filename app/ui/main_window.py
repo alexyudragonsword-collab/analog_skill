@@ -16,7 +16,12 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f'{APP_NAME} — gm/ID & ngspice workbench')
-        self.resize(1280, 820)
+        # keep the window within the *available* screen: a 1280x820 default
+        # overflows small / HiDPI-scaled displays (e.g. 1920x1280 @ 150-200%),
+        # clipping the status bar and controls.  Minimum stays small — tall
+        # control panels scroll (see layout_util.scroll_wrap).
+        self.setMinimumSize(880, 560)
+        self._fit_to_screen(1280, 820)
         self._build_menus()
 
         self.worker = SimWorker(self)
@@ -68,6 +73,8 @@ class MainWindow(QMainWindow):
         dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea |
                              Qt.DockWidgetArea.RightDockWidgetArea)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, dock)
+        # modest initial log height so it doesn't crowd out the tabs on short screens
+        self.resizeDocks([dock], [150], Qt.Orientation.Vertical)
 
         # status bar
         self._job_lbl = QLabel('idle')
@@ -86,6 +93,20 @@ class MainWindow(QMainWindow):
         self.worker.job_failed.connect(self._on_job_failed)
 
         self.refresh_ngspice_status()
+
+    def _fit_to_screen(self, want_w: int, want_h: int):
+        """Size to the requested dims, capped to the available screen, centered."""
+        from PySide6.QtWidgets import QApplication
+        screen = self.screen() or QApplication.primaryScreen()
+        if screen is not None:
+            avail = screen.availableGeometry()
+            w = min(want_w, int(avail.width() * 0.92))
+            h = min(want_h, int(avail.height() * 0.92))
+            self.resize(w, h)
+            self.move(avail.x() + (avail.width() - w) // 2,
+                      avail.y() + (avail.height() - h) // 2)
+        else:
+            self.resize(want_w, want_h)
 
     # ── menus ─────────────────────────────────────────────────────────────
     def _build_menus(self):

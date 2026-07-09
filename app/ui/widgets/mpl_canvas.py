@@ -22,6 +22,9 @@ class MplCanvas(QWidget):
         self.figure = Figure(figsize=figsize, layout='constrained')
         self.axes = self.figure.subplots(nrows, ncols)
         self.canvas = FigureCanvasQTAgg(self.figure)
+        # let a splitter shrink the plot on small screens instead of the
+        # figure's sizeHint forcing the window taller
+        self.canvas.setMinimumSize(240, 180)
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)

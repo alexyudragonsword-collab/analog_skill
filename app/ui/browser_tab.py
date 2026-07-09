@@ -9,6 +9,7 @@ from app import paths
 from app.core import browser_service, gmid_service
 from app.core.worker import Job, SimWorker
 from app.ui.job_mixin import JobTabMixin, fail_text
+from app.ui.layout_util import scroll_wrap
 from app.ui.widgets.png_viewer import PngViewer
 
 
@@ -74,7 +75,7 @@ class BrowserTab(QWidget, JobTabMixin):
         self._viewer = PngViewer()
 
         split = QSplitter()
-        split.addWidget(left)
+        split.addWidget(scroll_wrap(left))
         split.addWidget(self._viewer)
         split.setStretchFactor(0, 1)
         split.setStretchFactor(1, 3)
