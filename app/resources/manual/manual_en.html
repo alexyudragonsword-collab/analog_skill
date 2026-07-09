@@ -206,6 +206,51 @@ capacitance comparisons require all selected models to share one polarity
 
 <hr>
 
+<h2 id="circuits">5a. Circuit simulations (fifth tab: Circuits)</h2>
+
+<p align="center"><img src="img/v09_circuits.png" width="820"></p>
+
+<p>Brings the <b>five block-level circuits</b> of the vendored
+<code>circuit-skills</code> collection into the GUI: pick a circuit, pick an
+analysis, tweak parameters, hit Run — plots on the right, a copyable
+monospace metrics report on the left.</p>
+
+<table border="1" cellspacing="0" cellpadding="6">
+  <tr><th>Circuit</th><th>Node/supply</th><th>Analyses</th></tr>
+  <tr><td><b>StrongArm comparator</b></td><td>45nm / 1.0V</td>
+      <td>full characterization; internal-node waveform; probit input-referred
+          noise (1000 cycles, ~2 min); ramp transfer curve; four sweeps
+          (input amplitude / common mode / valid-K / noise bandwidth);
+          <b>self-check</b> (5 quantitative physics assertions with bounds
+          from the skill's own evals)</td></tr>
+  <tr><td><b>LDO regulator</b></td><td>180nm / 1.8V out</td>
+      <td>full characterization (DC/AC/noise/tran in parallel); individual
+          runs; <b>auto-design</b> (sizes the LDO from VOUT/VIN/ILOAD, then
+          verifies with an AC run); Ccomp/Rcomp/Cout compensation sweeps;
+          <b>theory vs simulation</b> (poles/zero/PSRR/Zout)</td></tr>
+  <tr><td><b>Bootstrapped switch</b></td><td>180nm</td>
+      <td>bootstrap waveform (VGATE ≈ VIN+VDD); on-resistance comparison
+          (NMOS vs CMOS vs bootstrapped)</td></tr>
+  <tr><td><b>5T OTA</b></td><td>180nm</td>
+      <td>DC transfer; AC open loop (gain/UGB/phase); output noise</td></tr>
+  <tr><td><b>Two-stage Miller op amp</b></td><td>180nm</td>
+      <td>operating point; gain/phase; <b>PZ analysis</b> (report includes the
+          full pole-zero table); open/closed-loop noise</td></tr>
+</table>
+
+<p>The parameter form switches per circuit (device widths, bias, compensation
+network; rarely-used items live in the collapsible <b>Advanced parameters</b>
+group). Analyses with a <i>note</i> (probit noise, the sweeps) take minutes —
+watch per-point progress in the log panel; jobs queue serially as usual, so
+you can keep working in other tabs.</p>
+
+<p><small>Note: two script-style entries of the collection (the comparator's
+tail/latch-width τ=C/gm verifications) execute at import time and are
+incompatible with the GUI's threading policy — run them from the command line
+(see <code>circuit-skills/comparator/SKILL.md</code>).</small></p>
+
+<hr>
+
 <h2>6. Log panel and job queue</h2>
 <p>The <b>Simulation log</b> panel at the bottom streams all simulation
 progress and ngspice output in real time; on failure it includes the error

@@ -158,6 +158,17 @@ CIRCUITS: dict[str, CircuitSpec] = {
             'noise': Analysis('Input-referred noise (probit, 1000 cycles)',
                               note='three 1000-cycle transient-noise runs — ~2 min'),
             'ramp':  Analysis('Ramp transfer curve'),
+            'sweep_amp': Analysis('Sweep: input amplitude vs P(1)',
+                                  note='many transient-noise points — several minutes'),
+            'sweep_vcm': Analysis('Sweep: common-mode voltage',
+                                  note='several transient-noise points — minutes'),
+            'sweep_k':   Analysis('Sweep: valid-K window',
+                                  note='several transient-noise points — minutes'),
+            'sweep_bw':  Analysis('Sweep: noise bandwidth',
+                                  note='several transient-noise points — minutes'),
+            'selfcheck': Analysis('Self-check (5 physics assertions)',
+                                  note='runs wave + noise + ramp, then checks '
+                                       'quantitative bounds — ~2 min'),
         }),
     'ldo': CircuitSpec(
         title='LDO regulator (180nm, 1.8 V out)',
@@ -176,6 +187,13 @@ CIRCUITS: dict[str, CircuitSpec] = {
             'ac':    Analysis('AC loop gain / PSRR / Zout'),
             'noise': Analysis('Output noise'),
             'tran':  Analysis('Load/line transient'),
+            'sweep_ccomp': Analysis('Sweep: C_COMP (PM / GBW)',
+                                    note='7 AC runs'),
+            'sweep_rcomp': Analysis('Sweep: R_COMP (PM / GBW)',
+                                    note='several AC runs'),
+            'sweep_cout':  Analysis('Sweep: C_OUT (PM / GBW)',
+                                    note='several AC runs'),
+            'theory': Analysis('Theory vs simulation (poles/zero/PSRR/Zout)'),
             'auto':  Analysis('Auto-design from specs', params=[
                 Param('vout',     'VOUT target', 1.8,   'V',  minv=0.5, maxv=3.0),
                 Param('vin',      'VIN',         2.3,   'V',  minv=0.8, maxv=5.0),
@@ -340,6 +358,16 @@ def _run_opamp(analysis, values):
         lines += [f"OL Vn @1kHz   : {_fmt(m_n.get('vn_1k_nvrtHz'))} nV/rtHz",
                   f"Input en @1kHz: {_fmt(m_n.get('en_1k_nvrtHz'))} nV/rtHz",
                   f"CL Vn rms     : {_fmt(m_n.get('cl_vn_rms_uv'))} uV_rms"]
+    if 'pz' in res:
+        lines += ['', 'Pole-zero table (ngspice PZ analysis)',
+                  f'{"#":>3s} {"type":<5s} {"re [Hz]":>13s} {"im [Hz]":>13s} '
+                  f'{"|f| ":>12s}']
+        for kind, pts in (('pole', m_pz.get('poles', [])),
+                          ('zero', m_pz.get('zeros', []))):
+            for p in pts:
+                lines.append(
+                    f'{p["idx"]:>3d} {kind:<5s} {p["real"]:>13.4g} '
+                    f'{p["imag"]:>13.4g} {p["hz"]:>10.4g} Hz')
     report = '\n'.join(lines)
 
     def render():
@@ -360,6 +388,12 @@ def _run_ldo(analysis, values):
 
     if analysis == 'auto':
         return _run_ldo_auto(values, PLOT_DIR)
+    if analysis.startswith('sweep_'):
+        _apply_params(common, values)
+        return _run_ldo_sweep(analysis, PLOT_DIR)
+    if analysis == 'theory':
+        _apply_params(common, values)
+        return _run_ldo_theory(PLOT_DIR)
 
     _apply_params(common, values)
     from simulate_ldo_dc import simulate_dc
@@ -432,6 +466,10 @@ def _run_comparator(analysis, values):
     import comparator_common as common
     _apply_params(common, values)
     from ngspice_common import PLOT_DIR
+
+    if analysis.startswith('sweep_'):
+        return _run_comparator_sweep(analysis, PLOT_DIR)
+
     import simulate_tran_strongarm_wave as sim_wave
     import simulate_tran_strongarm_noise as sim_noise
     import simulate_tran_strongarm_ramp as sim_ramp
@@ -440,7 +478,7 @@ def _run_comparator(analysis, values):
     import plot_tran_strongarm_ramp as p_ramp
 
     res = {}
-    if analysis == 'full':
+    if analysis in ('full', 'selfcheck'):
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=3) as pool:
             futs = {'wave': pool.submit(sim_wave.simulate_wave),
@@ -471,6 +509,8 @@ def _run_comparator(analysis, values):
         lines.append('Waveform      : internal nodes VXP/VXN, VLP/VLN, OUTP/OUTN')
     if 'ramp' in res:
         lines.append('Ramp          : transfer curve over slow differential ramp')
+    if analysis == 'selfcheck':
+        lines += ['', *_comparator_selfcheck(res, fom, common)]
     report = '\n'.join(lines)
 
     def render():
@@ -483,6 +523,205 @@ def _run_comparator(analysis, values):
         if 'ramp' in res:
             p_ramp.plot_ramp(res['ramp']['ramp'], res['ramp']['params'])
         return _new_pngs(PLOT_DIR, before), report
+    return CircuitResult(render)
+
+
+def _comparator_selfcheck(res, fom, common) -> list[str]:
+    """Quantitative physics checks (bounds derived from the skill's
+    evals.json assertions, widened for cross-ngspice-version headroom)."""
+    import numpy as np
+    checks = []
+
+    def add(name, ok, detail):
+        checks.append(f'  [{"PASS" if ok else "FAIL"}] {name:<22s} {detail}')
+
+    npt = res['noise']['noise_pt']
+    sigma = npt.get('sigma_uv', float('nan'))
+    add('sigma_n band', 100.0 <= sigma <= 800.0,
+        f'{_fmt(sigma, 1)} uV in [100, 800] (evals nominal 200-600)')
+    p1 = npt.get('p1', float('nan'))
+    add('probit operating pt', 0.55 < p1 < 0.999,
+        f'P(1)={_fmt(p1 * 100, 1)}% at +{_fmt(npt.get("vin_mv", 0), 2)} mV')
+    tau = res['wave'].get('wave', {}).get('tau_ps', float('nan'))
+    add('latch tau sane', 1.0 < tau < 100.0, f'tau={_fmt(tau, 1)} ps')
+    add('speed/power sane',
+        1.0 < fom.get('tcmp_ps', 0) < 1000.0
+        and 1.0 < fom.get('p_avg_uw', 0) < 10000.0,
+        f"Tcmp={_fmt(fom.get('tcmp_ps'), 1)} ps, "
+        f"P={_fmt(fom.get('p_avg_uw'))} uW")
+
+    # ramp transition width: per-cycle decisions vs ramped input
+    ramp = res['ramp']['ramp']
+    width_ok, detail = False, 'no ramp data'
+    t, vout, vin = ramp.get('time'), ramp.get('vout_diff'), ramp.get('vin_diff')
+    if t is not None and vout is not None and vin is not None:
+        tclk = common.TCLK
+        ncyc = int(t[-1] / tclk)
+        dec_v, dec_in = [], []
+        for k in range(ncyc):
+            m = (t >= k * tclk) & (t < (k + 1) * tclk)
+            if not np.any(m):
+                continue
+            i = np.argmax(np.abs(vout[m]))
+            dec_v.append(vout[m][i])
+            dec_in.append(vin[m][i])
+        dec_v, dec_in = np.array(dec_v), np.array(dec_in)
+        strong = np.abs(dec_v) > 0.3 * np.nanmax(np.abs(dec_v))
+        lows = dec_in[strong & (dec_v < 0)]
+        highs = dec_in[strong & (dec_v > 0)]
+        if len(lows) and len(highs):
+            width = float(np.max(lows) - np.min(highs))
+            width_ok = 0.0 <= width <= 3.0
+            detail = f'noisy region ~{_fmt(width, 2)} mV wide (evals 0.5-2)'
+    add('ramp transition', width_ok, detail)
+
+    n_pass = sum('[PASS]' in c for c in checks)
+    return [f'Self-check: {n_pass}/{len(checks)} passed', *checks]
+
+
+def _run_comparator_sweep(analysis, plot_dir):
+    """Comparator parameter sweeps (clean simulate/plot module pairs)."""
+    t0 = time.time()
+    if analysis == 'sweep_amp':
+        from simulate_sweep_input_amplitude import sweep_input_amplitude
+        from plot_sweep_input_amplitude import plot_input_amplitude
+        results = sweep_input_amplitude()
+        plot = lambda: plot_input_amplitude(results)
+        title = 'Input-amplitude sweep'
+    elif analysis == 'sweep_vcm':
+        from simulate_sweep_vcm import sweep_vcm
+        from plot_sweep_vcm import plot_vcm
+        results = sweep_vcm()
+        wall = time.time() - t0
+        plot = lambda: plot_vcm(results, wall_s=wall)
+        title = 'Common-mode sweep'
+    elif analysis == 'sweep_k':
+        from simulate_sweep_k_valid import sweep_k
+        from plot_sweep_k_valid import plot_k_valid
+        results = sweep_k()
+        wall = time.time() - t0
+        plot = lambda: plot_k_valid(results, wall_s=wall)
+        title = 'Valid-K sweep'
+    else:                                    # sweep_bw
+        from simulate_sweep_noise_bw import sweep_noise_bw
+        from plot_sweep_noise_bw import plot_noise_bw
+        results = sweep_noise_bw()
+        wall = time.time() - t0
+        plot = lambda: plot_noise_bw(results, wall_s=wall)
+        title = 'Noise-bandwidth sweep'
+
+    report = (f'StrongArm Comparator — {title}\n'
+              f'{"=" * (24 + len(title))}\n'
+              f'{len(results)} points, {time.time() - t0:.1f}s wall.\n'
+              'Numbers per point are in the log panel; see the plot.')
+
+    def render():
+        before = _snapshot_pngs(plot_dir)
+        plot()
+        return _new_pngs(plot_dir, before), report
+    return CircuitResult(render)
+
+
+def _run_ldo_sweep(analysis, plot_dir):
+    """LDO compensation sweeps — replicate the tiny loop from the vendored
+    run_*_sweep.main() (patch value → AC run → collect), then reuse the
+    module's own _plot for the figure."""
+    import math
+    import ldo_common as ldo
+    from simulate_ldo_ac import simulate_ac
+
+    cfg = {
+        'sweep_ccomp': ('run_ccomp_sweep', 'CCOMP_VALS', 'C_COMP',
+                        lambda v: 1 / (2 * math.pi * ldo.R_COMP * v) / 1e3,
+                        lambda v: f'{v * 1e12:.0f} pF'),
+        'sweep_rcomp': ('run_rcomp_sweep', 'RCOMP_VALS', 'R_COMP',
+                        lambda v: 1 / (2 * math.pi * v * ldo.C_COMP) / 1e3,
+                        lambda v: f'{v:.0f} ohm'),
+        'sweep_cout':  ('run_cout_sweep', 'COUT_VALS', 'C_OUT',
+                        lambda v: 1 / (2 * math.pi * ldo.R_LOAD_DEFAULT * v) / 1e3,
+                        lambda v: f'{v * 1e6:.3f} uF'),
+    }[analysis]
+    mod_name, vals_attr, attr, f_of, fmt = cfg
+    import importlib
+    mod = importlib.import_module(mod_name)
+    vals = getattr(mod, vals_attr)
+
+    orig = getattr(ldo, attr)
+    results = []
+    lines = [f'LDO {attr} sweep', '=' * 20,
+             f'{attr:>10s}      PM [deg]   GBW [kHz]']
+    try:
+        for v in vals:
+            setattr(ldo, attr, v)
+            fk = f_of(v)
+            print(f'  {attr} = {fmt(v)}  (f ~ {fk:.1f} kHz)', flush=True)
+            try:
+                m = simulate_ac()['metrics']
+                pm = m.get('phase_margin_deg', float('nan'))
+                gbw = m.get('gbw_hz', float('nan'))
+            except Exception as exc:            # keep sweeping like upstream
+                print(f'  WARN: sim failed ({exc})')
+                pm, gbw = float('nan'), float('nan')
+            results.append((v, pm, gbw, fk))
+            lines.append(f'{fmt(v):>12s}   {_fmt(pm, 1):>8s}   '
+                         f'{_fmt(gbw / 1e3, 1):>9s}')
+    finally:
+        setattr(ldo, attr, orig)
+    report = '\n'.join(lines)
+
+    def render():
+        before = _snapshot_pngs(plot_dir)
+        mod._plot(results)
+        return _new_pngs(plot_dir, before), report
+    return CircuitResult(render)
+
+
+def _run_ldo_theory(plot_dir):
+    """LDO theory-vs-simulation check — mirrors run_theory_verification.main()
+    with the sim/analysis on the worker and the module's _plot deferred."""
+    import math
+    import numpy as np
+    import ldo_common as ldo
+    import run_theory_verification as tv
+    from simulate_ldo_ac import simulate_ac
+
+    res = simulate_ac()
+    lg, psrr_d, zout_d, m = (res['loopgain'], res['psrr'], res['zout'],
+                             res['metrics'])
+    freq_lg, T_mag, T_phase = lg['freq'], lg['mag_db'], lg['phase_deg']
+    gbw_hz = m.get('gbw_hz', float('nan'))
+    pm_deg = m.get('phase_margin_deg', float('nan'))
+    dc_gain = m.get('dc_gain_db', float('nan'))
+
+    fz_th = 1 / (2 * math.pi * ldo.R_COMP * ldo.C_COMP)
+    fp_th = 1 / (2 * math.pi * ldo.R_LOAD_DEFAULT * ldo.C_OUT)
+    fp_sim = tv._find_fp(freq_lg, T_mag) if freq_lg is not None else float('nan')
+    fz_sim = (tv._find_fz(freq_lg, T_phase, fp_sim, gbw_hz)
+              if freq_lg is not None else float('nan'))
+
+    psrr_sim, psrr_th, zout_sim, zout_th = {}, {}, {}, {}
+    for f in tv.F_SPOTS:
+        psrr_sim[f] = -tv._interp_log(f, psrr_d['freq'], psrr_d['mag_db'])
+        zout_sim[f] = tv._interp_log(f, zout_d['freq'], zout_d['mag_db'])
+        t_db = tv._interp_log(f, freq_lg, T_mag)
+        if not np.isnan(t_db):
+            t_lin = 10 ** (t_db / 20)
+            psrr_th[f] = 20 * np.log10(1 + t_lin)
+            zout_th[f] = 20 * np.log10(ldo.R_LOAD_DEFAULT / (1 + t_lin))
+        else:
+            psrr_th[f] = zout_th[f] = float('nan')
+
+    report = tv._build_report(fz_th, fp_th, fz_sim, fp_sim, gbw_hz, pm_deg,
+                              dc_gain, psrr_sim, psrr_th, zout_sim, zout_th)
+
+    def render():
+        before = _snapshot_pngs(plot_dir)
+        tv._plot(freq_lg, T_mag, T_phase,
+                 psrr_d['freq'], psrr_d['mag_db'],
+                 zout_d['freq'], zout_d['mag_db'],
+                 fz_th, fp_th, fz_sim, fp_sim, gbw_hz, pm_deg,
+                 psrr_sim, psrr_th, zout_sim, zout_th)
+        return _new_pngs(plot_dir, before), report
     return CircuitResult(render)
 
 

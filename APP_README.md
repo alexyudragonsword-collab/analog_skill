@@ -11,6 +11,7 @@ Skill 目录(`ngspice/`、`gmoverid/`、`transistor-models/`)保持原样未修�
 | **ngspice Examples** | 9 个教学案例一键运行;常用参数直显,VDD/扫描范围/频率/时序/温度等归入可折叠 Advanced 分组(通过临时 monkey-patch 实现,不改 skill 文件);结果 PNG 支持滚轮缩放、拖拽、另存 |
 | **Curve Browser** | 按模型/L/W 生成并浏览特性图:IV 特性、gm/ID 四象限、栅电容;会话内缓存,可强制重新生成 |
 | **Comparison** | 对比图:同一模型多沟长对比(如 L=180/360/1000nm)、跨节点对比(多选同极性模型)、跨节点栅电容对比 |
+| **Circuits** | 五个块级电路(circuit-skills 技能集):StrongArm 比较器(波形/probit 噪声/ramp/四类扫描/五项自检)、LDO(全表征/auto-design/补偿扫描/理论对照)、自举开关、五管 OTA、两级 Miller 运放(含 PZ 极零表);参数可编辑,指标报告可复制 |
 
 菜单栏 Help 提供中英双语图文用户手册(F1)与 About。**FinFET(7–20nm)** 通过
 ngspice 的 OSDI 接口运行时加载随包携带的 `bsimcmg.osdi`(主流预编译 ngspice 不含

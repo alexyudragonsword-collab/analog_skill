@@ -175,6 +175,41 @@ HP 与 LSTP 两档,nmos/pmos 共 20 个,下拉框中标注 <b>[FinFET]</b>)。</
 
 <hr>
 
+<h2 id="circuits">5a. 电路仿真(第五个标签页 Circuits)</h2>
+
+<p align="center"><img src="img/v09_circuits.png" width="820"></p>
+
+<p>把 <code>circuit-skills</code> 技能集里的<b>五个块级电路</b>搬进 GUI:选电路、
+选分析、改参数、点 Run,右侧看图、左下看指标报告(等宽文本,可复制)。</p>
+
+<table border="1" cellspacing="0" cellpadding="6">
+  <tr><th>电路</th><th>工艺/电源</th><th>分析项</th></tr>
+  <tr><td><b>StrongArm 比较器</b></td><td>45nm / 1.0V</td>
+      <td>完整表征、内部节点波形、probit 输入噪声(1000 周期,~2 分钟)、
+          ramp 传输曲线、四类扫描(输入幅度/共模/valid-K/噪声带宽)、
+          <b>自检</b>(5 项定量物理断言,阈值取自技能自带 evals)</td></tr>
+  <tr><td><b>LDO 稳压器</b></td><td>180nm / 输出 1.8V</td>
+      <td>完整表征(DC/AC/噪声/瞬态并行)、单项分析、
+          <b>Auto-design</b>(给 VOUT/VIN/ILOAD 自动定尺寸并 AC 验证)、
+          Ccomp/Rcomp/Cout 补偿扫描、<b>理论 vs 仿真</b>(极点/零点/PSRR/Zout 对照)</td></tr>
+  <tr><td><b>自举开关</b></td><td>180nm</td>
+      <td>自举波形(VGATE≈VIN+VDD)、导通电阻对比(NMOS vs CMOS vs 自举)</td></tr>
+  <tr><td><b>五管 OTA</b></td><td>180nm</td>
+      <td>DC 传输、AC 开环(增益/UGB/相位)、输出噪声</td></tr>
+  <tr><td><b>两级 Miller 运放</b></td><td>180nm</td>
+      <td>工作点、增益/相位、<b>PZ 极零分析</b>(报告含完整极零表)、开/闭环噪声</td></tr>
+</table>
+
+<p>参数表单按电路自动切换(晶体管宽度、偏置、补偿网络等;少用的项收在
+<b>Advanced parameters</b> 折叠组)。带 <i>note</i> 的分析(如 probit 噪声、各类扫描)
+耗时较长,运行中可在日志面板看逐点进度;任务照常进串行队列,可切到其他标签页继续工作。</p>
+
+<p><small>注:技能集中两个脚本式入口(比较器 tail/latch 宽度的 τ=C/gm 验证)
+因在导入时直接执行、与 GUI 的线程策略不兼容,保持命令行运行方式
+(见 <code>circuit-skills/comparator/SKILL.md</code>)。</small></p>
+
+<hr>
+
 <h2>6. 日志面板与任务队列</h2>
 <p>窗口底部的 <b>Simulation log</b> 面板实时显示所有仿真进度与 ngspice 输出,
 出错时附带错误详情和最新日志文件的末尾内容。该面板可拖到窗口右侧或独立浮动。</p>
