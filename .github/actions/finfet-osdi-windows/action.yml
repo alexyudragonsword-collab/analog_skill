@@ -53,6 +53,20 @@ runs:
         if (-not $exe) { throw 'Could not obtain an OpenVAF Windows compiler' }
 
         Write-Host "Using compiler: $($exe.FullName)"
+
+        # OpenVAF links the .osdi with MSVC link.exe.  snprintf lives in
+        # legacy_stdio_definitions.lib, so enter the MSVC toolchain env (puts
+        # the UCRT libs on LIB) and add that lib to the link via the LINK env
+        # var that link.exe honours — fixes "LNK2019 unresolved snprintf".
+        try {
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -property installationPath
+          Import-Module (Join-Path $vs 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
+          Enter-VsDevShell -VsInstallPath $vs -DevCmdArguments '-arch=x64 -host_arch=x64' -SkipAutomaticLocation | Out-Null
+          Write-Host "MSVC dev shell ready"
+        } catch { Write-Host "VsDevShell setup failed (continuing): $_" }
+        $env:LINK = 'legacy_stdio_definitions.lib'
+
         Push-Location $va
         try { & $exe.FullName bsimcmg.va } finally { Pop-Location }
 
