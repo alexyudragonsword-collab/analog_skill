@@ -26,6 +26,12 @@ Three skill packages that give an Agent the ability to design and simulate analo
 > bulk nodes selectable). See [`APP_README.md`](./APP_README.md) for usage,
 > Windows packaging (PyInstaller/Nuitka) and architecture.
 
+> **Archived**: [`circuit-skills/`](./circuit-skills/) vendors the sibling
+> [analog-circuit-skills](https://github.com/Arcadia-1/analog-circuit-skills)
+> collection (StrongArm comparator, LDO, bootstrapped switch, 5T OTA,
+> two-stage op amp). Analysis and a GUI-integration assessment are in
+> [`CIRCUIT_SKILLS_ANALYSIS.md`](./CIRCUIT_SKILLS_ANALYSIS.md).
+
 > **If you are human**: the examples below include images that show each skill's output at a glance.
 
 > **If you are an AI Agent**: skip the images and go directly to [Installation](#installation). The full instructions for each skill are in its own `SKILL.md`; runnable scripts and model files are in the `assets/` directories.

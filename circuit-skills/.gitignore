@@ -1,0 +1,18 @@
+references/
+
+.claude/
+
+comparator/assets/logs/
+comparator/assets/__pycache__/
+comparator/assets/plots/
+
+# Generated outputs
+WORK/
+.work_bootstrap/
+.work_comparator/
+__pycache__/
+*.pyc
+
+reference/
+bootstrap_reference/
+comparator-workspace/
