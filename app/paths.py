@@ -130,6 +130,22 @@ def finfet_osdi_path() -> Path | None:
     return cand if cand.is_file() else None
 
 
+def circuit_skills_dir() -> Path:
+    """Root of the vendored analog-circuit-skills collection.
+
+    Dev: circuit-skills/ in the repo.  Frozen: bundled read-only copy —
+    the skills only *read* templates/models from their tree; all outputs
+    go to the ANALOG_WORK_DIR set by init_runtime().
+    """
+    if is_frozen():
+        base = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
+        for cand in (base / 'circuit_skills',
+                     Path(sys.executable).parent / '_internal' / 'circuit_skills'):
+            if cand.is_dir():
+                return cand
+    return repo_root() / 'circuit-skills'
+
+
 def resources_dir() -> Path:
     """Location of app/resources (manual HTML + images).
 
@@ -182,6 +198,13 @@ def init_runtime():
         BROWSER_PLOTS = root / 'app_output' / 'browser_plots'
 
     BROWSER_PLOTS.mkdir(parents=True, exist_ok=True)
+
+    # circuit-skills (comparator/LDO/OTA/opamp/bootstrap) route ALL their
+    # outputs through this env var (read at their import time — set it before
+    # any circuit module is imported); their own trees stay read-only.
+    circuit_work = BROWSER_PLOTS.parent / 'circuit_work'
+    circuit_work.mkdir(parents=True, exist_ok=True)
+    os.environ['ANALOG_WORK_DIR'] = str(circuit_work)
 
     for p in (str(NGSPICE_ASSETS), str(GMOVERID_ASSETS)):
         if p not in sys.path:

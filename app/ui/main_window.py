@@ -32,17 +32,20 @@ class MainWindow(QMainWindow):
         from app.ui.examples_tab import ExamplesTab
         from app.ui.browser_tab import BrowserTab
         from app.ui.comparison_tab import ComparisonTab
+        from app.ui.circuits_tab import CircuitsTab
 
         self.gmid_tab = GmIdTab(self.worker)
         self.examples_tab = ExamplesTab(self.worker)
         self.browser_tab = BrowserTab(self.worker)
         self.comparison_tab = ComparisonTab(self.worker)
+        self.circuits_tab = CircuitsTab(self.worker)
 
         tabs = QTabWidget()
         tabs.addTab(self.gmid_tab, 'gm/ID Designer')
         tabs.addTab(self.examples_tab, 'ngspice Examples')
         tabs.addTab(self.browser_tab, 'Curve Browser')
         tabs.addTab(self.comparison_tab, 'Comparison')
+        tabs.addTab(self.circuits_tab, 'Circuits')
 
         # ngspice-missing banner
         self._banner = QWidget()
@@ -158,7 +161,7 @@ class MainWindow(QMainWindow):
                 'Cached gm/ID tables can still be loaded.')
             self._banner.show()
         for tab in (self.examples_tab, self.browser_tab, self.gmid_tab,
-                    self.comparison_tab):
+                    self.comparison_tab, self.circuits_tab):
             tab.set_sim_enabled(st.ok)
         if not st.ok:
             self.log_panel.append_line(INSTALL_HINT)

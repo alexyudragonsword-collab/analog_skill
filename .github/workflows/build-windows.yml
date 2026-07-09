@@ -157,7 +157,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$dist\skill" | Out-Null
           Copy-Item -Recurse ngspice\assets  "$dist\skill\ngspice_assets"
           Copy-Item -Recurse gmoverid\assets "$dist\skill\gmoverid_assets"
-          Get-ChildItem -Recurse "$dist\skill" -Include __pycache__,logs,plots -Directory |
+          # circuit-skills contain .py (Nuitka refuses those as data) — copy verbatim
+          Copy-Item -Recurse circuit-skills "$dist\circuit_skills"
+          Get-ChildItem -Recurse "$dist\skill","$dist\circuit_skills" -Include __pycache__,logs,plots -Directory |
             Remove-Item -Recurse -Force
           $site = python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
           Get-ChildItem -Path $site -Directory -Filter '*.libs' | ForEach-Object {

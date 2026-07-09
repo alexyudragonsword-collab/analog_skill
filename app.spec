@@ -40,6 +40,9 @@ datas = (
     # PTM-MG FinFET modelcards + the BSIM-CMG OSDI model (per-platform .osdi)
     + collect_tree(REPO / 'transistor-models' / 'assets' / 'models'
                    / 'finfet', 'finfet_models')
+    # vendored analog-circuit-skills (Circuits tab) — read-only at runtime,
+    # outputs are routed through ANALOG_WORK_DIR
+    + collect_tree(REPO / 'circuit-skills', 'circuit_skills')
 )
 
 a = Analysis(
