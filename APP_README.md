@@ -12,6 +12,7 @@ Skill 目录(`ngspice/`、`gmoverid/`、`transistor-models/`)保持原样未修�
 | **Curve Browser** | 按模型/L/W 生成并浏览特性图:IV 特性、gm/ID 四象限、栅电容;会话内缓存,可强制重新生成 |
 | **Comparison** | 对比图:同一模型多沟长对比(如 L=180/360/1000nm)、跨节点对比(多选同极性模型)、跨节点栅电容对比 |
 | **Circuits** | 五个块级电路(circuit-skills 技能集):StrongArm 比较器(波形/probit 噪声/ramp/四类扫描/五项自检)、LDO(全表征/auto-design/补偿扫描/理论对照)、自举开关、五管 OTA、两级 Miller 运放(含 PZ 极零表);选中电路即显示按 DUT 网表绘制的**电路原理图**(schemdraw 预渲染,`tools/gen_schematics.py`),运行后常驻缩略图栏首位;参数可编辑,指标报告可复制 |
+| **Sizing** | 基于 vendored **AnalogGym**(ICCAD'24,BSD-3)开源子集的尺寸自动优化:SKY130 工艺的三级 AFFC 运放与 Basic LDO,变量/边界表格可编辑,预算受控的 Powell 搜索最小化目标违约代价(增益/GBW/PM/PSRR/CMRR/功耗/Vos/TC 或 LDO 的 PM/LNR/LR/PSRR/Iq),日志面板实时进度、可取消;完成后显示收敛曲线 + 最优指标表,可导出最优 `.PARAM`;SKY130 PDK 首次使用时自动解压到工作区(~109MB) |
 
 菜单栏 Help 提供中英双语图文用户手册(F1)与 About。**FinFET(7–20nm)** 通过
 ngspice 的 OSDI 接口运行时加载随包携带的 `bsimcmg.osdi`(主流预编译 ngspice 不含

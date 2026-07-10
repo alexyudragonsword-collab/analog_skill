@@ -39,3 +39,20 @@ repository's MIT license.
   Cite:
     BSIM-CMG Technical Manual, BSIM Group, UC Berkeley.
     https://bsim.berkeley.edu/models/bsimcmg/
+
+---
+
+AnalogGym benchmark subset (analoggym/)
+
+The netlists, design-variable files, testbenches, schematic image and the
+SkyWater SKY130 PDK archive under analoggym/ are vendored from
+CODA-Team/AnalogGym (https://github.com/CODA-Team/AnalogGym) and are
+licensed under the BSD 3-Clause License, Copyright (c) 2024, CODA-Team
+(see analoggym/LICENSE). When publishing results obtained with these
+circuits, please cite:
+
+  J. Li et al., "AnalogGym: An Open and Practical Testing Suite for
+  Analog Circuit Synthesis," ICCAD 2024. arXiv:2409.08534.
+
+The SKY130 PDK model files inside analoggym/pdk/sky130_pdk.zip originate
+from the SkyWater Open Source PDK (Apache License 2.0).

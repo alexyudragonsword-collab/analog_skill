@@ -4,8 +4,9 @@
 >
 > 分析日期:2026-07-10。三库均克隆自 GitHub(浅克隆),在本仓库的开发环境
 > (Linux x86-64,ngspice-42)做了**离线实证**——所有可复现性结论都来自实跑,
-> 不是转述 README。仓库本体**未** vendor 进本仓库(许可与体积考虑,见各节),
-> 仅存档本分析。文末附基于 AnalogGym 的 **Analog Studio "sizing 优化"功能集成评估**。
+> 不是转述 README。AnalogCoder / Analogagent 未 vendor(许可与完成度考虑,
+> 见各节);文末的集成评估已实施为 Sizing 标签页(P1),其依赖的 **AnalogGym
+> 开源子集(BSD-3)vendor 于 `analoggym/`**。
 
 ## 目录
 

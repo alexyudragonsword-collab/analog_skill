@@ -35,8 +35,9 @@ Three skill packages that give an Agent the ability to design and simulate analo
 > **Survey**: [`ANALOG_REPOS_ANALYSIS.md`](./ANALOG_REPOS_ANALYSIS.md) compares
 > three external analog-automation repos — AnalogCoder (AAAI'25), Analogagent
 > and AnalogGym (ICCAD'24) — with offline reproduction notes, plus an
-> integration assessment for an AnalogGym-based sizing-optimization feature
-> (repos themselves are not vendored).
+> integration assessment for an AnalogGym-based sizing-optimization feature.
+> The open (BSD-3) AnalogGym subset backing the app's **Sizing** tab is
+> vendored under [`analoggym/`](./analoggym/).
 
 > **If you are human**: the examples below include images that show each skill's output at a glance.
 

@@ -10,6 +10,7 @@ on:
       - 'gmoverid/**'
       - 'ngspice/**'
       - 'transistor-models/**'
+      - 'analoggym/**'
       - 'requirements*.txt'
       - 'app.spec'
       - '.github/workflows/build-windows.yml'
@@ -127,6 +128,7 @@ jobs:
             --include-data-dir=app/resources=app_resources `
             --include-data-dir=transistor-models/assets/models/bulk_cmos=bulk_models `
             --include-data-dir=transistor-models/assets/models/finfet=finfet_models `
+            --include-data-dir=analoggym=analoggym `
             --windows-console-mode=disable `
             --force-stderr-spec="{PROGRAM_BASE}.err.txt" `
             --force-stdout-spec="{PROGRAM_BASE}.out.txt" `

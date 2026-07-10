@@ -43,6 +43,8 @@ datas = (
     # vendored analog-circuit-skills (Circuits tab) — read-only at runtime,
     # outputs are routed through ANALOG_WORK_DIR
     + collect_tree(REPO / 'circuit-skills', 'circuit_skills')
+    # vendored AnalogGym subset (Sizing tab): netlists/testbenches + PDK zip
+    + collect_tree(REPO / 'analoggym', 'analoggym')
 )
 
 a = Analysis(

@@ -146,6 +146,50 @@ def circuit_skills_dir() -> Path:
     return repo_root() / 'circuit-skills'
 
 
+def analoggym_dir() -> Path:
+    """Root of the vendored AnalogGym subset (sizing benchmark assets).
+
+    Dev: analoggym/ in the repo.  Frozen: bundled read-only copy — the
+    netlists/testbenches are only read; rendered decks and outputs go to
+    the workspace.
+    """
+    if is_frozen():
+        base = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
+        for cand in (base / 'analoggym',
+                     Path(sys.executable).parent / '_internal' / 'analoggym'):
+            if cand.is_dir():
+                return cand
+    return repo_root() / 'analoggym'
+
+
+def sky130_pdk_dir() -> Path:
+    """SKY130 ngspice model root, extracted from the vendored zip on first
+    use.  Lives *next to* the versioned workspace (it is version-independent
+    and ~109 MB unpacked, so it survives app upgrades and workspace pruning).
+    """
+    return _workspace_root().parent.parent / 'sky130' / 'sky130_pdk'
+
+
+def ensure_sky130() -> Path:
+    """Extract analoggym/pdk/sky130_pdk.zip if not present yet (atomic)."""
+    dst = sky130_pdk_dir().parent            # …/sky130
+    if sky130_pdk_dir().is_dir():
+        return sky130_pdk_dir()
+    import zipfile
+    zip_path = analoggym_dir() / 'pdk' / 'sky130_pdk.zip'
+    tmp = dst.with_name(dst.name + '.tmp')
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    tmp.mkdir(parents=True)
+    print('Extracting SKY130 PDK (first run, ~109 MB) ...')
+    with zipfile.ZipFile(zip_path) as zf:
+        zf.extractall(tmp)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    os.replace(tmp, dst)
+    print('SKY130 PDK ready.')
+    return sky130_pdk_dir()
+
+
 def resources_dir() -> Path:
     """Location of app/resources (manual HTML + images).
 
