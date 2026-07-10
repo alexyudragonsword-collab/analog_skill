@@ -14,8 +14,11 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope='module', autouse=True)
 def runtime():
-    from PySide6.QtCore import QCoreApplication
-    QCoreApplication.instance() or QCoreApplication([])
+    # a full QApplication (not QCoreApplication): the first app created wins
+    # for the whole pytest process, and widget tests in other files would
+    # abort under a core-only application
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
     from app import paths
     paths.init_runtime()
 

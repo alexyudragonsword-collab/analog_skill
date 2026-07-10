@@ -5,14 +5,17 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 import pytest
-from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
+from PySide6.QtCore import QEventLoop, QTimer
 
 from app.core.worker import EmittingStream, Job, SimWorker
 
 
 @pytest.fixture(scope='module')
 def qapp():
-    app = QCoreApplication.instance() or QCoreApplication([])
+    # QApplication, not QCoreApplication — see test_examples.py: the first
+    # app created wins for the whole pytest process and must support widgets
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication([])
     yield app
 
 

@@ -916,3 +916,85 @@ def render_convergence(run: SizingRun) -> Path:
     fig.savefig(out, dpi=130)
     plt.close(fig)
     return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Run persistence: save / load / list / compare
+# ─────────────────────────────────────────────────────────────────────────────
+RUN_SCHEMA = 1
+
+
+def runs_dir() -> Path:
+    d = Path(os.environ.get('ANALOG_WORK_DIR',
+                            Path.home() / '.analog_studio')) / 'sizing_runs'
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def save_run(run: SizingRun, path: Path | None = None) -> Path:
+    """Persist a completed run as JSON (auto-named into runs_dir())."""
+    import dataclasses
+    import json
+    import time as _time
+    from app import __version__
+    if path is None:
+        stamp = _time.strftime('%Y%m%d_%H%M%S')
+        path = runs_dir() / f'{run.circuit}_{stamp}.json'
+    doc = {'schema': RUN_SCHEMA,
+           'saved_at': _time.strftime('%Y-%m-%d %H:%M:%S'),
+           'app_version': __version__,
+           'run': dataclasses.asdict(run)}
+    path = Path(path)
+    path.write_text(json.dumps(doc, indent=1))
+    return path
+
+
+def load_run(path: Path) -> SizingRun:
+    import json
+    doc = json.loads(Path(path).read_text())
+    d = doc['run']
+    d['history'] = [tuple(h) for h in d.get('history', [])]
+    if d.get('overrides'):
+        d['overrides'] = {k: tuple(v) for k, v in d['overrides'].items()}
+    return SizingRun(**d)
+
+
+def run_info(path: Path) -> dict:
+    """Cheap summary of a saved run for list views."""
+    import json
+    doc = json.loads(Path(path).read_text())
+    r = doc['run']
+    return {'path': Path(path), 'saved_at': doc.get('saved_at', ''),
+            'circuit': r['circuit'],
+            'title': SIZING[r['circuit']].title
+            if r['circuit'] in SIZING else r['circuit'],
+            'evals': r['evals'], 'best_cost': r['best_cost'],
+            'cancelled': r.get('cancelled', False)}
+
+
+def list_runs() -> list[Path]:
+    return sorted(runs_dir().glob('*.json'))
+
+
+def render_comparison(runs: list[SizingRun]) -> Path:
+    """Overlay the convergence curves of several saved runs
+    (GUI thread — matplotlib policy)."""
+    import matplotlib
+    matplotlib.use('Agg', force=False)
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(6.4, 4.2), constrained_layout=True)
+    for run in runs:
+        xs = [h[0] for h in run.history]
+        ys = [-h[1] for h in run.history]
+        ax.plot(xs, ys, '-o', ms=3,
+                label=f'{run.circuit}  ({run.evals} evals, '
+                      f'FoM {-run.best_cost:.3f})')
+    ax.set_xlabel('evaluation')
+    ax.set_ylabel('best FoM (= -cost, higher is better)')
+    ax.set_title('Sizing runs — convergence comparison', fontsize=10)
+    ax.grid(alpha=0.3)
+    ax.legend(fontsize=8)
+    out = runs_dir() / 'comparison.png'
+    fig.savefig(out, dpi=130)
+    plt.close(fig)
+    return out

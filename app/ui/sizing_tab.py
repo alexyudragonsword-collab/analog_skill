@@ -12,9 +12,9 @@ import threading
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtWidgets import (
-    QComboBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
-    QPlainTextEdit, QPushButton, QSpinBox, QSplitter, QTableWidget,
-    QTableWidgetItem, QVBoxLayout, QWidget,
+    QAbstractItemView, QComboBox, QDialog, QFileDialog, QFormLayout,
+    QGroupBox, QHBoxLayout, QLabel, QMessageBox, QPlainTextEdit, QPushButton,
+    QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from app.core import sizing
@@ -77,6 +77,10 @@ class SizingTab(QWidget, JobTabMixin):
         self.export_btn = QPushButton('Export best .PARAM…')
         self.export_btn.setEnabled(False)
         self.export_btn.clicked.connect(self._export)
+        self.runs_btn = QPushButton('Runs…')
+        self.runs_btn.setToolTip('Saved optimization runs: load, compare '
+                                 'convergence, warm-start from a best point.')
+        self.runs_btn.clicked.connect(self._open_runs)
 
         self._status = QLabel('')
         self._status.setWordWrap(True)
@@ -108,6 +112,7 @@ class SizingTab(QWidget, JobTabMixin):
         btn_row.addWidget(self.run_btn)
         btn_row.addWidget(self.cancel_btn)
         btn_row.addWidget(self.export_btn)
+        btn_row.addWidget(self.runs_btn)
 
         left = QWidget()
         ll = QVBoxLayout(left)
@@ -242,12 +247,21 @@ class SizingTab(QWidget, JobTabMixin):
     def on_job_finished(self, slot, run: sizing.SizingRun):
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
-        self._last_run = run
-        self.export_btn.setEnabled(True)
         note = ' (cancelled — best-so-far kept)' if run.cancelled else ''
+        saved = ''
+        try:
+            saved = f'  Saved as {sizing.save_run(run).name}.'
+        except OSError:
+            pass
         self._status.setText(
             f'Done{note}: cost {run.initial_cost:.3f} → {run.best_cost:.3f} '
-            f'in {run.evals} evaluations.')
+            f'in {run.evals} evaluations.{saved}')
+        self._show_run(run)
+
+    def _show_run(self, run: sizing.SizingRun):
+        """Display a run's report + convergence curve (GUI thread)."""
+        self._last_run = run
+        self.export_btn.setEnabled(True)
         self._report.setPlainText(run.report())
         try:
             png = sizing.render_convergence(run)   # GUI thread (mpl policy)
@@ -276,5 +290,168 @@ class SizingTab(QWidget, JobTabMixin):
                 f.write(self._last_run.params_text())
             self._status.setText(f'Exported to {path}')
 
+    # ── saved runs: load / compare / warm start ───────────────────────────
+    def _open_runs(self):
+        dlg = RunsDialog(self)
+        dlg.exec()
+
+    def apply_best_to_table(self, run: sizing.SizingRun) -> int:
+        """Warm start: write a run's best values into the init column of the
+        variables table (same circuit only).  Returns #cells updated."""
+        if run.circuit != self._key():
+            idx = self.circuit_combo.findData(run.circuit)
+            if idx < 0:
+                return 0
+            self.circuit_combo.setCurrentIndex(idx)   # repopulates the table
+        updated = 0
+        for row in range(self._table.rowCount()):
+            name = self._table.item(row, 0).text()
+            if name in run.best_values:
+                self._table.item(row, 1).setText(
+                    f'{run.best_values[name]:g}')
+                updated += 1
+        return updated
+
     def set_sim_enabled(self, enabled: bool):
         self.run_btn.setEnabled(enabled and not self.has_job('opt'))
+
+
+class RunsDialog(QDialog):
+    """Saved sizing runs: load a report, overlay convergence curves,
+    warm-start the variables table from a best point, or delete files."""
+
+    def __init__(self, tab: SizingTab):
+        super().__init__(tab)
+        self._tab = tab
+        self.setWindowTitle('Saved sizing runs')
+        self.resize(640, 360)
+
+        self._list = QTableWidget(0, 5)
+        self._list.setHorizontalHeaderLabels(
+            ['saved', 'circuit', 'evals', 'best cost', 'file'])
+        self._list.horizontalHeader().setStretchLastSection(True)
+        self._list.verticalHeader().setVisible(False)
+        self._list.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows)
+        self._list.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection)
+        self._list.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._list.itemSelectionChanged.connect(self._on_selection)
+        self._list.itemDoubleClicked.connect(lambda *_: self._load())
+
+        self.load_btn = QPushButton('Load')
+        self.load_btn.clicked.connect(self._load)
+        self.compare_btn = QPushButton('Compare')
+        self.compare_btn.setToolTip('Overlay the convergence curves of the '
+                                    'selected runs (select 2+).')
+        self.compare_btn.clicked.connect(self._compare)
+        self.warm_btn = QPushButton('Use best as init')
+        self.warm_btn.setToolTip("Write the selected run's best sizing into "
+                                 'the init column (warm start).')
+        self.warm_btn.clicked.connect(self._warm_start)
+        self.delete_btn = QPushButton('Delete')
+        self.delete_btn.clicked.connect(self._delete)
+        close_btn = QPushButton('Close')
+        close_btn.clicked.connect(self.accept)
+
+        btns = QHBoxLayout()
+        for b in (self.load_btn, self.compare_btn, self.warm_btn,
+                  self.delete_btn):
+            btns.addWidget(b)
+        btns.addStretch(1)
+        btns.addWidget(close_btn)
+
+        lay = QVBoxLayout(self)
+        lay.addWidget(self._list)
+        lay.addLayout(btns)
+
+        self._refresh()
+
+    def _refresh(self):
+        self._infos = []
+        for p in sizing.list_runs():
+            try:
+                self._infos.append(sizing.run_info(p))
+            except Exception:
+                continue                     # unreadable/foreign file: skip
+        self._list.setRowCount(len(self._infos))
+        for row, info in enumerate(self._infos):
+            cost = f"{info['best_cost']:.4f}" + (
+                '  (cancelled)' if info['cancelled'] else '')
+            for col, text in enumerate((info['saved_at'], info['title'],
+                                        str(info['evals']), cost,
+                                        info['path'].name)):
+                self._list.setItem(row, col, QTableWidgetItem(text))
+        self._list.resizeColumnsToContents()
+        self._on_selection()
+
+    def _selected(self) -> list:
+        rows = sorted({i.row() for i in self._list.selectedItems()})
+        return [self._infos[r] for r in rows]
+
+    def _on_selection(self):
+        n = len(self._selected())
+        self.load_btn.setEnabled(n == 1)
+        self.warm_btn.setEnabled(n == 1)
+        self.compare_btn.setEnabled(n >= 2)
+        self.delete_btn.setEnabled(n >= 1)
+
+    def _load_one(self) -> sizing.SizingRun | None:
+        sel = self._selected()
+        if len(sel) != 1:
+            return None
+        try:
+            return sizing.load_run(sel[0]['path'])
+        except Exception as exc:
+            QMessageBox.warning(self, 'Load failed', str(exc))
+            return None
+
+    def _load(self):
+        run = self._load_one()
+        if run is None:
+            return
+        idx = self._tab.circuit_combo.findData(run.circuit)
+        if idx >= 0:
+            self._tab.circuit_combo.setCurrentIndex(idx)
+        self._tab._show_run(run)
+        self.accept()
+
+    def _compare(self):
+        sel = self._selected()
+        runs = []
+        for info in sel:
+            try:
+                runs.append(sizing.load_run(info['path']))
+            except Exception:
+                continue
+        if len(runs) < 2:
+            return
+        png = sizing.render_comparison(runs)   # GUI thread (mpl policy)
+        self._tab._viewer.show_pngs([png])
+        self.accept()
+
+    def _warm_start(self):
+        run = self._load_one()
+        if run is None:
+            return
+        n = self._tab.apply_best_to_table(run)
+        self._tab._status.setText(
+            f'Warm start: {n} init value(s) taken from {run.circuit} best.')
+        self.accept()
+
+    def _delete(self):
+        sel = self._selected()
+        if not sel:
+            return
+        if QMessageBox.question(
+                self, 'Delete runs',
+                f'Delete {len(sel)} saved run(s)?') != \
+                QMessageBox.StandardButton.Yes:
+            return
+        for info in sel:
+            try:
+                info['path'].unlink()
+            except OSError:
+                pass
+        self._refresh()

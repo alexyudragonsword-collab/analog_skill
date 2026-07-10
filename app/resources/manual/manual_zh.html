@@ -261,6 +261,12 @@ max/min,变量为开关宽度 W.sw 与时钟频率,约 0.5 秒/次)。
 变量即 Circuits 页的同一组参数(含 W.xxx 宽度字典);优化在 PTM 模型上进行,
 结果可回填到 Circuits 页复跑完整表征。</p>
 
+<p><b>运行管理</b>:每次优化完成后自动保存为 JSON(工作区
+<code>sizing_runs/</code>);点 <b>Runs…</b> 打开已存运行列表——<b>Load</b>
+恢复报告与收敛曲线,<b>Compare</b> 多选叠加多次运行的收敛曲线,
+<b>Use best as init</b> 把选中运行的最优尺寸写回变量表 init 列
+(热启动,继续用更大预算精修),<b>Delete</b> 清理旧记录。</p>
+
 <p><small>SKY130 PDK(约 109MB)在首次使用 Sizing 时自动从随包 zip 解压到
 工作区,升级版本不重复解压。上游 21 个运放中 Qu_LEC(网表为空)与
 Tan_CLIA(默认宽度低于模型 bin 下限)两个存在上游缺陷,未注册。

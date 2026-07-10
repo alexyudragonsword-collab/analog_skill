@@ -262,6 +262,55 @@ def test_parallel_optimize_slots():
     assert any((base / f'w{s}').is_dir() for s in (1, 2, 3))
 
 
+# ── run persistence: save / load / compare / warm start ─────────────────────
+def _fake_run(circuit='amp_hoilee_affc', cost=1.2):
+    return sizing.SizingRun(
+        circuit=circuit,
+        best_values={'CURRENT_0_BIAS': 2.5e-6},
+        best_metrics={'dcgain': 92.0}, best_cost=cost, initial_cost=3.4,
+        history=[(1, 3.4), (2, 2.0), (3, cost)], evals=3, cancelled=False,
+        elapsed=12.0, overrides={'dcgain': (100.0, True)})
+
+
+def test_run_save_load_roundtrip(tmp_path):
+    run = _fake_run()
+    p = sizing.save_run(run, tmp_path / 'r.json')
+    assert sizing.load_run(p) == run          # history tuples + overrides
+    info = sizing.run_info(p)
+    assert info['circuit'] == 'amp_hoilee_affc' and info['evals'] == 3
+    assert 'HoiLee' in info['title']
+
+
+def test_render_comparison(tmp_path):
+    png = sizing.render_comparison(
+        [_fake_run(), _fake_run('skill_ota5t', cost=0.5)])
+    assert png.is_file() and png.stat().st_size > 1000
+
+
+def test_runs_dialog_and_warm_start(tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    monkeypatch.setattr(sizing, 'runs_dir', lambda: tmp_path)
+    sizing.save_run(_fake_run())
+    sizing.save_run(_fake_run('skill_ota5t', cost=0.5))
+
+    from app.core.worker import SimWorker
+    from app.ui.sizing_tab import RunsDialog, SizingTab
+    worker = SimWorker()
+    try:
+        tab = SizingTab(worker)
+        dlg = RunsDialog(tab)
+        assert dlg._list.rowCount() == 2
+        n = tab.apply_best_to_table(_fake_run())
+        assert n == 1                          # CURRENT_0_BIAS exists
+        assert tab.circuit_combo.currentData() == 'amp_hoilee_affc'
+        vals = {tab._table.item(r, 0).text(): tab._table.item(r, 1).text()
+                for r in range(tab._table.rowCount())}
+        assert vals['CURRENT_0_BIAS'] == '2.5e-06'
+    finally:
+        worker.stop()
+
+
 @needs_ngspice
 def test_diff_evolution_micro():
     variables = sizing.parse_variables('amp_hoilee_affc')

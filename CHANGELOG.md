@@ -5,6 +5,24 @@ development milestones on the `claude/gmoverid-skill-analysis-7ron1c` branch;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
+## v1.1 — 2026-07-10
+
+Sizing run management + release pipeline.
+
+- **Run management** in the Sizing tab: every completed optimization is
+  auto-saved as JSON into the workspace (`sizing_runs/`). The new
+  **Runs…** dialog lists saved runs and offers **Load** (restore report +
+  convergence curve), **Compare** (overlay the convergence curves of
+  several runs), **Use best as init** (warm-start the variables table
+  from a run's best sizing) and **Delete**.
+- **Linux package**: the CI now also builds a PyInstaller onedir tarball
+  on ubuntu (`AnalogStudio-linux-pyinstaller.tar.gz`) from the same
+  cross-platform spec; the vendored linux64 `bsimcmg.osdi` means FinFET
+  works out of the box.
+- **GitHub Releases**: tag builds automatically publish a Release with
+  all three packages attached and the matching CHANGELOG section as the
+  notes.
+
 ## v1.0 — 2026-07-10
 
 Sizing P4 + release polish.
