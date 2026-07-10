@@ -32,6 +32,12 @@ Three skill packages that give an Agent the ability to design and simulate analo
 > two-stage op amp). Analysis and a GUI-integration assessment are in
 > [`CIRCUIT_SKILLS_ANALYSIS.md`](./CIRCUIT_SKILLS_ANALYSIS.md).
 
+> **Survey**: [`ANALOG_REPOS_ANALYSIS.md`](./ANALOG_REPOS_ANALYSIS.md) compares
+> three external analog-automation repos — AnalogCoder (AAAI'25), Analogagent
+> and AnalogGym (ICCAD'24) — with offline reproduction notes, plus an
+> integration assessment for an AnalogGym-based sizing-optimization feature
+> (repos themselves are not vendored).
+
 > **If you are human**: the examples below include images that show each skill's output at a glance.
 
 > **If you are an AI Agent**: skip the images and go directly to [Installation](#installation). The full instructions for each skill are in its own `SKILL.md`; runnable scripts and model files are in the `assets/` directories.
