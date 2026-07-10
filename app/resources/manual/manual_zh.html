@@ -220,6 +220,37 @@ HP 与 LSTP 两档,nmos/pmos 共 20 个,下拉框中标注 <b>[FinFET]</b>)。</
 
 <hr>
 
+<h2 id="sizing">5b. 尺寸自动优化(第六个标签页 Sizing)</h2>
+
+<p align="center"><img src="img/v011_sizing.png" width="820"></p>
+
+<p>基于 vendored <b>AnalogGym</b>(ICCAD'24,BSD-3)开源子集的自动 sizing:
+共 <b>20 个 SKY130 电路</b>(15 个文献级三级 Miller 运放 + Basic LDO + 4 个 LDO 变体),
+全部在 ngspice-42 上逐一验证过。选电路 → 编辑变量边界与指标目标 → 设预算 → Optimize:</p>
+
+<ul>
+  <li><b>Targets 表</b>:每个指标的目标值可改;勾选 <i>hard</i> 后该项违约代价 ×10
+      (硬约束)。运放指标:DC 增益/GBW/相位裕度/PSRR±/CMRR/功耗/失调/温漂;
+      LDO 指标:轻重载相位裕度与环路 GBW、LNR/LR、PSRR、输出误差、静态电流。</li>
+  <li><b>Design variables 表</b>:W/L/M/电容/偏置电流及其上下界均可编辑
+      (初值来自 AnalogGym 的文献默认尺寸)。</li>
+  <li><b>算法</b>:内置 <i>Sobol + Powell</i>(围绕默认值的 Sobol 采样 + 有界
+      Powell 精修,零额外依赖);源码运行且装有 <code>optuna</code> 时另有
+      <i>Optuna TPE</i> 可选。</li>
+  <li><b>预算</b>:单次全表征评估约 4–8 秒,界面显示预计耗时;运行中日志面板
+      实时输出进度,<b>Cancel</b> 立即停止并保留当前最优。</li>
+  <li>完成后右侧显示<b>收敛曲线</b>,左下为最优指标表(逐项 ✓/✗ 对照目标)
+      与最优设计变量;<b>Export best .PARAM…</b> 可把最优尺寸存为
+      SPICE 参数文件。</li>
+</ul>
+
+<p><small>SKY130 PDK(约 109MB)在首次使用 Sizing 时自动从随包 zip 解压到
+工作区,升级版本不重复解压。上游 21 个运放中 Qu_LEC(网表为空)与
+Tan_CLIA(默认宽度低于模型 bin 下限)两个存在上游缺陷,未注册。
+需要 ngspice ≥ 42(ngspice 41 的温度/电流 DC 扫描有已知 bug)。</small></p>
+
+<hr>
+
 <h2>6. 日志面板与任务队列</h2>
 <p>窗口底部的 <b>Simulation log</b> 面板实时显示所有仿真进度与 ngspice 输出,
 出错时附带错误详情和最新日志文件的末尾内容。该面板可拖到窗口右侧或独立浮动。</p>

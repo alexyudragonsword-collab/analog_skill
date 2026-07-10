@@ -41,6 +41,18 @@ class SizingTab(QWidget, JobTabMixin):
         self._table.horizontalHeader().setStretchLastSection(True)
         self._table.verticalHeader().setVisible(False)
 
+        self._targets = QTableWidget(0, 3)
+        self._targets.setHorizontalHeaderLabels(['metric', 'target', 'hard'])
+        self._targets.horizontalHeader().setStretchLastSection(True)
+        self._targets.verticalHeader().setVisible(False)
+        self._targets.setMaximumHeight(220)
+
+        self.algo_combo = QComboBox()
+        self.algo_combo.addItem('Sobol + Powell (built-in)',
+                                userData='sobol_powell')
+        if sizing.optuna_available():
+            self.algo_combo.addItem('Optuna TPE', userData='optuna')
+
         self.budget_spin = QSpinBox()
         self.budget_spin.setRange(10, 2000)
         self.budget_spin.setValue(150)
@@ -69,8 +81,13 @@ class SizingTab(QWidget, JobTabMixin):
         sel_box = QGroupBox('Circuit (AnalogGym, SKY130)')
         sf = QFormLayout(sel_box)
         sf.addRow('Circuit', self.circuit_combo)
+        sf.addRow('Algorithm', self.algo_combo)
         sf.addRow('Budget (evals)', self.budget_spin)
         sf.addRow('', self._estimate)
+
+        tgt_box = QGroupBox('Targets (editable; hard = 10x weight)')
+        tb = QVBoxLayout(tgt_box)
+        tb.addWidget(self._targets)
 
         var_box = QGroupBox('Design variables (bounds editable)')
         vb = QVBoxLayout(var_box)
@@ -84,6 +101,7 @@ class SizingTab(QWidget, JobTabMixin):
         left = QWidget()
         ll = QVBoxLayout(left)
         ll.addWidget(sel_box)
+        ll.addWidget(tgt_box)
         ll.addWidget(var_box, stretch=1)
         ll.addLayout(btn_row)
         ll.addWidget(self._status)
@@ -116,6 +134,21 @@ class SizingTab(QWidget, JobTabMixin):
             for col, val in ((1, v.default), (2, v.lo), (3, v.hi)):
                 self._table.setItem(row, col, QTableWidgetItem(f'{val:g}'))
         self._table.resizeColumnsToContents()
+        metrics = sizing.SIZING[self._key()].metrics
+        self._targets.setRowCount(len(metrics))
+        for row, ms in enumerate(metrics):
+            lbl = QTableWidgetItem(f'{ms.label} [{ms.unit}] ({ms.direction})')
+            lbl.setFlags(lbl.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            lbl.setData(Qt.ItemDataRole.UserRole, ms.key)
+            self._targets.setItem(row, 0, lbl)
+            self._targets.setItem(row, 1, QTableWidgetItem(f'{ms.target:g}'))
+            hard = QTableWidgetItem()
+            hard.setFlags(Qt.ItemFlag.ItemIsUserCheckable
+                          | Qt.ItemFlag.ItemIsEnabled)
+            hard.setCheckState(Qt.CheckState.Checked if ms.hard
+                               else Qt.CheckState.Unchecked)
+            self._targets.setItem(row, 2, hard)
+        self._targets.resizeColumnsToContents()
         self._update_estimate()
         sch = sizing.schematic_path(self._key())
         if sch is not None:
@@ -143,17 +176,32 @@ class SizingTab(QWidget, JobTabMixin):
                 else False))
         return variables
 
+    def _read_targets(self) -> dict:
+        overrides = {}
+        for row in range(self._targets.rowCount()):
+            key = self._targets.item(row, 0).data(Qt.ItemDataRole.UserRole)
+            try:
+                target = float(self._targets.item(row, 1).text())
+            except (TypeError, ValueError):
+                raise ValueError(f'target row {row + 1}: not a number')
+            hard = (self._targets.item(row, 2).checkState()
+                    == Qt.CheckState.Checked)
+            overrides[key] = (target, hard)
+        return overrides
+
     # ── run / cancel ──────────────────────────────────────────────────────
     def _run(self):
         if self.has_job('opt'):
             return
         try:
             variables = self._read_table()
+            overrides = self._read_targets()
         except ValueError as exc:
             self._status.setText(f'<font color="red">{exc}</font>')
             return
         key = self._key()
         budget = self.budget_spin.value()
+        algo = self.algo_combo.currentData()
         self._cancel.clear()
 
         def job():
@@ -163,7 +211,8 @@ class SizingTab(QWidget, JobTabMixin):
                           f'best cost {best:.4f}')
             return sizing.optimize(key, variables, budget=budget,
                                    progress=progress,
-                                   should_cancel=self._cancel.is_set)
+                                   should_cancel=self._cancel.is_set,
+                                   overrides=overrides, algo=algo)
 
         self.submit_job('opt', Job(kind='sizing', fn=job,
                                    label=f'sizing: {key} ({budget} evals)'))

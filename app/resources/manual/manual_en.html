@@ -263,6 +263,46 @@ incompatible with the GUI's threading policy — run them from the command line
 
 <hr>
 
+<h2 id="sizing">5b. Automatic sizing (sixth tab: Sizing)</h2>
+
+<p align="center"><img src="img/v011_sizing.png" width="820"></p>
+
+<p>Automatic device sizing over the vendored <b>AnalogGym</b> (ICCAD'24,
+BSD-3) open subset: <b>20 SKY130 circuits</b> — 15 literature-grade
+three-stage Miller op amps plus the Basic LDO and 4 LDO variants, each
+validated on ngspice-42. Pick a circuit, edit variable bounds and metric
+targets, set a budget, hit Optimize:</p>
+
+<ul>
+  <li><b>Targets table</b>: every metric target is editable; ticking
+      <i>hard</i> weighs that violation 10x (hard constraint). Amp metrics:
+      DC gain / GBW / phase margin / PSRR± / CMRR / power / offset / TC;
+      LDO metrics: phase margin and loop GBW at light+heavy load, LNR/LR,
+      PSRR, output error, quiescent current.</li>
+  <li><b>Design-variables table</b>: W/L/M, capacitors and bias currents
+      with editable bounds (defaults are AnalogGym's literature
+      sizings).</li>
+  <li><b>Algorithms</b>: built-in <i>Sobol + Powell</i> (Sobol sampling
+      around the defaults + bounded Powell refinement, no extra
+      dependency); <i>Optuna TPE</i> appears when running from source with
+      <code>optuna</code> installed.</li>
+  <li><b>Budget</b>: one full characterization costs ~4–8 s; the UI shows
+      a time estimate, the log panel streams progress, and <b>Cancel</b>
+      stops immediately keeping the best-so-far.</li>
+  <li>On completion the viewer shows the <b>convergence curve</b>; the
+      report lists best metrics (per-target ✓/✗) and the best sizing —
+      <b>Export best .PARAM…</b> saves it as a SPICE parameter file.</li>
+</ul>
+
+<p><small>The SKY130 PDK (~109 MB) is extracted from the bundled zip into
+the workspace on first use and survives app upgrades. Two upstream
+circuits are not registered due to upstream defects: Qu_LEC (empty
+netlist) and Tan_CLIA (default width below the model-bin range). Requires
+ngspice ≥ 42 (ngspice 41 has known temperature/current DC-sweep
+bugs).</small></p>
+
+<hr>
+
 <h2>6. Log panel and job queue</h2>
 <p>The <b>Simulation log</b> panel at the bottom streams all simulation
 progress and ngspice output in real time; on failure it includes the error

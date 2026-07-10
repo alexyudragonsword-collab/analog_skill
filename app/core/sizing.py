@@ -55,6 +55,7 @@ class MetricSpec:
     target: float
     direction: str        # 'max' | 'min' | 'target' | 'absmin' (|m| ≤ target)
     weight: float = 1.0
+    hard: bool = False    # hard constraint: violations weigh 10x
 
 
 @dataclass
@@ -68,55 +69,93 @@ class SizingSpec:
     fixed: tuple = ()             # .PARAM names kept at default (TB conditions)
     schematic: str | None = None
     eval_seconds: float = 4.0     # rough single-evaluation cost (UI estimate)
+    subckt: str | None = None     # DUT token to substitute into the TB
+    wrdata_prefix: str = ''       # LDO wrdata file prefix (variant TBs differ)
 
 
-SIZING: dict[str, SizingSpec] = {
-    'amp_hoilee_affc': SizingSpec(
-        title='3-stage AFFC op amp — HoiLee_AFFC (SKY130, 1.8 V)',
-        kind='amp',
-        netlist='HoiLee_AFFC_Pin_3', variables='HoiLee_AFFC_Pin_3',
-        testbench='TB_Amplifier_ACDC.cir',
-        schematic='HoiLee_AFFC_Pin_3.png',
-        # targets from AnalogGym's spec dicts (ckt_graphs.py / README FoM)
-        metrics=[
-            MetricSpec('dcgain', 'DC gain', 'dB', 100.0, 'max', 2.0),
-            MetricSpec('gain_bandwidth_product', 'GBW', 'Hz', 1.2e6, 'max', 2.0),
-            MetricSpec('phase_in_deg', 'Phase margin', 'deg', 60.0,
-                       'target', 1.5),
-            MetricSpec('dcpsrp', 'PSRR+ (dc)', 'dB', -60.0, 'min', 1.0),
-            MetricSpec('dcpsrn', 'PSRR- (dc)', 'dB', -60.0, 'min', 1.0),
-            MetricSpec('cmrrdc', 'CMRR (dc)', 'dB', -60.0, 'min', 1.0),
-            MetricSpec('power', 'Power', 'W', 0.5e-3, 'min', 1.0),
-            MetricSpec('vos25', 'Offset (25C)', 'V', 0.1e-3, 'absmin', 0.5),
-            MetricSpec('tc', 'Temp. coeff.', 'V/°C', 10e-6, 'absmin', 0.5),
-        ],
-        fixed=('CLOAD', 'VCM'),
-        eval_seconds=3.5,
-    ),
-    'ldo_basic': SizingSpec(
+def _amp_metrics() -> list:
+    # targets from AnalogGym's spec dicts (ckt_graphs.py / README FoM)
+    return [
+        MetricSpec('dcgain', 'DC gain', 'dB', 100.0, 'max', 2.0),
+        MetricSpec('gain_bandwidth_product', 'GBW', 'Hz', 1.2e6, 'max', 2.0),
+        MetricSpec('phase_in_deg', 'Phase margin', 'deg', 60.0,
+                   'target', 1.5),
+        MetricSpec('dcpsrp', 'PSRR+ (dc)', 'dB', -60.0, 'min', 1.0),
+        MetricSpec('dcpsrn', 'PSRR- (dc)', 'dB', -60.0, 'min', 1.0),
+        MetricSpec('cmrrdc', 'CMRR (dc)', 'dB', -60.0, 'min', 1.0),
+        MetricSpec('power', 'Power', 'W', 0.5e-3, 'min', 1.0),
+        MetricSpec('vos25', 'Offset (25C)', 'V', 0.1e-3, 'absmin', 0.5),
+        MetricSpec('tc', 'Temp. coeff.', 'V/°C', 10e-6, 'absmin', 0.5),
+    ]
+
+
+def _ldo_metrics_spec() -> list:
+    return [
+        MetricSpec('pm_maxload', 'Phase margin (55 mA)', 'deg', 60.0,
+                   'target', 1.5),
+        MetricSpec('pm_minload', 'Phase margin (5 mA)', 'deg', 60.0,
+                   'target', 1.5),
+        MetricSpec('gbw_maxload', 'Loop GBW (55 mA)', 'Hz', 2e6, 'max', 1.5),
+        MetricSpec('lnr', 'Line regulation', 'V/V', 0.01, 'absmin', 1.0),
+        MetricSpec('lr', 'Load regulation', 'V/A', 0.1, 'absmin', 1.0),
+        MetricSpec('psrr_maxload', 'PSRR (dc, 55 mA)', 'dB', -40.0,
+                   'min', 1.0),
+        MetricSpec('vos_maxload', 'Vout error (55 mA)', 'V', 2e-3,
+                   'absmin', 1.0),
+        MetricSpec('iq', 'Quiescent current', 'A', 1e-3, 'min', 1.0),
+    ]
+
+
+# 15 Miller multi-stage op amps validated with ngspice-42 at their default
+# sizing.  Excluded upstream defects: Qu_LEC (netlist file ships empty) and
+# Tan_CLIA (default W=0.253 um is below the SKY130 model-bin range →
+# "could not find a valid modelname").  All share the 5-pin subckt contract
+# gnda vdda vinn vinp vout and the TB_Amplifier_ACDC testbench (DUT name
+# substituted at render time).
+_AMP_NETLISTS = [
+    'HoiLee_AFFC_Pin_3', 'Leung_NMCF_Pin_3', 'Leung_NMCNR_Pin_3',
+    'Leung_DFCFC1_Pin_3', 'Leung_DFCFC2_Pin_3', 'Peng_ACBC_Pin_3',
+    'Peng_IAC_Pin_3', 'Peng_TCFC_Pin_3', 'Qu2017_AZC_Pin_3',
+    'Ramos_PFC_Pin_3', 'Sau_CFCC_Pin_3', 'Song_DACFC_Pin_3',
+    'Yan_AZ_Pin_3', 'Fan_SMC_Pin_3', 'Alfio_RAFFC_Pin_3',
+]
+
+# LDO variants: each has its own testbench; wrdata files carry the prefix
+# (ldo_1/ldo_2 insert an extra _ACDC infix).
+_LDO_VARIANTS = {'ldo_simple': 'ldo_simple', 'ldo_1': 'ldo_1_ACDC',
+                 'ldo_2': 'ldo_2_ACDC',
+                 'ldo_folded_cascode': 'ldo_folded_cascode'}
+
+
+def _build_registry() -> dict[str, SizingSpec]:
+    reg: dict[str, SizingSpec] = {}
+    for name in _AMP_NETLISTS:
+        short = name[:-6]                     # drop the _Pin_3 suffix
+        key = 'amp_' + short.lower()
+        sch = f'{name}.png'
+        if not (paths.analoggym_dir() / 'amp' / 'schematic' / sch).is_file():
+            sch = None
+        reg[key] = SizingSpec(
+            title=f'3-stage op amp — {short} (SKY130, 1.8 V)',
+            kind='amp', netlist=name, variables=name,
+            testbench='TB_Amplifier_ACDC.cir', metrics=_amp_metrics(),
+            fixed=('CLOAD', 'VCM'), schematic=sch, eval_seconds=3.5,
+            subckt=name)
+    reg['ldo_basic'] = SizingSpec(
         title='Basic LDO (SKY130, 1.8 V, 5–55 mA)',
-        kind='ldo',
-        netlist='LDO_netlist.txt', variables='LDO_variables.txt',
-        testbench='TB_LDO_ACDC.cir',
-        metrics=[
-            MetricSpec('pm_maxload', 'Phase margin (55 mA)', 'deg', 60.0,
-                       'target', 1.5),
-            MetricSpec('pm_minload', 'Phase margin (5 mA)', 'deg', 60.0,
-                       'target', 1.5),
-            MetricSpec('gbw_maxload', 'Loop GBW (55 mA)', 'Hz', 2e6,
-                       'max', 1.5),
-            MetricSpec('lnr', 'Line regulation', 'V/V', 0.01, 'absmin', 1.0),
-            MetricSpec('lr', 'Load regulation', 'V/A', 0.1, 'absmin', 1.0),
-            MetricSpec('psrr_maxload', 'PSRR (dc, 55 mA)', 'dB', -40.0,
-                       'min', 1.0),
-            MetricSpec('vos_maxload', 'Vout error (55 mA)', 'V', 2e-3,
-                       'absmin', 1.0),
-            MetricSpec('iq', 'Quiescent current', 'A', 1e-3, 'min', 1.0),
-        ],
-        fixed=('M_CL',),          # output cap is a board-level condition
-        eval_seconds=8.0,
-    ),
-}
+        kind='ldo', netlist='LDO_netlist.txt', variables='LDO_variables.txt',
+        testbench='TB_LDO_ACDC.cir', metrics=_ldo_metrics_spec(),
+        fixed=('M_CL',), eval_seconds=8.0, wrdata_prefix='LDO_TB_ACDC')
+    for v, prefix in _LDO_VARIANTS.items():
+        reg[v] = SizingSpec(
+            title=f'LDO — {v} (SKY130, 1.8 V, 5–55 mA)',
+            kind='ldo', netlist=f'{v}.txt', variables=f'{v}_vars.spice',
+            testbench=f'{v}_acdc.cir', metrics=_ldo_metrics_spec(),
+            fixed=('M_CL',), eval_seconds=8.0, wrdata_prefix=prefix)
+    return reg
+
+
+SIZING: dict[str, SizingSpec] = _build_registry()
 
 
 @dataclass
@@ -142,6 +181,8 @@ def _default_bounds(name: str, default: float) -> tuple[float, float, bool]:
         return default / 4, default * 4, False
     if 'current' in n:                            # A
         return default / 4, default * 4, False
+    if n.startswith('v'):                         # bias voltage (1.8 V rail)
+        return max(0.1, default * 0.5), min(1.8, default * 1.5), False
     return default / 4 if default > 0 else default * 4, \
         default * 4 if default > 0 else default / 4, False
 
@@ -207,16 +248,19 @@ def _write_params(spec: SizingSpec, values: dict, dst: Path):
 
 def _render_testbench(spec: SizingSpec, run: Path) -> Path:
     """Rewrite the vendored testbench's include lines with absolute paths
-    (netlist / generated params / extracted PDK) and drop interactive
-    `plot` commands.  Paths are quoted (may contain spaces)."""
+    (netlist / generated params / extracted PDK), substitute the DUT subckt
+    name (the shared amp TB is written against HoiLee_AFFC) and drop
+    interactive `plot` commands.  Paths are quoted (may contain spaces)."""
     src = paths.analoggym_dir() / spec.kind / 'testbench' / spec.testbench
-    netlist = paths.analoggym_dir() / spec.kind / 'netlist' / spec.netlist
+    netlist_dir = paths.analoggym_dir() / spec.kind / 'netlist'
+    netlist = netlist_dir / spec.netlist
     pdk = paths.sky130_pdk_dir()
     out_lines = []
     for line in src.read_text().splitlines():
         ls = line.strip().lower()
         if ls.startswith('.include'):
             inc = line.split(None, 1)[1].strip().strip('"')
+            base = inc.rsplit('/', 1)[-1]
             if '/spice_netlist/' in inc:
                 line = f'.include "{netlist}"'
             elif '/design_variables/' in inc:
@@ -224,8 +268,19 @@ def _render_testbench(spec: SizingSpec, run: Path) -> Path:
             elif 'mosfet_model/sky130_pdk/' in inc:
                 rel = inc.split('mosfet_model/sky130_pdk/', 1)[1]
                 line = f'.include "{pdk / rel}"'
+            elif '/simulations/' in inc:
+                # LDO-variant layout: <v>.txt = netlist, <v>_vars.spice =
+                # design variables, <v>_dev_params.spice = op-point probes
+                if base == spec.variables:
+                    line = f'.include "{run / "params.spice"}"'
+                elif base.endswith('_dev_params.spice'):
+                    line = f'.include "{netlist_dir / base}"'
+                else:
+                    line = f'.include "{netlist}"'
         elif ls.startswith('plot ') or ls == 'plot':
             continue
+        elif spec.subckt and spec.subckt != 'HoiLee_AFFC_Pin_3':
+            line = re.sub(r'\bHoiLee_AFFC_Pin_3\b', spec.subckt, line)
         out_lines.append(line)
     tb = run / spec.testbench
     tb.write_text('\n'.join(out_lines) + '\n')
@@ -282,31 +337,34 @@ def evaluate(circuit: str, values: dict) -> dict:
                    cwd=run, capture_output=True, timeout=300)
     metrics = _parse_meas_log(log)
     if spec.kind == 'ldo':
-        metrics = _ldo_metrics(run, metrics)
+        metrics = _ldo_metrics(run, metrics, spec.wrdata_prefix)
     return metrics
 
 
-def _ldo_metrics(run: Path, meas: dict) -> dict:
-    """Fold the LDO testbench's wrdata outputs into named metrics."""
+def _ldo_metrics(run: Path, meas: dict, prefix: str) -> dict:
+    """Fold the LDO testbench's wrdata outputs into named metrics.
+
+    The Basic-LDO testbench writes LDO_TB_ACDC_*; each variant testbench
+    uses its own prefix (ldo_simple_*, ldo_1_*, ...)."""
     out = {}
-    v = _read_wrdata(run / 'LDO_TB_ACDC_LR_Power_vos', 5)
+    v = _read_wrdata(run / f'{prefix}_LR_Power_vos', 5)
     if v:
         lr, p_max, p_min, vos_max, vos_min = v
         out.update(lr=lr, power_maxload=p_max, power_minload=p_min,
                    vos_maxload=vos_max, vos_minload=vos_min,
                    # quiescent current = supply current at min load − 5 mA
                    iq=max(p_min / 1.8 - 5e-3, 0.0))
-    v = _read_wrdata(run / 'LDO_TB_ACDC_LNR_maxload', 1)
+    v = _read_wrdata(run / f'{prefix}_LNR_maxload', 1)
     if v:
         out['lnr'] = v[0]
-    v = _read_wrdata(run / 'LDO_TB_ACDC_LNR_minload', 1)
+    v = _read_wrdata(run / f'{prefix}_LNR_minload', 1)
     if v:
         out['lnr_minload'] = v[0]
     for load in ('maxload', 'minload'):
-        v = _read_wrdata(run / f'LDO_TB_ACDC_GBW_PM_{load}', 2)
+        v = _read_wrdata(run / f'{prefix}_GBW_PM_{load}', 2)
         if v:
             out[f'gbw_{load}'], out[f'pm_{load}'] = v
-        v = _read_wrdata(run / f'LDO_TB_ACDC_PSRR_dcgain_{load}', 2)
+        v = _read_wrdata(run / f'{prefix}_PSRR_dcgain_{load}', 2)
         if v:
             out[f'psrr_{load}'], out[f'dcgain_{load}'] = v
     out.update(meas)
@@ -317,32 +375,40 @@ def _ldo_metrics(run: Path, meas: dict) -> dict:
 # Scoring
 # ─────────────────────────────────────────────────────────────────────────────
 _MISSING_PENALTY = 10.0
+_HARD_FACTOR = 10.0
 
 
-def score(circuit: str, metrics: dict) -> float:
+def _violation(ms: MetricSpec, m: float, target: float) -> float:
+    if ms.direction == 'max':
+        return max(0.0, (target - m) / abs(target))
+    if ms.direction == 'min':
+        return max(0.0, (m - target) / abs(target))
+    if ms.direction == 'absmin':
+        return max(0.0, (abs(m) - target) / abs(target))
+    return abs(m - target) / abs(target)         # 'target'
+
+
+def score(circuit: str, metrics: dict, overrides: dict | None = None) -> float:
     """Weighted violation cost against the target specs (0 = all met).
 
     max:    penalize (target − m)/|target| when below target
     min:    penalize (m − target)/|target| when above target
     absmin: like min on |m|
     target: |m − target|/|target|  (e.g. phase margin 60°)
+
+    overrides: {metric_key: (target, hard)} — GUI-edited targets; a hard
+    constraint multiplies its violation by 10.
     """
+    overrides = overrides or {}
     cost = 0.0
     for ms in SIZING[circuit].metrics:
+        target, hard = overrides.get(ms.key, (ms.target, ms.hard))
+        w = ms.weight * (_HARD_FACTOR if hard else 1.0)
         m = metrics.get(ms.key)
         if m is None or not np.isfinite(m):
-            cost += ms.weight * _MISSING_PENALTY
+            cost += w * _MISSING_PENALTY
             continue
-        t = ms.target
-        if ms.direction == 'max':
-            r = max(0.0, (t - m) / abs(t))
-        elif ms.direction == 'min':
-            r = max(0.0, (m - t) / abs(t))
-        elif ms.direction == 'absmin':
-            r = max(0.0, (abs(m) - t) / abs(t))
-        else:                                    # 'target'
-            r = abs(m - t) / abs(t)
-        cost += ms.weight * min(r, _MISSING_PENALTY)
+        cost += w * min(_violation(ms, m, target), _MISSING_PENALTY)
     return cost
 
 
@@ -364,9 +430,11 @@ class SizingRun:
     evals: int
     cancelled: bool
     elapsed: float
+    overrides: dict | None = None
 
     def report(self) -> str:
         spec = SIZING[self.circuit]
+        ov = self.overrides or {}
         lines = [spec.title, '',
                  f'evaluations: {self.evals}'
                  + ('  (cancelled)' if self.cancelled else '')
@@ -375,10 +443,16 @@ class SizingRun:
                  f'   (FoM {-self.best_cost:.4f})', '',
                  f'{"metric":<22}{"value":>14}   target']
         for ms in spec.metrics:
+            target, hard = ov.get(ms.key, (ms.target, ms.hard))
             m = self.best_metrics.get(ms.key)
-            val = f'{m:.4g}' if m is not None else 'n/a'
-            lines.append(f'{ms.label:<22}{val:>14} {ms.unit:<5}'
-                         f' {ms.direction} {ms.target:g}')
+            if m is None:
+                mark, val = '✗', 'n/a'
+            else:
+                mark = '✓' if _violation(ms, m, target) <= 1e-9 else '✗'
+                val = f'{m:.4g}'
+            lines.append(f'{ms.label:<22}{val:>14} {ms.unit:<6}'
+                         f'{mark} {ms.direction} {target:g}'
+                         + ('  [HARD]' if hard else ''))
         lines += ['', 'best design variables:']
         for k, v in self.best_values.items():
             lines.append(f'  {k} = {_fmt_num(v)}')
@@ -392,15 +466,26 @@ class SizingRun:
         return buf.read_text()
 
 
+def optuna_available() -> bool:
+    try:
+        import optuna                                     # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
-             progress=None, should_cancel=None) -> SizingRun:
-    """Global + local search within bounds, ≤ budget evaluations.
+             progress=None, should_cancel=None, overrides: dict | None = None,
+             algo: str = 'sobol_powell') -> SizingRun:
+    """Bounded search, ≤ budget evaluations.
 
-    Phase 1 evaluates the default sizing plus a scrambled-Sobol sample of
-    the box (~half the budget — Powell alone explores one coordinate at a
-    time and is nearly blind on 20–30-dim spaces at these budgets);
-    phase 2 refines the best point with bounded Powell.
+    algo='sobol_powell' (built-in): phase 1 evaluates the default sizing
+    plus a scrambled-Sobol sample around it (~half the budget — Powell
+    alone explores one coordinate at a time and is nearly blind on
+    20–30-dim spaces at these budgets); phase 2 refines the best point
+    with bounded Powell.  algo='optuna' uses TPE (if optuna is installed).
 
+    overrides: {metric_key: (target, hard)} — see score().
     progress(eval_no, best_cost, metrics) fires after every evaluation;
     should_cancel() → True stops between evaluations (best-so-far kept).
     """
@@ -432,7 +517,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             raise _Cancelled
         vals = to_values(xn)
         metrics = evaluate(circuit, vals)
-        c = score(circuit, metrics)
+        c = score(circuit, metrics, overrides)
         state['n'] += 1
         if state['best'] is None or c < state['best']:
             state['best'], state['best_x'] = c, vals
@@ -450,8 +535,8 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             state['best_xn'] = np.asarray(xn, float)
         return c
 
-    n_sobol = min(max(budget // 2, 0), max(budget - 5, 0))
-    try:
+    def run_sobol_powell():
+        n_sobol = min(max(budget // 2, 0), max(budget - 5, 0))
         objective_track(x0)                  # evaluation #1: default sizing
         if n_sobol > 1:
             # Sobol sample around the (literature-derived) default sizing:
@@ -467,6 +552,24 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                  bounds=[(0.0, 1.0)] * len(names),
                  options={'maxfev': max(budget - state['n'], 1),
                           'xtol': 1e-3, 'ftol': 1e-4})
+
+    def run_optuna():
+        import optuna
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        study = optuna.create_study(
+            direction='minimize',
+            sampler=optuna.samplers.TPESampler(seed=0))
+        study.enqueue_trial({n: float(x) for n, x in zip(names, x0)})
+        while state['n'] < budget:
+            trial = study.ask()
+            xn = np.array([trial.suggest_float(n, 0.0, 1.0) for n in names])
+            study.tell(trial, objective(xn))
+
+    try:
+        if algo == 'optuna':
+            run_optuna()
+        else:
+            run_sobol_powell()
     except _Cancelled:
         pass
     initial_cost = state['history'][0][1] if state['history'] else float('inf')
@@ -477,7 +580,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                      else float('inf'),
                      initial_cost=initial_cost, history=state['history'],
                      evals=state['n'], cancelled=state['cancel'],
-                     elapsed=time.time() - t0)
+                     elapsed=time.time() - t0, overrides=overrides)
 
 
 def render_convergence(run: SizingRun) -> Path:

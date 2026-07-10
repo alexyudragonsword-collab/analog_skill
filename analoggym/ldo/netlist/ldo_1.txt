@@ -1,0 +1,13 @@
+.subckt ldo_1 Vss Vdd vinn vout vfb vinp Ib
+XM8 vout net3 Vdd Vdd sky130_fd_pr__pfet_01v8 L=L_M8 W=W_M8 m=M_M8
+XM1 net1 net1 Vdd Vdd sky130_fd_pr__pfet_01v8 L=L_M1 W=W_M1 m=M_M1
+XM0 net8 net1 Vdd Vdd sky130_fd_pr__pfet_01v8 L=L_M0 W=W_M0 m=M_M0
+XM6 net3 net8 Vdd Vdd sky130_fd_pr__pfet_01v8 L=L_M6 W=W_M6 m=M_M6
+XM7 net3 Ib Vss Vss sky130_fd_pr__nfet_01v8 L=L_M7 W=W_M7 m=M_M7
+XM5 Ib Ib Vss Vss sky130_fd_pr__nfet_01v8 L=L_M5 W=W_M5 m=M_M5
+XM4 net2 Ib Vss Vss sky130_fd_pr__nfet_01v8 L=L_M4 W=W_M4 m=M_M4
+XM3 net8 vinp net2 Vss sky130_fd_pr__nfet_01v8 L=L_M3 W=W_M3 m=M_M3
+XM2 net1 vinn net2 Vss sky130_fd_pr__nfet_01v8 L=L_M2 W=W_M2 m=M_M2
+r0 vout vfb 300e3
+r1 vfb Vss 100e3
+.ends ldo_1

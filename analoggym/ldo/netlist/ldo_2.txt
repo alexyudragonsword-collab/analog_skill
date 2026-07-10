@@ -1,0 +1,26 @@
+.subckt ldo_2 gnd vdd vref vout vfb vinp Ib 
+XNM10 net42 Ib gnd gnd sky130_fd_pr__nfet_01v8 W=W_NM10 L=L_NM10 m=M_NM10
+XNM9 net37 vref net42 gnd sky130_fd_pr__nfet_01v8 W=W_NM9 L=L_NM9 m=M_NM9
+XNM8 net40 vinp net42 gnd sky130_fd_pr__nfet_01v8 W=W_NM8 L=L_NM8 m=M_NM8
+XNM7 net32 Ib gnd gnd sky130_fd_pr__nfet_01v8 W=W_NM7 L=L_NM7 m=M_NM7
+XNM6 net030 Ib gnd gnd sky130_fd_pr__nfet_01v8 W=W_NM6 L=L_NM6 m=M_NM6
+XNM4 net049 net20 gnd gnd sky130_fd_pr__nfet_01v8 W=W_NM4 L=L_NM4 m=M_NM4
+XNM3 net20 net20 gnd gnd sky130_fd_pr__nfet_01v8 W=W_NM3 L=L_NM3 m=M_NM3
+XNM2 net17 vref net030 gnd sky130_fd_pr__nfet_01v8 W=W_NM2 L=L_NM2 m=M_NM2
+XNM1 Ib Ib gnd gnd sky130_fd_pr__nfet_01v8 W=W_NM1 L=L_NM1 m=M_NM1
+XNM0 net14 net7 gnd gnd sky130_fd_pr__nfet_01v8 W=W_NM0 L=L_NM0 m=M_NM0
+XPM9 net40 net40 vdd vdd sky130_fd_pr__pfet_01v8 W=W_PM9 L=L_PM9 m=M_PM9
+XPM8 net37 net40 vdd vdd sky130_fd_pr__pfet_01v8 W=W_PM8 L=L_PM8 m=M_PM8
+XPM7 vfb net37 vdd vdd sky130_fd_pr__pfet_01v8 W=W_PM7 L=L_PM7 m=M_PM7
+XPM6 net32 net32 vfb vfb sky130_fd_pr__pfet_01v8 W=W_PM6 L=L_PM6 m=M_PM6
+XPM5 net030 net32 vout vout sky130_fd_pr__pfet_01v8 W=W_PM5 L=L_PM5 m=M_PM5
+XPM4 vout net049 vdd vdd sky130_fd_pr__pfet_01v8 W=W_PM4 L=L_PM4 m=M_PM4
+XPM3 net049 net14 vdd vdd sky130_fd_pr__pfet_01v8 W=W_PM3 L=L_PM3 m=M_PM3
+XPM2 net20 net17 vdd vdd sky130_fd_pr__pfet_01v8 W=W_PM2 L=L_PM2 m=M_PM2
+XPM1 net17 net14 vdd vdd sky130_fd_pr__pfet_01v8 W=W_PM1 L=L_PM1 m=M_PM1
+XPM0 net14 net14 vdd vdd sky130_fd_pr__pfet_01v8 W=W_PM0 L=L_PM0 m=M_PM0
+XR0 Ib net7 gnd sky130_fd_pr__res_high_po_0p35 L=3 mult=M_R0 m=M_R0
+XC4 net37 gnd sky130_fd_pr__cap_mim_m3_1 W=10 L=10 MF=M_C4 m=M_C4
+XC1 net17 vout sky130_fd_pr__cap_mim_m3_1 W=10 L=10 MF=M_C1 m=M_C1
+XC0 vout net7 sky130_fd_pr__cap_mim_m3_1 W=30 L=30 MF=M_C0 m=M_C0
+.ends ldo_2
