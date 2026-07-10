@@ -71,6 +71,7 @@ class SizingSpec:
     eval_seconds: float = 4.0     # rough single-evaluation cost (UI estimate)
     subckt: str | None = None     # DUT token to substitute into the TB
     wrdata_prefix: str = ''       # LDO wrdata file prefix (variant TBs differ)
+    skill_key: str | None = None  # kind='skill': key into circuits.CIRCUITS
 
 
 def _amp_metrics() -> list:
@@ -126,6 +127,60 @@ _LDO_VARIANTS = {'ldo_simple': 'ldo_simple', 'ldo_1': 'ldo_1_ACDC',
                  'ldo_2': 'ldo_2_ACDC',
                  'ldo_folded_cascode': 'ldo_folded_cascode'}
 
+# circuit-skills (PTM) circuits wired into the same optimizer via their
+# plot-free simulate_*() metric paths.  bootstrap is characterization-only
+# (its simulations return raw arrays, no scalar metrics, and the only
+# exposed parameter is FCLK) and is deliberately not registered.
+# Targets sit above the measured default-sizing values (see tests /
+# ANALOG_REPOS_ANALYSIS) so the optimizer has headroom in each direction.
+_SKILL_CIRCUITS: dict[str, dict] = {
+    # targets calibrated against measured defaults on ngspice-42:
+    # ota5t 34.3 dB / 85 MHz / PM 77.2°; opamp2 64.3 dB / 13.7 MHz /
+    # PM 80.7° / 1.72 mW; ldo 51.7 dB / 1.18 MHz / PM 58.6° / PSRR 57.3 dB
+    'ota5t': dict(
+        title='5T OTA — circuit-skills (PTM 180 nm)',
+        fixed=('C_LOAD',), eval_seconds=2.0,
+        metrics=[
+            MetricSpec('dc_gain_db', 'DC gain', 'dB', 40.0, 'max', 2.0),
+            MetricSpec('ugb_hz', 'UGB', 'Hz', 100e6, 'max', 2.0),
+            MetricSpec('phase_margin_deg', 'Phase margin', 'deg', 60.0,
+                       'target', 1.5),
+        ]),
+    'opamp2': dict(
+        title='Two-stage Miller op amp — circuit-skills (PTM 180 nm)',
+        fixed=('CL',), eval_seconds=5.0,
+        metrics=[
+            MetricSpec('dc_gain_db', 'DC gain', 'dB', 70.0, 'max', 2.0),
+            MetricSpec('ugb_hz', 'UGB', 'Hz', 40e6, 'max', 2.0),
+            MetricSpec('phase_margin_deg', 'Phase margin', 'deg', 60.0,
+                       'target', 1.5),
+            MetricSpec('power_w', 'Power', 'W', 2e-3, 'min', 1.0),
+        ]),
+    'ldo': dict(
+        title='LDO — circuit-skills (PTM 180 nm)',
+        fixed=('R_LOAD_DEFAULT',), eval_seconds=5.0,
+        metrics=[
+            MetricSpec('dc_gain_db', 'Loop DC gain', 'dB', 55.0, 'max', 1.5),
+            MetricSpec('gbw_hz', 'Loop GBW', 'Hz', 2e6, 'max', 1.5),
+            MetricSpec('phase_margin_deg', 'Phase margin', 'deg', 60.0,
+                       'target', 1.5),
+            # circuit-skills LDO reports PSRR as positive rejection dB
+            MetricSpec('psrr_dc_db', 'PSRR (dc)', 'dB', 60.0, 'max', 1.0),
+        ]),
+    # comparator defaults measured on ngspice-42: σ=178.6 µV,
+    # P=104 µW, Tcmp=55.3 ps (162 s per evaluation, 3x1000 cycles)
+    'comparator': dict(
+        title='StrongArm comparator — circuit-skills (PTM 45 nm, '
+              '~2 min/eval)',
+        fixed=('NOISE_VIN_MV',), eval_seconds=160.0,
+        metrics=[
+            MetricSpec('sigma_uv', 'Input noise σ', 'uV', 150.0,
+                       'absmin', 1.5),
+            MetricSpec('p_avg_uw', 'Avg power', 'uW', 80.0, 'min', 1.0),
+            MetricSpec('tcmp_ps', 'Decision time', 'ps', 50.0, 'min', 1.0),
+        ]),
+}
+
 
 def _build_registry() -> dict[str, SizingSpec]:
     reg: dict[str, SizingSpec] = {}
@@ -152,6 +207,11 @@ def _build_registry() -> dict[str, SizingSpec]:
             kind='ldo', netlist=f'{v}.txt', variables=f'{v}_vars.spice',
             testbench=f'{v}_acdc.cir', metrics=_ldo_metrics_spec(),
             fixed=('M_CL',), eval_seconds=8.0, wrdata_prefix=prefix)
+    for key, cfg in _SKILL_CIRCUITS.items():
+        reg[f'skill_{key}'] = SizingSpec(
+            title=cfg['title'], kind='skill', netlist='', variables='',
+            testbench='', metrics=cfg['metrics'], fixed=cfg['fixed'],
+            eval_seconds=cfg['eval_seconds'], skill_key=key)
     return reg
 
 
@@ -191,6 +251,31 @@ def _variables_path(spec: SizingSpec) -> Path:
     return (paths.analoggym_dir() / spec.kind / 'variables' / spec.variables)
 
 
+def _skill_variables(spec: SizingSpec) -> list[VarSpec]:
+    """VarSpecs from circuits.CIRCUITS[...].params (module-global params).
+
+    Registry min/max are mostly UI placeholders (0 / 1e12), so bounds fall
+    back to unit-aware heuristics: widths ≥ 0.5 um, voltages capped at the
+    1.8 V rail, everything else a factor-4 window around the default."""
+    from app.core import circuits
+    out = []
+    for p in circuits.CIRCUITS[spec.skill_key].params:
+        if p.attr in spec.fixed:
+            continue
+        d = p.default
+        if 0.0 < p.minv and p.maxv < 1e11:
+            lo, hi = p.minv, p.maxv
+        elif p.unit == 'um' or p.attr.startswith('W'):
+            lo, hi = max(0.5, d / 4), d * 4
+        elif p.unit == 'V':
+            lo, hi = d * 0.5, min(d * 1.5, 1.8)
+        else:
+            lo, hi = d / 4, d * 4
+        lo, hi = min(lo, d), max(hi, d)
+        out.append(VarSpec(p.attr, d, lo, hi, p.kind == 'int'))
+    return out
+
+
 def parse_variables(circuit: str) -> list[VarSpec]:
     """Parse the shipped .PARAM file into editable variable specs.
 
@@ -199,6 +284,8 @@ def parse_variables(circuit: str) -> list[VarSpec]:
     (e.g. `W_M2=W_M1`) are excluded from the optimizable set.
     """
     spec = SIZING[circuit]
+    if spec.kind == 'skill':
+        return _skill_variables(spec)
     text = _variables_path(spec).read_text()
     out = []
     fixed_lower = {f.lower() for f in spec.fixed}
@@ -218,6 +305,9 @@ def parse_variables(circuit: str) -> list[VarSpec]:
 
 def schematic_path(circuit: str) -> Path | None:
     spec = SIZING[circuit]
+    if spec.kind == 'skill':
+        from app.core import circuits
+        return circuits.schematic_path(spec.skill_key)
     if not spec.schematic:
         return None
     p = paths.analoggym_dir() / spec.kind / 'schematic' / spec.schematic
@@ -323,9 +413,47 @@ def _ngspice_cmd() -> str:
     return st.exe
 
 
+def _evaluate_skill(spec: SizingSpec, values: dict) -> dict:
+    """One evaluation of a circuit-skills circuit via its plot-free
+    simulate_*() metric path (runs inside skill_context import isolation;
+    values are applied as module globals, incl. the 'W.key' dict syntax)."""
+    import importlib
+    from app.core import circuits
+    cspec = circuits.CIRCUITS[spec.skill_key]
+    scripts = paths.circuit_skills_dir() / cspec.subdir
+    with circuits.skill_context(scripts):
+        common = importlib.import_module(cspec.common_mod)
+        circuits._apply_params(common, values)
+        if spec.skill_key == 'ota5t':
+            import simulate_ota_ac
+            m = dict(simulate_ota_ac.simulate_ac()['metrics'])
+            if 'phase_ugb_deg' in m:
+                # the OTA sweep reports phase from the inverting output:
+                # positive phase at UGB IS the phase margin; a negative
+                # value follows the usual 180+phase convention
+                ph = m['phase_ugb_deg']
+                m['phase_margin_deg'] = ph if ph > 0 else 180.0 + ph
+            return m
+        if spec.skill_key == 'opamp2':
+            import simulate_opamp_ac
+            import simulate_opamp_dc
+            m = dict(simulate_opamp_ac.simulate_ac()['metrics'])
+            m['power_w'] = simulate_opamp_dc.simulate_dc()['dc']['power_w']
+            return m
+        if spec.skill_key == 'ldo':
+            import simulate_ldo_ac
+            return dict(simulate_ldo_ac.simulate_ac()['metrics'])
+        if spec.skill_key == 'comparator':
+            import simulate_tran_strongarm_noise as noise_mod
+            return dict(noise_mod.compute_fom(noise_mod.simulate_noise()))
+    raise KeyError(spec.skill_key)
+
+
 def evaluate(circuit: str, values: dict) -> dict:
     """One full testbench evaluation → metric dict (missing metrics absent)."""
     spec = SIZING[circuit]
+    if spec.kind == 'skill':
+        return _evaluate_skill(spec, values)
     paths.ensure_sky130()
     run = _run_dir(circuit)
     _write_params(spec, values, run / 'params.spice')
@@ -459,8 +587,12 @@ class SizingRun:
         return '\n'.join(lines)
 
     def params_text(self) -> str:
-        """Best sizing as a .PARAM file (same shape as the shipped one)."""
+        """Best sizing as a .PARAM file (same shape as the shipped one);
+        skill circuits export a plain name = value listing instead."""
         spec = SIZING[self.circuit]
+        if spec.kind == 'skill':
+            return '\n'.join(f'{k} = {_fmt_num(v)}'
+                             for k, v in self.best_values.items()) + '\n'
         buf = Path(_run_dir(self.circuit) / 'best_params.spice')
         _write_params(spec, self.best_values, buf)
         return buf.read_text()

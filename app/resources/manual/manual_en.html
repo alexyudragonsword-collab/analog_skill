@@ -294,6 +294,20 @@ targets, set a budget, hit Optimize:</p>
       <b>Export best .PARAM…</b> saves it as a SPICE parameter file.</li>
 </ul>
 
+<p><b>PTM circuit-skills circuits</b>: four circuits of the Circuits tab
+plug into the same optimizer (marked "circuit-skills, PTM" in the
+drop-down): the <b>5T OTA</b> (gain/UGB/phase margin, ~2 s/eval), the
+<b>two-stage Miller op amp</b> (plus power, ~5 s/eval), the <b>LDO</b>
+(loop gain/GBW/PM/PSRR, ~5 s/eval) and the <b>StrongArm comparator</b>
+(input-referred noise σ / power / decision time — each evaluation runs
+3×1000 transient-noise cycles, <b>~2 min</b>, so keep budgets small).
+Variables are the same parameter set as the Circuits tab (incl. the W.xxx
+width dictionary); optimization runs on the PTM models and the best
+sizing can be fed back into the Circuits tab for full characterization.
+The bootstrapped switch is not optimizable (its simulations return raw
+waveform arrays without scalar metrics, and its only exposed parameter is
+the clock frequency) — it stays characterization-only.</p>
+
 <p><small>The SKY130 PDK (~109 MB) is extracted from the bundled zip into
 the workspace on first use and survives app upgrades. Two upstream
 circuits are not registered due to upstream defects: Qu_LEC (empty

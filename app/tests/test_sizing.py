@@ -19,19 +19,40 @@ needs_ngspice = pytest.mark.skipif(
 # ── registry / parsing (no ngspice needed) ───────────────────────────────────
 def test_registry_and_assets():
     assert set(sizing.SIZING) >= {'amp_hoilee_affc', 'ldo_basic',
-                                  'ldo_simple', 'ldo_folded_cascode'}
-    assert len(sizing.SIZING) == 20        # 15 amps + basic LDO + 4 variants
+                                  'ldo_simple', 'ldo_folded_cascode',
+                                  'skill_ota5t', 'skill_opamp2',
+                                  'skill_ldo', 'skill_comparator'}
+    # 15 amps + basic LDO + 4 variants + 4 circuit-skills (PTM)
+    assert len(sizing.SIZING) == 24
     for key, spec in sizing.SIZING.items():
+        assert spec.metrics, key
+        assert sizing.parse_variables(key), key
+        if spec.kind == 'skill':
+            from app.core import circuits
+            assert spec.skill_key in circuits.CIRCUITS, key
+            assert sizing.schematic_path(key) is not None, key
+            continue
         root = paths.analoggym_dir() / spec.kind
         assert (root / 'netlist' / spec.netlist).is_file(), key
         assert (root / 'variables' / spec.variables).is_file(), key
         assert (root / 'testbench' / spec.testbench).is_file(), key
-        assert spec.metrics, key
-        assert sizing.parse_variables(key), key
         if spec.kind == 'amp':               # shared TB → subckt substituted
             assert spec.subckt == spec.netlist, key
     assert (paths.analoggym_dir() / 'pdk' / 'sky130_pdk.zip').is_file()
     assert (paths.analoggym_dir() / 'LICENSE').is_file()   # BSD-3
+
+
+def test_skill_variables_fixed_and_bounds():
+    ota = sizing.parse_variables('skill_ota5t')
+    names = {v.name for v in ota}
+    assert 'C_LOAD' not in names             # TB condition stays fixed
+    assert {'W_IN_UM', 'W_LOAD_UM', 'W_TAIL_UM', 'VBIAS', 'VCM'} <= names
+    for v in ota:
+        assert v.lo <= v.default <= v.hi, v
+        if v.name.startswith('V'):
+            assert v.hi <= 1.8               # rail-capped bias voltages
+    comp = {v.name for v in sizing.parse_variables('skill_comparator')}
+    assert 'W.inp' in comp and 'NOISE_VIN_MV' not in comp
 
 
 def test_parse_variables():
@@ -136,6 +157,30 @@ def test_optuna_micro_run():
                           algo='optuna')
     assert run.evals == 4 and len(run.history) == 4
     assert run.best_cost <= run.initial_cost
+
+
+@needs_ngspice
+def test_skill_ota_evaluate_and_micro_optimize():
+    vals = {v.name: v.default for v in sizing.parse_variables('skill_ota5t')}
+    m = sizing.evaluate('skill_ota5t', vals)
+    # measured defaults on ngspice-42: 34.3 dB, 85 MHz, PM 77.2°
+    assert 25 < m['dc_gain_db'] < 45
+    assert m['ugb_hz'] > 1e7
+    assert 40 < m['phase_margin_deg'] < 120
+    run = sizing.optimize('skill_ota5t', sizing.parse_variables('skill_ota5t'),
+                          budget=5)
+    assert run.evals == 5 and run.best_cost <= run.initial_cost
+    assert 'W_IN_UM' in run.params_text()    # skill export = name = value
+
+
+@needs_ngspice
+def test_skill_opamp_and_ldo_evaluate():
+    vals = {v.name: v.default for v in sizing.parse_variables('skill_opamp2')}
+    m = sizing.evaluate('skill_opamp2', vals)
+    assert m['power_w'] > 0 and m['dc_gain_db'] > 50
+    vals = {v.name: v.default for v in sizing.parse_variables('skill_ldo')}
+    m = sizing.evaluate('skill_ldo', vals)
+    assert m['gbw_hz'] > 1e5 and m['psrr_dc_db'] > 20
 
 
 @needs_ngspice

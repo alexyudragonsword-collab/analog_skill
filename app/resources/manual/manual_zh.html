@@ -244,6 +244,15 @@ HP 与 LSTP 两档,nmos/pmos 共 20 个,下拉框中标注 <b>[FinFET]</b>)。</
       SPICE 参数文件。</li>
 </ul>
 
+<p><b>PTM circuit-skills 电路</b>:除 AnalogGym 外,Circuits 标签页的四个电路也接入了
+同一优化器(下拉中标注 "circuit-skills, PTM"):<b>5T OTA</b>(增益/UGB/相位裕度,
+约 2 秒/次)、<b>两级 Miller 运放</b>(另含功耗,约 5 秒/次)、<b>LDO</b>
+(环路增益/GBW/PM/PSRR,约 5 秒/次)、<b>StrongArm 比较器</b>(输入噪声 σ/功耗/
+判决时间——每次评估要跑 3×1000 周期瞬态噪声,<b>约 2 分钟</b>,只适合小预算)。
+变量即 Circuits 页的同一组参数(含 W.xxx 宽度字典);优化在 PTM 模型上进行,
+结果可回填到 Circuits 页复跑完整表征。自举开关不参与优化(其仿真只输出波形数组、
+无标量指标,且参数面只有时钟频率),仍在 Circuits 页做表征。</p>
+
 <p><small>SKY130 PDK(约 109MB)在首次使用 Sizing 时自动从随包 zip 解压到
 工作区,升级版本不重复解压。上游 21 个运放中 Qu_LEC(网表为空)与
 Tan_CLIA(默认宽度低于模型 bin 下限)两个存在上游缺陷,未注册。
