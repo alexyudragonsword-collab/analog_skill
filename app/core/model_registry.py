@@ -155,6 +155,11 @@ def is_finfet(model: str) -> bool:
 
 
 def finfet_available() -> bool:
-    """True if FinFET sims can actually run (osdi shipped + ngspice has OSDI)."""
+    """True if FinFET sims can actually run: osdi shipped, ngspice knows
+    pre_osdi, AND an end-to-end micro-smoke of the BSIM-CMG module passes
+    (some ngspice builds accept pre_osdi yet cannot run the module —
+    e.g. the KLU-solver ngspice-42 on rotated GitHub ubuntu runners)."""
     from app.core import finfet_sim
-    return finfet_sim.osdi_path() is not None and finfet_sim.ngspice_has_osdi()
+    return (finfet_sim.osdi_path() is not None
+            and finfet_sim.ngspice_has_osdi()
+            and finfet_sim.osdi_functional())

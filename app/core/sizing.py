@@ -72,6 +72,8 @@ class SizingSpec:
     subckt: str | None = None     # DUT token to substitute into the TB
     wrdata_prefix: str = ''       # LDO wrdata file prefix (variant TBs differ)
     skill_key: str | None = None  # kind='skill': key into circuits.CIRCUITS
+    mode: str = ''                # skill variant: '' | 'fast' | 'ron'
+    verify_key: str | None = None # re-evaluate the best point on this circuit
 
 
 def _amp_metrics() -> list:
@@ -128,9 +130,10 @@ _LDO_VARIANTS = {'ldo_simple': 'ldo_simple', 'ldo_1': 'ldo_1_ACDC',
                  'ldo_folded_cascode': 'ldo_folded_cascode'}
 
 # circuit-skills (PTM) circuits wired into the same optimizer via their
-# plot-free simulate_*() metric paths.  bootstrap is characterization-only
-# (its simulations return raw arrays, no scalar metrics, and the only
-# exposed parameter is FCLK) and is deliberately not registered.
+# plot-free simulate_*() metric paths.  The comparator additionally gets a
+# fast τ-proxy entry (seconds per eval, probit-verified at the end via
+# verify_key), and the bootstrap switch is optimizable through scalar Ron
+# metrics post-processed from its gds-based ron testbench.
 # Targets sit above the measured default-sizing values (see tests /
 # ANALOG_REPOS_ANALYSIS) so the optimizer has headroom in each direction.
 _SKILL_CIRCUITS: dict[str, dict] = {
@@ -212,6 +215,33 @@ def _build_registry() -> dict[str, SizingSpec]:
             title=cfg['title'], kind='skill', netlist='', variables='',
             testbench='', metrics=cfg['metrics'], fixed=cfg['fixed'],
             eval_seconds=cfg['eval_seconds'], skill_key=key)
+    # fast comparator proxy: seconds-per-eval latch-tau + total-width
+    # objective; the best point is re-verified with one full probit run
+    # (defaults measured on ngspice-42: tau=8.6 ps, weighted ΣW=22 um)
+    reg['skill_comparator_fast'] = SizingSpec(
+        title='StrongArm comparator — fast τ proxy, probit-verified '
+              '(PTM 45 nm)',
+        kind='skill', netlist='', variables='', testbench='',
+        metrics=[
+            MetricSpec('tau_ps', 'Latch τ (speed proxy)', 'ps', 6.0,
+                       'min', 2.0),
+            MetricSpec('total_w_um', 'Σ width (power proxy)', 'um', 18.0,
+                       'min', 1.0),
+        ],
+        fixed=('NOISE_VIN_MV',), eval_seconds=1.0,
+        skill_key='comparator', mode='fast',
+        verify_key='skill_comparator')
+    # bootstrapped switch: app-layer scalars from the ron arrays
+    # (defaults measured on ngspice-42: Ron_max=86.3 ohm, flatness=1.25)
+    reg['skill_bootstrap'] = SizingSpec(
+        title='Bootstrapped switch — circuit-skills (PTM 180 nm)',
+        kind='skill', netlist='', variables='', testbench='',
+        metrics=[
+            MetricSpec('ron_bts_max', 'Ron max (track)', 'ohm', 70.0,
+                       'min', 1.5),
+            MetricSpec('ron_flat', 'Ron max/min', '', 1.2, 'min', 1.5),
+        ],
+        fixed=(), eval_seconds=1.5, skill_key='bootstrap', mode='ron')
     return reg
 
 
@@ -259,6 +289,12 @@ def _skill_variables(spec: SizingSpec) -> list[VarSpec]:
     1.8 V rail, everything else a factor-4 window around the default."""
     from app.core import circuits
     out = []
+    if spec.skill_key == 'bootstrap' and spec.mode == 'ron':
+        # the bootstrapped DUT's sampling switch is W['sw'] in
+        # bootstrap_common (render_dut); the dotted name goes through
+        # _apply_params' dict syntax and is mirrored into the ron
+        # testbench's node config by _evaluate_skill
+        out.append(VarSpec('W.sw', 10.0, 2.0, 40.0, False))
     for p in circuits.CIRCUITS[spec.skill_key].params:
         if p.attr in spec.fixed:
             continue
@@ -336,11 +372,16 @@ def _write_params(spec: SizingSpec, values: dict, dst: Path):
     dst.write_text(text)
 
 
-def _render_testbench(spec: SizingSpec, run: Path) -> Path:
+def _render_testbench(spec: SizingSpec, run: Path,
+                      single_thread: bool = False) -> Path:
     """Rewrite the vendored testbench's include lines with absolute paths
     (netlist / generated params / extracted PDK), substitute the DUT subckt
     name (the shared amp TB is written against HoiLee_AFFC) and drop
-    interactive `plot` commands.  Paths are quoted (may contain spaces)."""
+    interactive `plot` commands.  Paths are quoted (may contain spaces).
+
+    single_thread injects `set num_threads=1` into the control block:
+    ngspice's internal threading spin-waits badly under concurrent
+    instances (measured: 4 parallel runs 10.2 s → 4.5 s wall with it)."""
     src = paths.analoggym_dir() / spec.kind / 'testbench' / spec.testbench
     netlist_dir = paths.analoggym_dir() / spec.kind / 'netlist'
     netlist = netlist_dir / spec.netlist
@@ -369,6 +410,9 @@ def _render_testbench(spec: SizingSpec, run: Path) -> Path:
                     line = f'.include "{netlist}"'
         elif ls.startswith('plot ') or ls == 'plot':
             continue
+        elif ls == '.control' and single_thread:
+            out_lines.append(line)
+            line = '  set num_threads=1'
         elif spec.subckt and spec.subckt != 'HoiLee_AFFC_Pin_3':
             line = re.sub(r'\bHoiLee_AFFC_Pin_3\b', spec.subckt, line)
         out_lines.append(line)
@@ -443,21 +487,57 @@ def _evaluate_skill(spec: SizingSpec, values: dict) -> dict:
         if spec.skill_key == 'ldo':
             import simulate_ldo_ac
             return dict(simulate_ldo_ac.simulate_ac()['metrics'])
+        if spec.skill_key == 'comparator' and spec.mode == 'fast':
+            import simulate_tran_strongarm_wave as wave_mod
+            tau = float(wave_mod.simulate_wave()['wave']['tau_ps'])
+            # weighted device widths of the StrongArm core (2x input pair,
+            # 1x tail, 2x latch N, 2x latch P, 4x reset)
+            w = common.W
+            total = (2 * w['inp'] + w['tail'] + 2 * w['lat_n']
+                     + 2 * w['lat_p'] + 4 * w['rst'])
+            return {'tau_ps': tau, 'total_w_um': float(total)}
         if spec.skill_key == 'comparator':
             import simulate_tran_strongarm_noise as noise_mod
             return dict(noise_mod.compute_fom(noise_mod.simulate_noise()))
+        if spec.skill_key == 'bootstrap':
+            # repoint the skill's hardcoded model path (same as circuits.py)
+            from ngspice_common import spath
+            common.MODEL_DIR = paths.NGSPICE_ASSETS / 'models'
+            common.MODEL_PATH = spath(common.MODEL_DIR / 'ptm180.lib')
+            if 'FCLK' in values:
+                common.TCLK = 1.0 / common.FCLK
+            import simulate_tran_bts_ron as sim_ron
+            cfg = dict(sim_ron.NODE_CONFIGS[0])
+            # W.sw was applied to common.W by _apply_params; the same width
+            # also sizes the reference switches in the ron testbench config
+            cfg['W_sw'] = float(common.W['sw'])
+            r = sim_ron.simulate_ron(cfg)
+            rb = np.asarray(r['ron_bts'], float)
+            rb = rb[np.isfinite(rb) & (rb > 0)]
+            if rb.size == 0:
+                return {}
+            return {'ron_bts_max': float(rb.max()),
+                    'ron_flat': float(rb.max() / rb.min())}
     raise KeyError(spec.skill_key)
 
 
-def evaluate(circuit: str, values: dict) -> dict:
-    """One full testbench evaluation → metric dict (missing metrics absent)."""
+def evaluate(circuit: str, values: dict, slot: int = 0,
+             single_thread: bool = False) -> dict:
+    """One full testbench evaluation → metric dict (missing metrics absent).
+
+    slot: parallel-evaluation lane — each slot gets its own run
+    sub-directory so params/log/wrdata files never collide (AnalogGym
+    circuits only; skill circuits are serial and ignore the slot).
+    single_thread: see _render_testbench (set when running concurrently).
+    """
     spec = SIZING[circuit]
     if spec.kind == 'skill':
         return _evaluate_skill(spec, values)
     paths.ensure_sky130()
-    run = _run_dir(circuit)
+    run = _run_dir(circuit) if slot == 0 else _run_dir(circuit) / f'w{slot}'
+    run.mkdir(parents=True, exist_ok=True)
     _write_params(spec, values, run / 'params.spice')
-    tb = _render_testbench(spec, run)
+    tb = _render_testbench(spec, run, single_thread=single_thread)
     log = run / 'log.txt'
     if log.exists():
         log.unlink()
@@ -559,6 +639,7 @@ class SizingRun:
     cancelled: bool
     elapsed: float
     overrides: dict | None = None
+    verified: dict | None = None  # full re-evaluation of the best point
 
     def report(self) -> str:
         spec = SIZING[self.circuit]
@@ -581,6 +662,13 @@ class SizingRun:
             lines.append(f'{ms.label:<22}{val:>14} {ms.unit:<6}'
                          f'{mark} {ms.direction} {target:g}'
                          + ('  [HARD]' if hard else ''))
+        if self.verified is not None:
+            vkey = SIZING[self.circuit].verify_key
+            lines += ['', f'verified (full evaluation, {vkey}):']
+            for ms in SIZING[vkey].metrics:
+                m = self.verified.get(ms.key)
+                val = f'{m:.4g}' if m is not None else 'n/a'
+                lines.append(f'  {ms.label:<20}{val:>14} {ms.unit}')
         lines += ['', 'best design variables:']
         for k, v in self.best_values.items():
             lines.append(f'  {k} = {_fmt_num(v)}')
@@ -608,23 +696,40 @@ def optuna_available() -> bool:
 
 def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
              progress=None, should_cancel=None, overrides: dict | None = None,
-             algo: str = 'sobol_powell') -> SizingRun:
-    """Bounded search, ≤ budget evaluations.
+             algo: str = 'sobol_powell', workers: int = 1) -> SizingRun:
+    """Bounded search, ≤ budget evaluations, optionally parallel.
 
-    algo='sobol_powell' (built-in): phase 1 evaluates the default sizing
-    plus a scrambled-Sobol sample around it (~half the budget — Powell
-    alone explores one coordinate at a time and is nearly blind on
-    20–30-dim spaces at these budgets); phase 2 refines the best point
-    with bounded Powell.  algo='optuna' uses TPE (if optuna is installed).
+    algo:
+      'sobol_powell'    (built-in) — evaluate the default sizing plus a
+                        scrambled-Sobol sample around it (parallel batch,
+                        ~half the budget), then refine the best point with
+                        bounded Powell (serial by nature).
+      'diff_evolution'  scipy differential_evolution with a thread-pool map
+                        (population 4x dims per generation — needs larger
+                        budgets), polish disabled.
+      'optuna'          TPE via batch ask/tell (if optuna is installed).
+
+    workers > 1 runs evaluations concurrently (each in its own run
+    sub-directory).  circuit-skills circuits are forced serial: their
+    evaluation mutates process-global state (sys.modules isolation +
+    module-global parameters).
 
     overrides: {metric_key: (target, hard)} — see score().
     progress(eval_no, best_cost, metrics) fires after every evaluation;
-    should_cancel() → True stops between evaluations (best-so-far kept).
+    should_cancel() → True stops dispatching (in-flight evals finish,
+    best-so-far is kept).
     """
+    import queue as _queue
+    import threading
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     from scipy.optimize import minimize
     from scipy.stats import qmc
 
     spec = SIZING[circuit]
+    if spec.kind == 'skill':
+        workers = 1
+    workers = max(1, int(workers))
+
     names = [v.name for v in variables]
     lo = np.array([v.lo for v in variables], float)
     hi = np.array([v.hi for v in variables], float)
@@ -632,8 +737,12 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
     is_int = np.array([v.is_int for v in variables])
     x0 = (np.array([v.default for v in variables], float) - lo) / span
 
-    state = {'n': 0, 'best': None, 'best_x': None, 'best_m': {},
-             'history': [], 'cancel': False}
+    lock = threading.Lock()
+    state = {'done': 0, 'dispatched': 0, 'best': None, 'best_x': None,
+             'best_m': {}, 'best_xn': x0, 'history': [], 'cancel': False}
+    slots = _queue.SimpleQueue()
+    for i in range(workers):
+        slots.put(i)
     t0 = time.time()
 
     def to_values(xn):
@@ -641,35 +750,78 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         x = np.where(is_int, np.round(x), x)
         return dict(zip(names, x.tolist()))
 
-    def objective(xn):
-        if should_cancel is not None and should_cancel():
-            state['cancel'] = True
-            raise _Cancelled
-        if state['n'] >= budget:
-            raise _Cancelled
-        vals = to_values(xn)
-        metrics = evaluate(circuit, vals)
+    def _cancelled():
+        return should_cancel is not None and should_cancel()
+
+    def _eval_one(xn):
+        slot = slots.get()
+        try:
+            vals = to_values(xn)
+            metrics = evaluate(circuit, vals, slot=slot,
+                               single_thread=workers > 1)
+        finally:
+            slots.put(slot)
         c = score(circuit, metrics, overrides)
-        state['n'] += 1
-        if state['best'] is None or c < state['best']:
-            state['best'], state['best_x'] = c, vals
-            state['best_m'] = metrics
-        state['history'].append((state['n'], state['best']))
+        with lock:
+            state['done'] += 1
+            if state['best'] is None or c < state['best']:
+                state['best'], state['best_x'] = c, vals
+                state['best_m'] = metrics
+                state['best_xn'] = np.asarray(xn, float)
+            n, best = state['done'], state['best']
+            state['history'].append((n, best))
         if progress is not None:
-            progress(state['n'], state['best'], metrics)
+            progress(n, best, metrics)
         return c
 
-    state['best_xn'] = x0
+    def _safe_eval(xn):
+        try:
+            return _eval_one(xn)
+        except Exception:                     # sim failure → worst cost
+            return float('inf')
 
-    def objective_track(xn):
-        c = objective(xn)
-        if c <= state['best']:
-            state['best_xn'] = np.asarray(xn, float)
-        return c
+    def run_batch(points):
+        """Evaluate ≤ remaining-budget points (parallel); rest stay +inf."""
+        points = [np.asarray(p, float) for p in points]
+        with lock:
+            if _cancelled():
+                state['cancel'] = True
+            allowed = 0 if state['cancel'] else max(
+                0, budget - state['dispatched'])
+            todo = points[:allowed]
+            state['dispatched'] += len(todo)
+        out = [float('inf')] * len(points)
+        if not todo:
+            return out
+        if workers == 1:
+            for i, pt in enumerate(todo):
+                if _cancelled():
+                    with lock:
+                        state['cancel'] = True
+                        state['dispatched'] -= len(todo) - i   # refund
+                    break
+                out[i] = _safe_eval(pt)
+        else:
+            with ThreadPoolExecutor(max_workers=workers) as ex:
+                futs = {ex.submit(_safe_eval, pt): i
+                        for i, pt in enumerate(todo)}
+                for f in as_completed(futs):
+                    out[futs[f]] = f.result()
+        return out
+
+    def objective(xn):
+        """Serial single evaluation (Powell refinement)."""
+        with lock:
+            if _cancelled():
+                state['cancel'] = True
+            if state['cancel'] or state['dispatched'] >= budget:
+                raise _Cancelled
+            state['dispatched'] += 1
+        return _safe_eval(xn)
 
     def run_sobol_powell():
         n_sobol = min(max(budget // 2, 0), max(budget - 5, 0))
-        objective_track(x0)                  # evaluation #1: default sizing
+        run_batch([x0])                      # evaluation #1: default sizing
         if n_sobol > 1:
             # Sobol sample around the (literature-derived) default sizing:
             # ±25% of each bound span, clipped to the box
@@ -678,12 +830,27 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 pts = sob.random(n_sobol - 1)
-            for p in pts:
-                objective_track(np.clip(x0 + (p - 0.5) * 0.5, 0.0, 1.0))
-        minimize(objective_track, state['best_xn'], method='Powell',
+            run_batch([np.clip(x0 + (p - 0.5) * 0.5, 0.0, 1.0) for p in pts])
+        if state['cancel'] or state['dispatched'] >= budget:
+            return
+        minimize(objective, state['best_xn'], method='Powell',
                  bounds=[(0.0, 1.0)] * len(names),
-                 options={'maxfev': max(budget - state['n'], 1),
+                 options={'maxfev': max(budget - state['dispatched'], 1),
                           'xtol': 1e-3, 'ftol': 1e-4})
+
+    def run_de():
+        from scipy.optimize import differential_evolution
+        dims = len(names)
+        popsize = 4                          # individuals = 4 x dims
+        maxiter = max(1, budget // (popsize * dims))
+        differential_evolution(
+            lambda xn: run_batch([xn])[0],   # only used if scipy bypasses map
+            bounds=[(0.0, 1.0)] * dims, x0=x0, init='sobol',
+            popsize=popsize, maxiter=maxiter, polish=False, tol=0.0,
+            seed=0, updating='deferred',
+            workers=lambda func, xs: run_batch(list(xs)),
+            callback=lambda xk, convergence=0.0:
+                state['cancel'] or state['dispatched'] >= budget)
 
     def run_optuna():
         import optuna
@@ -692,18 +859,33 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             direction='minimize',
             sampler=optuna.samplers.TPESampler(seed=0))
         study.enqueue_trial({n: float(x) for n, x in zip(names, x0)})
-        while state['n'] < budget:
-            trial = study.ask()
-            xn = np.array([trial.suggest_float(n, 0.0, 1.0) for n in names])
-            study.tell(trial, objective(xn))
+        while not state['cancel'] and state['dispatched'] < budget:
+            k = min(workers, budget - state['dispatched'])
+            trials = [study.ask() for _ in range(k)]
+            xs = [np.array([t.suggest_float(n, 0.0, 1.0) for n in names])
+                  for t in trials]
+            costs = run_batch(xs)
+            for t, c in zip(trials, costs):
+                study.tell(t, c if np.isfinite(c) else 1e12)
 
     try:
         if algo == 'optuna':
             run_optuna()
+        elif algo == 'diff_evolution':
+            run_de()
         else:
             run_sobol_powell()
     except _Cancelled:
         pass
+    verified = None
+    if (spec.verify_key and state['best_x'] is not None
+            and not state['cancel']):
+        print(f'verifying best point with a full {spec.verify_key} '
+              'evaluation ...')
+        try:
+            verified = evaluate(spec.verify_key, state['best_x'])
+        except Exception as exc:                 # keep the proxy result
+            print(f'verification failed: {exc}')
     initial_cost = state['history'][0][1] if state['history'] else float('inf')
     return SizingRun(circuit=circuit,
                      best_values=state['best_x'] or to_values(x0),
@@ -711,8 +893,9 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                      best_cost=state['best'] if state['best'] is not None
                      else float('inf'),
                      initial_cost=initial_cost, history=state['history'],
-                     evals=state['n'], cancelled=state['cancel'],
-                     elapsed=time.time() - t0, overrides=overrides)
+                     evals=state['done'], cancelled=state['cancel'],
+                     elapsed=time.time() - t0, overrides=overrides,
+                     verified=verified)
 
 
 def render_convergence(run: SizingRun) -> Path:

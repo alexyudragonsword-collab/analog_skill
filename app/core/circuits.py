@@ -772,7 +772,20 @@ def _run_bootstrap(analysis, values):
                 f"  Min  : {_fmt(np.min(vb), 3)} V",
                 f"  Max  : {_fmt(np.max(vb), 3)} V"]
     if 'ron' in res:
+        import numpy as np
         lines.append('Ron comparison : NMOS vs CMOS vs bootstrapped (see plot)')
+        for key, label in (('ron_nmos', 'NMOS'), ('ron_cmos', 'CMOS'),
+                           ('ron_bts', 'bootstrapped')):
+            arr = res['ron'].get(key)
+            if arr is None:
+                continue
+            arr = np.asarray(arr, float)
+            arr = arr[np.isfinite(arr) & (arr > 0)]
+            if arr.size == 0:
+                continue
+            flat = arr.max() / arr.min()
+            lines.append(f'  {label:<13}: max {_fmt(arr.max(), 1)} Ω  '
+                         f'(flatness max/min {_fmt(flat, 2)})')
     report = '\n'.join(lines)
 
     plot_dir = common.PLOT_DIR

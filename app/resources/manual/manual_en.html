@@ -265,7 +265,7 @@ incompatible with the GUI's threading policy — run them from the command line
 
 <h2 id="sizing">5b. Automatic sizing (sixth tab: Sizing)</h2>
 
-<p align="center"><img src="img/v011_sizing.png" width="820"></p>
+<p align="center"><img src="img/v100_sizing.png" width="820"></p>
 
 <p>Automatic device sizing over the vendored <b>AnalogGym</b> (ICCAD'24,
 BSD-3) open subset: <b>20 SKY130 circuits</b> — 15 literature-grade
@@ -284,29 +284,41 @@ targets, set a budget, hit Optimize:</p>
       sizings).</li>
   <li><b>Algorithms</b>: built-in <i>Sobol + Powell</i> (Sobol sampling
       around the defaults + bounded Powell refinement, no extra
-      dependency); <i>Optuna TPE</i> appears when running from source with
+      dependency) and <i>Differential evolution</i> (scipy global search
+      for large budgets, recommended ≥ 15× the variable count);
+      <i>Optuna TPE</i> appears when running from source with
       <code>optuna</code> installed.</li>
+  <li><b>Parallel evals</b>: sets the number of concurrent ngspice runs
+      (default min(4, CPU cores); measured ~3.5× speed-up on 4 cores).
+      The batch-sampling stages of all three algorithms dispatch in
+      parallel; circuit-skills circuits always run serially (the spinner
+      is disabled) because of their import isolation.</li>
   <li><b>Budget</b>: one full characterization costs ~4–8 s; the UI shows
-      a time estimate, the log panel streams progress, and <b>Cancel</b>
-      stops immediately keeping the best-so-far.</li>
+      a time estimate scaled by the parallelism, the log panel streams
+      progress, and <b>Cancel</b> stops immediately keeping the
+      best-so-far.</li>
   <li>On completion the viewer shows the <b>convergence curve</b>; the
       report lists best metrics (per-target ✓/✗) and the best sizing —
       <b>Export best .PARAM…</b> saves it as a SPICE parameter file.</li>
 </ul>
 
-<p><b>PTM circuit-skills circuits</b>: four circuits of the Circuits tab
-plug into the same optimizer (marked "circuit-skills, PTM" in the
-drop-down): the <b>5T OTA</b> (gain/UGB/phase margin, ~2 s/eval), the
-<b>two-stage Miller op amp</b> (plus power, ~5 s/eval), the <b>LDO</b>
-(loop gain/GBW/PM/PSRR, ~5 s/eval) and the <b>StrongArm comparator</b>
-(input-referred noise σ / power / decision time — each evaluation runs
-3×1000 transient-noise cycles, <b>~2 min</b>, so keep budgets small).
+<p><b>PTM circuit-skills circuits</b>: the Circuits-tab circuits plug into
+the same optimizer (marked "circuit-skills, PTM" in the drop-down), six
+entries in total: the <b>5T OTA</b> (gain/UGB/phase margin, ~2 s/eval),
+the <b>two-stage Miller op amp</b> (plus power, ~5 s/eval), the <b>LDO</b>
+(loop gain/GBW/PM/PSRR, ~5 s/eval), the <b>StrongArm comparator</b> in two
+flavours — the full entry (input-referred noise σ / power / decision time;
+each evaluation runs 3×1000 transient-noise cycles, <b>~2 min</b>, so keep
+budgets small) and a <b>fast τ-proxy entry</b> (latch time constant τ plus
+a total-width power proxy, ~1 s/eval; after the run the best point is
+automatically re-measured with one full probit evaluation and the report
+shows the verified σ / power / decision time) — and the <b>bootstrapped
+switch</b> (scalar metrics post-processed from its Ron testbench: peak
+sampling on-resistance ron_bts_max and max/min flatness; variables are the
+switch width W.sw and the clock frequency, ~0.5 s/eval).
 Variables are the same parameter set as the Circuits tab (incl. the W.xxx
 width dictionary); optimization runs on the PTM models and the best
-sizing can be fed back into the Circuits tab for full characterization.
-The bootstrapped switch is not optimizable (its simulations return raw
-waveform arrays without scalar metrics, and its only exposed parameter is
-the clock frequency) — it stays characterization-only.</p>
+sizing can be fed back into the Circuits tab for full characterization.</p>
 
 <p><small>The SKY130 PDK (~109 MB) is extracted from the bundled zip into
 the workspace on first use and survives app upgrades. Two upstream

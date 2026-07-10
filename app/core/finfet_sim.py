@@ -73,6 +73,57 @@ def ngspice_has_osdi() -> bool:
     return _probe_osdi(exe)
 
 
+_OSDI_FUNCTIONAL: bool | None = None
+
+
+def osdi_functional() -> bool:
+    """End-to-end micro-smoke: True only if the vendored bsimcmg.osdi
+    actually loads AND simulates on this ngspice build.
+
+    A shallow `pre_osdi is a known command` probe is not enough: some
+    ngspice-42 builds (e.g. the KLU-solver build that appeared on GitHub
+    ubuntu runners) accept pre_osdi but fail to run the BSIM-CMG module.
+    Result is cached per process (~0.2 s once).
+    """
+    global _OSDI_FUNCTIONAL
+    if _OSDI_FUNCTIONAL is None:
+        try:
+            _OSDI_FUNCTIONAL = _smoke_osdi()
+        except Exception:
+            _OSDI_FUNCTIONAL = False
+    return _OSDI_FUNCTIONAL
+
+
+def _smoke_osdi() -> bool:
+    import tempfile
+    from app import paths as _paths
+    op = osdi_path()
+    if op is None:
+        return False
+    pm = _paths.finfet_models_dir() / 'lstp' / '20nfet.pm'
+    if not pm.is_file():
+        return False
+    card = osdi_modelcard(str(pm), 'nmos')
+    with tempfile.TemporaryDirectory() as td:
+        dat = Path(td) / 's.dat'
+        deck = Path(td) / 's.cir'
+        deck.write_text(
+            '* osdi smoke\n'
+            f'.include "{card}"\n'
+            'Vgs vgs 0 DC 0\nVds vds 0 DC 0.45\n'
+            'N1 vds vgs 0 0 nfet L=0.024u NFIN=10\n'
+            '.control\n'
+            f"  pre_osdi '{_spath(op)}'\n"
+            '  dc Vgs 0 0.9 0.45\n'
+            f"  wrdata '{_spath(dat)}' i(Vds)\n"
+            '  quit\n.endc\n.end\n', encoding='ascii')
+        try:
+            _run([_ngspice(), '-b', str(deck)], timeout=60)
+        except Exception:
+            return False
+        return dat.exists() and dat.stat().st_size > 0
+
+
 def _probe_osdi(exe: str) -> bool:
     """Run a one-line deck that only succeeds if pre_osdi is a known command."""
     import tempfile

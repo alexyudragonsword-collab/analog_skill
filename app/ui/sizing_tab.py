@@ -50,13 +50,23 @@ class SizingTab(QWidget, JobTabMixin):
         self.algo_combo = QComboBox()
         self.algo_combo.addItem('Sobol + Powell (built-in)',
                                 userData='sobol_powell')
+        self.algo_combo.addItem('Differential evolution (global, '
+                                'large budgets)', userData='diff_evolution')
         if sizing.optuna_available():
             self.algo_combo.addItem('Optuna TPE', userData='optuna')
 
         self.budget_spin = QSpinBox()
-        self.budget_spin.setRange(10, 2000)
+        self.budget_spin.setRange(10, 5000)
         self.budget_spin.setValue(150)
         self.budget_spin.valueChanged.connect(self._update_estimate)
+        import os
+        self.workers_spin = QSpinBox()
+        self.workers_spin.setRange(1, 16)
+        self.workers_spin.setValue(min(4, os.cpu_count() or 1))
+        self.workers_spin.setToolTip(
+            'Concurrent ngspice evaluations (AnalogGym circuits only; '
+            'circuit-skills circuits always run serially).')
+        self.workers_spin.valueChanged.connect(self._update_estimate)
         self._estimate = QLabel('')
 
         self.run_btn = QPushButton('Optimize')
@@ -83,6 +93,7 @@ class SizingTab(QWidget, JobTabMixin):
         sf.addRow('Circuit', self.circuit_combo)
         sf.addRow('Algorithm', self.algo_combo)
         sf.addRow('Budget (evals)', self.budget_spin)
+        sf.addRow('Parallel evals', self.workers_spin)
         sf.addRow('', self._estimate)
 
         tgt_box = QGroupBox('Targets (editable; hard = 10x weight)')
@@ -155,7 +166,11 @@ class SizingTab(QWidget, JobTabMixin):
             self._viewer.show_pngs([sch])
 
     def _update_estimate(self, *_):
-        secs = sizing.SIZING[self._key()].eval_seconds * self.budget_spin.value()
+        spec = sizing.SIZING[self._key()]
+        is_skill = spec.kind == 'skill'
+        self.workers_spin.setEnabled(not is_skill)
+        workers = 1 if is_skill else self.workers_spin.value()
+        secs = spec.eval_seconds * self.budget_spin.value() / workers
         self._estimate.setText(f'≈ {secs / 60:.0f} min estimated')
 
     def _read_table(self) -> list:
@@ -202,6 +217,8 @@ class SizingTab(QWidget, JobTabMixin):
         key = self._key()
         budget = self.budget_spin.value()
         algo = self.algo_combo.currentData()
+        workers = (1 if sizing.SIZING[key].kind == 'skill'
+                   else self.workers_spin.value())
         self._cancel.clear()
 
         def job():
@@ -212,7 +229,8 @@ class SizingTab(QWidget, JobTabMixin):
             return sizing.optimize(key, variables, budget=budget,
                                    progress=progress,
                                    should_cancel=self._cancel.is_set,
-                                   overrides=overrides, algo=algo)
+                                   overrides=overrides, algo=algo,
+                                   workers=workers)
 
         self.submit_job('opt', Job(kind='sizing', fn=job,
                                    label=f'sizing: {key} ({budget} evals)'))

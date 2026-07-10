@@ -1,4 +1,4 @@
-# Analog Studio — PySide6 桌面应用(v0.12)
+# Analog Studio — PySide6 桌面应用(v1.0)
 
 基于本仓库三个 skill(ngspice 教学案例 / gm/ID 设计 / PTM 模型)的统一桌面工作台。
 Skill 目录(`ngspice/`、`gmoverid/`、`transistor-models/`)保持原样未修改;应用代码全部在 `app/`。
@@ -12,7 +12,7 @@ Skill 目录(`ngspice/`、`gmoverid/`、`transistor-models/`)保持原样未修�
 | **Curve Browser** | 按模型/L/W 生成并浏览特性图:IV 特性、gm/ID 四象限、栅电容;会话内缓存,可强制重新生成 |
 | **Comparison** | 对比图:同一模型多沟长对比(如 L=180/360/1000nm)、跨节点对比(多选同极性模型)、跨节点栅电容对比 |
 | **Circuits** | 五个块级电路(circuit-skills 技能集):StrongArm 比较器(波形/probit 噪声/ramp/四类扫描/五项自检)、LDO(全表征/auto-design/补偿扫描/理论对照)、自举开关、五管 OTA、两级 Miller 运放(含 PZ 极零表);选中电路即显示按 DUT 网表绘制的**电路原理图**(schemdraw 预渲染,`tools/gen_schematics.py`),运行后常驻缩略图栏首位;参数可编辑,指标报告可复制 |
-| **Sizing** | 基于 vendored **AnalogGym**(ICCAD'24,BSD-3)开源子集的尺寸自动优化:**20 个 SKY130 电路**(15 个文献级三级 Miller 运放 + Basic LDO + 4 个 LDO 变体,均经 ngspice-42 逐一验证;上游 Qu_LEC/Tan_CLIA 两个缺陷电路未注册);变量/边界与指标目标均可编辑,支持**硬约束**(违约代价 ×10);内置 Sobol+Powell 优化器(零新依赖),源码运行装有 optuna 时可选 **Optuna TPE**;日志实时进度、可取消;完成后显示收敛曲线 + 最优指标表(逐项 ✓/✗),可导出最优 `.PARAM`;SKY130 PDK 首次使用时自动解压到工作区(~109MB);另接入 4 个 **circuit-skills PTM 电路**(5T OTA/两级运放/LDO 秒级评估,StrongArm 比较器 ~2 分钟/次),变量与 Circuits 页同源,最优尺寸可回填复跑表征 |
+| **Sizing** | 基于 vendored **AnalogGym**(ICCAD'24,BSD-3)开源子集的尺寸自动优化:**20 个 SKY130 电路**(15 个文献级三级 Miller 运放 + Basic LDO + 4 个 LDO 变体,均经 ngspice-42 逐一验证;上游 Qu_LEC/Tan_CLIA 两个缺陷电路未注册);变量/边界与指标目标均可编辑,支持**硬约束**(违约代价 ×10);内置 Sobol+Powell 与 **Differential evolution**(大预算全局搜索)优化器,源码运行装有 optuna 时可选 **Optuna TPE**;**并行评估**(默认 min(4, CPU 核),4 核实测 ~3.5× 加速,skill 电路自动串行);日志实时进度、可取消;完成后显示收敛曲线 + 最优指标表(逐项 ✓/✗),可导出最优 `.PARAM`;SKY130 PDK 首次使用时自动解压到工作区(~109MB);另接入 6 个 **circuit-skills PTM 条目**(5T OTA/两级运放/LDO 秒级评估;StrongArm 比较器完整 probit 档 ~2 分钟/次 + **快速 τ 代理档** ~1 秒/次、优化后自动对最优点补跑完整 probit 验证;自举开关 Ron 标量指标 ~0.5 秒/次),变量与 Circuits 页同源,最优尺寸可回填复跑表征 |
 
 菜单栏 Help 提供中英双语图文用户手册(F1)与 About。**FinFET(7–20nm)** 通过
 ngspice 的 OSDI 接口运行时加载随包携带的 `bsimcmg.osdi`(主流预编译 ngspice 不含
