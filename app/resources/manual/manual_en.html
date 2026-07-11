@@ -337,6 +337,45 @@ bugs).</small></p>
 
 <hr>
 
+<h2 id="ai">5c. AI-assisted design (optional, bring your own LLM API)</h2>
+
+<p>Configure once under <b>Settings → LLM</b>: pick a protocol
+(<b>OpenAI-compatible</b> — OpenAI / DeepSeek / Qwen / local Ollama …,
+or <b>Anthropic</b> for Claude), fill in base URL, API key (optional for
+local endpoints) and model name, then hit Test.  Examples: DeepSeek =
+<code>https://api.deepseek.com/v1</code> + key +
+<code>deepseek-chat</code>; local Ollama =
+<code>http://localhost:11434/v1</code> + a model name.</p>
+
+<ul>
+  <li><b>LLM-guided algorithm</b>: pick "LLM-guided (AI)" in the algorithm
+      drop-down — the model reads the circuit netlist / parameter
+      semantics, variable bounds and metric targets, then proposes
+      candidate sizings round by round; <b>every candidate is measured by
+      a real ngspice run</b> and the measured costs are fed back for the
+      next round.  Budget, cancel and parallel evaluation work exactly
+      like the other algorithms; an unparseable reply falls back to Sobol
+      sampling for that round, so the loop never stalls on the LLM.  The
+      best point still goes through full verification (e.g. the probit
+      re-measurement of the comparator proxy) and is auto-saved.</li>
+  <li><b>AI advise…</b> (pre-run): the LLM suggests per-variable starting
+      points / search ranges and a budget from circuit fundamentals;
+      confirm to write them into the tables.</li>
+  <li><b>AI explain</b> (post-run): one click sends the report to the LLM
+      for a design critique — which metric is the bottleneck, which
+      device to resize, whether bounds/targets should move — appended
+      below the report.</li>
+</ul>
+
+<p><small><b>Privacy</b>: AI features send netlist excerpts, the
+variable/metric tables and result reports to the endpoint you configured
+(a local Ollama endpoint never leaves your machine).  The API key is
+stored in local QSettings only.  Leaving the model empty disables all AI
+features; everything else is unaffected.  Each LLM round adds seconds of
+latency that the budget time estimate does not include.</small></p>
+
+<hr>
+
 <h2>6. Log panel and job queue</h2>
 <p>The <b>Simulation log</b> panel at the bottom streams all simulation
 progress and ngspice output in real time; on failure it includes the error

@@ -708,6 +708,11 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                         (population 4x dims per generation — needs larger
                         budgets), polish disabled.
       'optuna'          TPE via batch ask/tell (if optuna is installed).
+      'llm'             LLM-in-the-loop (needs an API key in Settings):
+                        the model proposes candidates in physical units,
+                        every candidate is measured by ngspice, costs are
+                        fed back; malformed replies fall back to Sobol
+                        points for that round (see llm_sizing.run_loop).
 
     workers > 1 runs evaluations concurrently (each in its own run
     sub-directory).  circuit-skills circuits are forced serial: their
@@ -868,11 +873,19 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             for t, c in zip(trials, costs):
                 study.tell(t, c if np.isfinite(c) else 1e12)
 
+    def run_llm():
+        from app.core import llm_sizing
+        llm_sizing.run_loop(circuit, variables, overrides,
+                            state=state, run_batch=run_batch,
+                            budget=budget, workers=workers)
+
     try:
         if algo == 'optuna':
             run_optuna()
         elif algo == 'diff_evolution':
             run_de()
+        elif algo == 'llm':
+            run_llm()
         else:
             run_sobol_powell()
     except _Cancelled:

@@ -274,6 +274,36 @@ Tan_CLIA(默认宽度低于模型 bin 下限)两个存在上游缺陷,未注册�
 
 <hr>
 
+<h2 id="ai">5c. AI 辅助设计(可选,需自备 LLM API)</h2>
+
+<p>在 <b>Settings</b> 的 "LLM" 组里配置一次即可启用三个 AI 功能
+(协议二选一:<b>OpenAI 兼容</b>——OpenAI/DeepSeek/通义/本地 Ollama 等,
+或 <b>Anthropic</b>(Claude);填 Base URL、API key(本地端点可留空)、
+模型名,点 Test 验证连通)。示例:DeepSeek 填
+<code>https://api.deepseek.com/v1</code> + key + <code>deepseek-chat</code>;
+本地 Ollama 填 <code>http://localhost:11434/v1</code> + 模型名。</p>
+
+<ul>
+  <li><b>LLM-guided 优化算法</b>:算法下拉选 "LLM-guided (AI)"——LLM 读取
+      电路网表/参数语义、变量边界与指标目标后,逐轮提议候选尺寸;
+      <b>每个候选都由 ngspice 实测打分</b>,实测结果回喂给 LLM 再提下一轮。
+      预算/取消/并行评估与其他算法完全一致;LLM 回复不可解析时该轮自动
+      回退 Sobol 采样,循环永不因 LLM 卡住。最优点照常走完整验证
+      (如比较器代理档的 probit 复测)并自动存档。</li>
+  <li><b>AI advise…(开跑前顾问)</b>:让 LLM 根据电路原理建议各变量的
+      初值/搜索范围与预算,确认后一键写回表格。</li>
+  <li><b>AI explain(结果解读)</b>:跑完后一键让 LLM 用中文分析报告——
+      哪个指标是瓶颈、该动哪个管子、边界要不要放宽,追加显示在报告栏。</li>
+</ul>
+
+<p><small><b>隐私提示</b>:使用 AI 功能时,电路网表片段、变量/指标表与
+结果报告会发送到你配置的 API 端点(本地 Ollama 则不出本机)。
+API key 保存在本机 QSettings,不写入任何工程文件。模型留空即完全禁用
+AI 功能,其余功能不受影响。LLM 每轮有数秒到数十秒延迟,预算估时仅计
+仿真时间。</small></p>
+
+<hr>
+
 <h2>6. 日志面板与任务队列</h2>
 <p>窗口底部的 <b>Simulation log</b> 面板实时显示所有仿真进度与 ngspice 输出,
 出错时附带错误详情和最新日志文件的末尾内容。该面板可拖到窗口右侧或独立浮动。</p>

@@ -5,6 +5,29 @@ development milestones on the `claude/gmoverid-skill-analysis-7ron1c` branch;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
+## v1.2 — 2026-07-11
+
+AI-assisted design (optional, bring-your-own LLM API).
+
+- **LLM-guided sizing algorithm**: a fourth `optimize()` algorithm where
+  the configured LLM reads the circuit netlist / parameter semantics,
+  bounds and targets, proposes candidate sizings round by round, and
+  every candidate is measured by a real ngspice run whose cost is fed
+  back — full closed-loop verification by construction.  Budget, cancel,
+  parallel evaluation, best-point verification (`verify_key`) and run
+  auto-save all work exactly as with the other algorithms; an
+  unparseable reply falls back to Sobol sampling for that round.
+- **AI advise…**: pre-run suggestions for per-variable init/bounds and
+  budget, applied to the tables on confirmation.
+- **AI explain**: one-click Chinese design critique of a finished run's
+  report, appended below the report.
+- **Dual-protocol client** (`app/core/llm_client.py`, stdlib-only):
+  OpenAI-compatible (OpenAI / DeepSeek / Qwen / local Ollama …) and
+  Anthropic (Claude); configured under Settings → LLM with a Test
+  button.  API keys stay in local QSettings; leaving the model empty
+  disables all AI features.  Offline test suite fakes the single HTTP
+  chokepoint.
+
 ## v1.1 — 2026-07-10
 
 Sizing run management + release pipeline.

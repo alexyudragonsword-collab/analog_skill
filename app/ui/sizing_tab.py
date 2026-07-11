@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
-from app.core import sizing
+from app.core import llm_client, sizing
 from app.core.worker import Job, SimWorker
 from app.ui.job_mixin import JobTabMixin, fail_text
 from app.ui.layout_util import scroll_wrap
@@ -54,6 +54,8 @@ class SizingTab(QWidget, JobTabMixin):
                                 'large budgets)', userData='diff_evolution')
         if sizing.optuna_available():
             self.algo_combo.addItem('Optuna TPE', userData='optuna')
+        self.algo_combo.addItem('LLM-guided (AI — configure in Settings)',
+                                userData='llm')
 
         self.budget_spin = QSpinBox()
         self.budget_spin.setRange(10, 5000)
@@ -81,6 +83,15 @@ class SizingTab(QWidget, JobTabMixin):
         self.runs_btn.setToolTip('Saved optimization runs: load, compare '
                                  'convergence, warm-start from a best point.')
         self.runs_btn.clicked.connect(self._open_runs)
+        self.advise_btn = QPushButton('AI advise…')
+        self.advise_btn.setToolTip('Ask the configured LLM for suggested '
+                                   'bounds / starting point / budget.')
+        self.advise_btn.clicked.connect(self._ai_advise)
+        self.explain_btn = QPushButton('AI explain')
+        self.explain_btn.setToolTip("Ask the configured LLM to analyse the "
+                                    "last run's report (Chinese).")
+        self.explain_btn.setEnabled(False)
+        self.explain_btn.clicked.connect(self._ai_explain)
 
         self._status = QLabel('')
         self._status.setWordWrap(True)
@@ -113,6 +124,10 @@ class SizingTab(QWidget, JobTabMixin):
         btn_row.addWidget(self.cancel_btn)
         btn_row.addWidget(self.export_btn)
         btn_row.addWidget(self.runs_btn)
+        ai_row = QHBoxLayout()
+        ai_row.addWidget(self.advise_btn)
+        ai_row.addWidget(self.explain_btn)
+        ai_row.addStretch(1)
 
         left = QWidget()
         ll = QVBoxLayout(left)
@@ -120,6 +135,7 @@ class SizingTab(QWidget, JobTabMixin):
         ll.addWidget(tgt_box)
         ll.addWidget(var_box, stretch=1)
         ll.addLayout(btn_row)
+        ll.addLayout(ai_row)
         ll.addWidget(self._status)
         ll.addWidget(QLabel('Result:'))
         ll.addWidget(self._report, stretch=1)
@@ -222,6 +238,10 @@ class SizingTab(QWidget, JobTabMixin):
         key = self._key()
         budget = self.budget_spin.value()
         algo = self.algo_combo.currentData()
+        if algo == 'llm' and not llm_client.configured():
+            self._status.setText('<font color="red">LLM not configured — '
+                                 'set model + API key in Settings.</font>')
+            return
         workers = (1 if sizing.SIZING[key].kind == 'skill'
                    else self.workers_spin.value())
         self._cancel.clear()
@@ -244,7 +264,17 @@ class SizingTab(QWidget, JobTabMixin):
         self._status.setText(f'Optimizing ({budget} evaluations)… '
                              'progress in the log panel below.')
 
-    def on_job_finished(self, slot, run: sizing.SizingRun):
+    def on_job_finished(self, slot, result):
+        if slot == 'advise':
+            self._show_advice(result)
+            return
+        if slot == 'explain':
+            self.explain_btn.setEnabled(True)
+            self._report.appendPlainText('\n─── AI analysis ───\n'
+                                         + str(result))
+            self._status.setText('AI analysis appended below the report.')
+            return
+        run: sizing.SizingRun = result
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
         note = ' (cancelled — best-so-far kept)' if run.cancelled else ''
@@ -262,6 +292,7 @@ class SizingTab(QWidget, JobTabMixin):
         """Display a run's report + convergence curve (GUI thread)."""
         self._last_run = run
         self.export_btn.setEnabled(True)
+        self.explain_btn.setEnabled(True)
         self._report.setPlainText(run.report())
         try:
             png = sizing.render_convergence(run)   # GUI thread (mpl policy)
@@ -275,9 +306,91 @@ class SizingTab(QWidget, JobTabMixin):
         self._viewer.show_pngs(pngs, current=len(pngs) - 1)
 
     def on_job_failed(self, slot, err):
-        self.run_btn.setEnabled(True)
-        self.cancel_btn.setEnabled(False)
+        if slot == 'advise':
+            self.advise_btn.setEnabled(True)
+        elif slot == 'explain':
+            self.explain_btn.setEnabled(self._last_run is not None)
+        else:
+            self.run_btn.setEnabled(True)
+            self.cancel_btn.setEnabled(False)
         self._status.setText(fail_text(err))
+
+    # ── AI advise / explain (one-shot LLM calls on the worker) ────────────
+    def _ai_advise(self):
+        if self.has_job('advise'):
+            return
+        if not llm_client.configured():
+            self._status.setText('<font color="red">LLM not configured — '
+                                 'set model + API key in Settings.</font>')
+            return
+        try:
+            variables = self._read_table()
+            overrides = self._read_targets()
+        except ValueError as exc:
+            self._status.setText(f'<font color="red">{exc}</font>')
+            return
+        key = self._key()
+
+        def job():
+            from app.core import llm_sizing
+            return llm_sizing.suggest_setup(key, variables, overrides)
+
+        self.advise_btn.setEnabled(False)
+        self.submit_job('advise', Job(kind='sizing', fn=job,
+                                      label=f'AI advice: {key}'))
+        self._status.setText('Asking the LLM for setup advice…')
+
+    def _show_advice(self, result):
+        self.advise_btn.setEnabled(True)
+        suggestions, rationale = result
+        budget = suggestions.pop('_budget', None)
+        if not suggestions and budget is None:
+            self._status.setText('AI returned no applicable suggestion.')
+            return
+        lines = [f'{n}:  init {d["init"]:g},  range '
+                 f'[{d["lo"]:g}, {d["hi"]:g}]'
+                 for n, d in suggestions.items()]
+        if budget is not None:
+            lines.append(f'budget: {budget} evaluations')
+        answer = QMessageBox.question(
+            self, 'AI setup advice',
+            (rationale + '\n\n' if rationale else '')
+            + '\n'.join(lines) + '\n\nApply to the tables?',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        applied = 0
+        for row in range(self._table.rowCount()):
+            name = self._table.item(row, 0).text()
+            if name in suggestions:
+                d = suggestions[name]
+                for col, val in ((1, d['init']), (2, d['lo']),
+                                 (3, d['hi'])):
+                    self._table.item(row, col).setText(f'{val:g}')
+                applied += 1
+        if budget is not None:
+            self.budget_spin.setValue(int(budget))
+        self._status.setText(f'Applied AI suggestions to {applied} '
+                             'variable(s).')
+
+    def _ai_explain(self):
+        if self._last_run is None or self.has_job('explain'):
+            return
+        if not llm_client.configured():
+            self._status.setText('<font color="red">LLM not configured — '
+                                 'set model + API key in Settings.</font>')
+            return
+        run = self._last_run
+        variables = sizing.parse_variables(run.circuit)
+
+        def job():
+            from app.core import llm_sizing
+            return llm_sizing.explain_run(run, variables)
+
+        self.explain_btn.setEnabled(False)
+        self.submit_job('explain', Job(kind='sizing', fn=job,
+                                       label='AI explain'))
+        self._status.setText('Asking the LLM to analyse the report…')
 
     def _export(self):
         if self._last_run is None:
