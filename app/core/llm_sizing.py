@@ -194,19 +194,21 @@ def run_loop(circuit: str, variables: list[VarSpec], overrides,
 # ─────────────────────────────────────────────────────────────────────────────
 def explain_run(run, variables: list[VarSpec] | None = None,
                 chat=None) -> str:
-    """Design critique of a finished run, in Chinese."""
+    """Design critique of a finished run, in English."""
     chat = chat or llm_client.chat
     lines = [run.report()]
     if variables:
         lines += ['', 'Variable bounds:'] + _variable_lines(variables)
-    prompt = ('下面是一次模拟电路尺寸自动优化的结果报告。请用中文简要分析:'
-              '1) 哪些指标达标/未达标,瓶颈在哪;2) 从电路原理出发,'
-              '哪些变量最值得调整、朝哪个方向;3) 变量边界或指标目标'
-              '是否需要放宽/收紧。控制在 300 字以内。\n\n'
-              + '\n'.join(lines))
+    prompt = ('Below is the result report of an automatic analog-circuit '
+              'sizing run. Briefly analyse: 1) which metrics meet/miss '
+              'their targets and where the bottleneck is; 2) from circuit '
+              'fundamentals, which variables are most worth adjusting and '
+              'in which direction; 3) whether any variable bounds or metric '
+              'targets should be relaxed or tightened. Keep it under 150 '
+              'words.\n\n' + '\n'.join(lines))
     return chat([{'role': 'user', 'content': prompt}],
                 system='You are an expert analog IC designer. '
-                       'Answer in Chinese.').strip()
+                       'Answer in English.').strip()
 
 
 def suggest_setup(circuit: str, variables: list[VarSpec],
@@ -217,7 +219,7 @@ def suggest_setup(circuit: str, variables: list[VarSpec],
     prompt = (describe_circuit(circuit, variables, overrides)
               + '\n\nBefore optimizing, suggest a good starting point and '
                 'search ranges from circuit fundamentals.  Answer STRICT '
-                'JSON only: {"rationale": "<=3 sentences (Chinese)", '
+                'JSON only: {"rationale": "<=3 sentences (English)", '
                 '"budget": <int>, '
                 '"variables": {"<name>": {"init": x, "lo": x, "hi": x}, '
                 '...}} — only include variables worth changing.')

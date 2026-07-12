@@ -19,7 +19,7 @@ AI-assisted design (optional, bring-your-own LLM API).
   unparseable reply falls back to Sobol sampling for that round.
 - **AI advise…**: pre-run suggestions for per-variable init/bounds and
   budget, applied to the tables on confirmation.
-- **AI explain**: one-click Chinese design critique of a finished run's
+- **AI explain**: one-click English design critique of a finished run's
   report, appended below the report.
 - **Dual-protocol client** (`app/core/llm_client.py`, stdlib-only):
   OpenAI-compatible (OpenAI / DeepSeek / Qwen / local Ollama …) and
