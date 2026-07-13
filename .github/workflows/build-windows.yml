@@ -132,6 +132,12 @@ jobs:
             --include-module=matplotlib.backends.backend_qtagg `
             --include-module=scipy.stats `
             --include-module=scipy.signal `
+            --nofollow-import-to=optuna `
+            --nofollow-import-to=sqlalchemy `
+            --nofollow-import-to=greenlet `
+            --nofollow-import-to=alembic `
+            --nofollow-import-to=mako `
+            --nofollow-import-to=colorlog `
             --include-package-data=matplotlib `
             --include-data-dir=app/resources=app_resources `
             --include-data-dir=transistor-models/assets/models/bulk_cmos=bulk_models `

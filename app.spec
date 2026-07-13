@@ -82,6 +82,11 @@ a = Analysis(
         'PySide6.QtSvgWidgets', 'PySide6.QtTest', 'PySide6.QtXml',
         'PySide6.Qt3DCore', 'PySide6.Qt3DRender', 'PySide6.Qt3DInput',
         'PySide6.Qt3DLogic', 'PySide6.Qt3DAnimation', 'PySide6.Qt3DExtras',
+        # optuna is a source-only optional (requirements-dev.txt); the frozen
+        # builds ship the built-in Sobol+Powell / DE optimizers and the GUI
+        # hides the TPE option when optuna is absent.  Excluding it drops its
+        # heavy dependency tree (SQLAlchemy, greenlet, alembic, Mako, ...).
+        'optuna', 'sqlalchemy', 'greenlet', 'alembic', 'mako', 'colorlog',
     ],
     noarchive=False,
 )
@@ -99,6 +104,22 @@ _QT_DROP = (
     'Qt6RemoteObjects', 'Qt6Scxml', 'Qt6Charts', 'Qt6DataVisualization',
     'Qt63D', 'Qt6Test', 'Qt6Designer', 'Qt6Help', 'Qt6UiTools',
     'Qt6SerialPort', 'Qt6StateMachine', 'Qt6TextToSpeech',
+    # EglFS is for embedded/kiosk (framebuffer) targets — never used on a
+    # desktop; dropping it and its GTK platform-theme sibling lets the whole
+    # GTK widget stack below be pruned
+    'Qt6EglFSDeviceIntegration', 'Qt6EglFsKmsSupport',
+)
+
+# The GTK3 platform-theme plugin (libqgtk3) drags in the entire GTK widget
+# toolkit (~12 MB on Linux) purely for native theming.  Without it Qt falls
+# back to its Fusion style — fully functional.  These libs are pulled ONLY by
+# libqgtk3; glib/gobject/gio/gthread are intentionally NOT here because Qt6's
+# own Core/Gui/Widgets link libglib (verified via ldd) and must stay.
+_GTKLIB_DROP = (
+    'libgtk-3', 'libgdk-3', 'libgdk_pixbuf-2.0',
+    'libpango-1.0', 'libpangocairo-1.0', 'libpangoft2-1.0', 'libcairo',
+    'libcairo-gobject', 'libatk-1.0', 'libatk-bridge-2.0', 'libatspi',
+    'libepoxy',
 )
 
 
@@ -109,11 +130,15 @@ def _keep(entry):
     base = name.rsplit('/', 1)[-1]
     if any(tag in base for tag in _QT_DROP):
         return False
+    if any(base.startswith(tag) for tag in _GTKLIB_DROP):
+        return False
     # matching Qt plugin directories (qml/, virtualkeyboard/, …)
     for sub in ('/Qt/qml/', '/plugins/virtualkeyboard/',
                 '/plugins/multimedia/', '/plugins/position/',
                 '/plugins/sensors/', '/plugins/sqldrivers/',
-                '/plugins/tls/', '/plugins/networkinformation/'):
+                '/plugins/tls/', '/plugins/networkinformation/',
+                '/plugins/platformthemes/',         # libqgtk3 (GTK stack)
+                '/plugins/egldeviceintegrations/'):  # EglFS (embedded only)
         if sub in name:
             return False
     return True
@@ -131,7 +156,7 @@ exe = EXE(
     exclude_binaries=True,
     name='AnalogStudio',
     debug=False,
-    strip=False,
+    strip=True,      # drop ELF symbols on Linux (~a few MB); no-op on Windows
     upx=False,
     console=False,
 )
@@ -140,7 +165,7 @@ coll = COLLECT(
     exe,
     a.binaries,
     a.datas,
-    strip=False,
+    strip=True,
     upx=False,
     name='AnalogStudio',
 )

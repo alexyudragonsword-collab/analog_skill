@@ -21,6 +21,12 @@ AI-assisted design (optional, bring-your-own LLM API).
   budget, applied to the tables on confirmation.
 - **AI explain**: one-click English design critique of a finished run's
   report, appended below the report.
+- **Smaller bundles**: the frozen builds no longer ship optuna and its
+  dependency tree (SQLAlchemy, greenlet, alembic, …) — it is a
+  source-only optional and the GUI hides the TPE option when absent.
+  On Linux the unused Qt GTK3 platform-theme + EglFS plugins and the
+  whole GTK widget stack are pruned, and ELF symbols are stripped
+  (~47 MB off the Linux package; ~8–10 MB off Windows).
 - **Dual-protocol client** (`app/core/llm_client.py`, stdlib-only):
   OpenAI-compatible (OpenAI / DeepSeek / Qwen / local Ollama …) and
   Anthropic (Claude); configured under Settings → LLM with a Test
