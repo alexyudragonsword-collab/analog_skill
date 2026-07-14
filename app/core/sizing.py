@@ -275,7 +275,7 @@ def _build_registry() -> dict[str, SizingSpec]:
         kind='amp', netlist='CM_OTA_Pin_3', variables='CM_OTA_Pin_3',
         testbench='TB_Amplifier_ACDC.cir', metrics=_cm_ota_metrics(),
         fixed=('CLOAD', 'VCM'), eval_seconds=3.5,
-        subckt='CM_OTA_Pin_3', pkg='studio')
+        subckt='CM_OTA_Pin_3', pkg='studio', schematic='CM_OTA_Pin_3.png')
     return reg
 
 

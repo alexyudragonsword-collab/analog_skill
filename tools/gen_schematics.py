@@ -23,6 +23,10 @@ import schemdraw
 import schemdraw.elements as elm
 
 OUT_DIR = Path(__file__).resolve().parent.parent / 'app' / 'resources' / 'schematics'
+# studio_circuits Sizing entries keep their schematic next to the netlist,
+# matching the AnalogGym amp layout (<tree>/amp/schematic/<name>.png)
+STUDIO_SCH_DIR = (Path(__file__).resolve().parent.parent
+                  / 'studio_circuits' / 'amp' / 'schematic')
 
 INK = '#1c2833'
 NODE = '#5d6d7e'
@@ -696,12 +700,124 @@ def draw_bootstrap():
     save(d, 'bootstrap')
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 6) Current-mirror (symmetric) OTA — studio_circuits (Sizing tab)
+# ─────────────────────────────────────────────────────────────────────────────
+def draw_cm_ota():
+    """PMOS-input current-mirror OTA — matches studio_circuits/amp/netlist/
+    CM_OTA_Pin_3 device-by-device (self-biased from one internal Ibias)."""
+    d = drawing()
+    Y_VDD, Y_VSS = 8.0, 0.0
+    Y_PD = Y_VDD - FET_H            # PMOS drains (6.33)
+    Y_NT = Y_PD                     # tail / input-pair source bus
+    Y_ND = 4.4                      # input-pair (PMOS) drains  n1/n2
+    Y_MND = FET_H                   # NMOS mirror drains (1.67)
+
+    X_B = -3.6                      # bias: MB diode + Ibias
+    X1, X2 = 0.0, 3.6              # input pair / mirror-input legs
+    XT = (X1 + X2) / 2              # tail
+    X5 = 7.2                        # fold: M5 + M7 diode -> n3
+    X6 = 10.8                       # output: M8 + M6 -> OUT
+
+    tint(d, X_B - 1.1, Y_VSS + 0.1, X_B + 1.1, Y_VDD - 0.15, TINTS['bias'],
+         'bias')
+    tint(d, X1 - 1.5, Y_ND - 0.4, X2 + 1.5, Y_VDD - 0.15, TINTS['input'],
+         'PMOS input pair + tail', label_at='top')
+    tint(d, X1 - 1.5, Y_VSS + 0.1, X2 + 1.5, Y_MND + 0.7, TINTS['mirror'],
+         'NMOS mirror inputs')
+    tint(d, X5 - 1.3, Y_VSS + 0.1, X6 + 2.0, Y_VDD - 0.15, TINTS['out'],
+         'mirror out + fold + output', label_at='top')
+
+    rail(d, X_B - 1.4, X6 + 2.4, Y_VDD, 'VDDA')
+    rail(d, X_B - 1.4, X6 + 2.4, Y_VSS, 'GNDA')
+
+    # bias: MB PMOS diode + Ibias sink; VB = npb
+    mb = pmos(d, (X_B, Y_VDD), 'MB', '')
+    npb = (X_B, Y_PD)
+    wire(d, mb.absanchors['drain'], npb)
+    gb = mb.absanchors['gate']
+    wire(d, (gb.x, gb.y), (X_B, gb.y)); dot(d, (X_B, gb.y)); dot(d, npb)
+    node_label(d, (X_B - 0.25, Y_PD + 0.2), 'VB', halign='right')
+    d.add(elm.SourceI().at((X_B, Y_PD)).theta(-90).length(Y_PD)
+          .label('Ibias', fontsize=8, loc='right'))
+
+    # tail M0 (PMOS), gate = VB
+    m0 = pmos(d, (XT, Y_VDD), 'M0', '', left=True)
+    nt = (XT, Y_PD)
+    wire(d, m0.absanchors['drain'], nt)
+    g0 = m0.absanchors['gate']
+    wire(d, npb, (X_B, g0.y), (g0.x, g0.y))
+    node_label(d, (XT + 0.15, Y_PD + 0.22), 'nt', halign='left')
+
+    # input pair M1(INN,left) / M2(INP,right); sources on the nt bus
+    m1 = pmos(d, (X1, Y_NT), 'M1', '', left=True)
+    m2 = pmos(d, (X2, Y_NT), 'M2', '')
+    wire(d, (X1, Y_NT), (X2, Y_NT)); dot(d, nt)
+    n1 = (X1, Y_ND); n2 = (X2, Y_ND)
+    wire(d, m1.absanchors['drain'], n1)
+    wire(d, m2.absanchors['drain'], n2)
+    g1 = m1.absanchors['gate']; g2 = m2.absanchors['gate']
+    wire(d, (g1.x, g1.y), (X1 - 2.0, g1.y)); port(d, (X1 - 2.0, g1.y), 'VINN')
+    wire(d, (g2.x, g2.y), (X2 + 2.0, g2.y))
+    port(d, (X2 + 2.0, g2.y), 'VINP', 'right')
+
+    # NMOS mirror-input diodes M3/M4 (drain=gate=n1/n2)
+    m3 = nmos(d, (X1, Y_MND), 'M3', '', left=True)
+    m4 = nmos(d, (X2, Y_MND), 'M4', '')
+    wire(d, n1, (X1, Y_MND)); wire(d, n2, (X2, Y_MND))
+    wire(d, m3.absanchors['source'], (X1, Y_VSS))
+    wire(d, m4.absanchors['source'], (X2, Y_VSS))
+    g3 = m3.absanchors['gate']; g4 = m4.absanchors['gate']
+    wire(d, (g3.x, g3.y), (X1, g3.y)); dot(d, (X1, g3.y))
+    wire(d, (g4.x, g4.y), (X2, g4.y)); dot(d, (X2, g4.y))
+    dot(d, n1); node_label(d, (X1 - 0.25, Y_ND + 0.15), 'n1', halign='right')
+    dot(d, n2); node_label(d, (X2 + 0.25, Y_ND + 0.15), 'n2', halign='left')
+
+    # fold: M5(NMOS, gate n1) + M7(PMOS diode) -> n3
+    m5 = nmos(d, (X5, Y_MND), 'M5', '')
+    wire(d, m5.absanchors['source'], (X5, Y_VSS))
+    g5 = m5.absanchors['gate']
+    wire(d, (X1, Y_ND), (X1, 3.5))                       # n1 gate bus (middle)
+    wire(d, (X1, 3.5), (g5.x, 3.5), (g5.x, g5.y)); dot(d, (X1, 3.5))
+    m7 = pmos(d, (X5, Y_VDD), 'M7', '')
+    n3 = (X5, Y_PD)
+    wire(d, m7.absanchors['drain'], n3)
+    wire(d, n3, (X5, Y_MND))                             # n3 down to M5 drain
+    g7 = m7.absanchors['gate']
+    wire(d, (g7.x, g7.y), (X5, g7.y)); dot(d, (X5, g7.y))
+    dot(d, n3); node_label(d, (X5 + 0.2, Y_PD + 0.2), 'n3', halign='left')
+
+    # output: M8(PMOS, gate n3) + M6(NMOS, gate n2) -> OUT
+    m8 = pmos(d, (X6, Y_VDD), 'M8', '', left=True)
+    out_t = (X6, Y_PD)
+    wire(d, m8.absanchors['drain'], out_t)
+    g8 = m8.absanchors['gate']
+    wire(d, (X5, g7.y), (g8.x, g8.y))                    # n3 -> M8 gate
+    m6 = nmos(d, (X6, Y_MND), 'M6', '')
+    wire(d, m6.absanchors['source'], (X6, Y_VSS))
+    g6 = m6.absanchors['gate']
+    wire(d, (X2, Y_ND), (X2, 2.9))                       # n2 gate bus (middle)
+    wire(d, (X2, 2.9), (g6.x, 2.9), (g6.x, g6.y)); dot(d, (X2, 2.9))
+    wire(d, out_t, (X6, Y_MND)); dot(d, out_t)
+    wire(d, out_t, (X6 + 1.9, Y_PD)); port(d, (X6 + 1.9, Y_PD), 'VOUT', 'right')
+    d.add(elm.Capacitor().at((X6 + 0.95, Y_PD)).to((X6 + 0.95, Y_VSS))
+          .label('CL', fontsize=8, loc='bottom'))
+
+    title(d, (X1 + X6) / 2, Y_VDD + 0.8,
+          'Current-Mirror (Symmetric) OTA   (SKY130, VDDA = 1.8 V)')
+    STUDIO_SCH_DIR.mkdir(parents=True, exist_ok=True)
+    path = STUDIO_SCH_DIR / 'CM_OTA_Pin_3.png'
+    d.save(str(path), dpi=200, transparent=False)
+    print(f'  saved {path}')
+
+
 DRAWERS = {
     'ota5t': draw_ota5t,
     'opamp2': draw_opamp2,
     'ldo': draw_ldo,
     'comparator': draw_comparator,
     'bootstrap': draw_bootstrap,
+    'cm_ota': draw_cm_ota,
 }
 
 

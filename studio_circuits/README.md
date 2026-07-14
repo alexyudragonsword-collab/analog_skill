@@ -25,6 +25,10 @@ top-level `analoggym/` tree and NOTICE for its license.
 |------|----------|-------|
 | `amp/{netlist,variables}/CM_OTA_Pin_3` | PMOS-input current-mirror (symmetric) OTA | single-stage, self-biased, single-ended; genuine gain ↔ GBW ↔ power trade-off on a 500 pF load |
 
+Each circuit also ships a schemdraw schematic under `amp/schematic/<name>.png`
+(shown in the Sizing tab on selection), regenerated with
+`python tools/gen_schematics.py --only cm_ota`.
+
 The current-mirror OTA is single-stage, so every internal node is
 diode-connected and self-biasing — it converges robustly across the whole
 sizing box (unlike a cascode topology that needs delicate external bias
