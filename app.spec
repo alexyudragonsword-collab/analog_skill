@@ -9,9 +9,15 @@ synced by app/paths.py into a writable per-user workspace on first launch,
 so the frozen install directory is never written to at runtime.
 """
 
+import sys
 from pathlib import Path
 
 REPO = Path(SPECPATH)
+
+# strip and the GTK/EglFS pruning below are Linux-only: GNU `strip` corrupts
+# Windows PE DLLs (the exe then hangs at startup), and the GTK widget stack /
+# EglFS plugins simply don't exist in the Windows bundle.
+IS_WINDOWS = sys.platform == 'win32'
 
 EXCLUDE_DIRS = {'__pycache__', 'logs', 'plots'}
 
@@ -123,6 +129,16 @@ _GTKLIB_DROP = (
 )
 
 
+_DROP_PLUGIN_DIRS = ['/Qt/qml/', '/plugins/virtualkeyboard/',
+                     '/plugins/multimedia/', '/plugins/position/',
+                     '/plugins/sensors/', '/plugins/sqldrivers/',
+                     '/plugins/tls/', '/plugins/networkinformation/']
+if not IS_WINDOWS:
+    # GTK platform-theme (libqgtk3) + EglFS plugins — Linux/embedded only
+    _DROP_PLUGIN_DIRS += ['/plugins/platformthemes/',
+                          '/plugins/egldeviceintegrations/']
+
+
 def _keep(entry):
     name = entry[0].replace('\\', '/')
     if '/Qt/translations/' in name:
@@ -130,15 +146,9 @@ def _keep(entry):
     base = name.rsplit('/', 1)[-1]
     if any(tag in base for tag in _QT_DROP):
         return False
-    if any(base.startswith(tag) for tag in _GTKLIB_DROP):
+    if not IS_WINDOWS and any(base.startswith(tag) for tag in _GTKLIB_DROP):
         return False
-    # matching Qt plugin directories (qml/, virtualkeyboard/, …)
-    for sub in ('/Qt/qml/', '/plugins/virtualkeyboard/',
-                '/plugins/multimedia/', '/plugins/position/',
-                '/plugins/sensors/', '/plugins/sqldrivers/',
-                '/plugins/tls/', '/plugins/networkinformation/',
-                '/plugins/platformthemes/',         # libqgtk3 (GTK stack)
-                '/plugins/egldeviceintegrations/'):  # EglFS (embedded only)
+    for sub in _DROP_PLUGIN_DIRS:
         if sub in name:
             return False
     return True
@@ -156,8 +166,8 @@ exe = EXE(
     exclude_binaries=True,
     name='AnalogStudio',
     debug=False,
-    strip=True,      # drop ELF symbols on Linux (~a few MB); no-op on Windows
-    upx=False,
+    strip=not IS_WINDOWS,   # ELF symbol strip on Linux; NEVER on Windows (GNU
+    upx=False,              # strip corrupts PE DLLs → the exe hangs at startup)
     console=False,
 )
 
@@ -165,7 +175,7 @@ coll = COLLECT(
     exe,
     a.binaries,
     a.datas,
-    strip=True,
+    strip=not IS_WINDOWS,
     upx=False,
     name='AnalogStudio',
 )
