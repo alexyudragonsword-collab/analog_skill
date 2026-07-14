@@ -7,8 +7,22 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## v1.2 — 2026-07-11
 
-AI-assisted design (optional, bring-your-own LLM API).
+AI-assisted design (optional, bring-your-own LLM API) + a new sizing circuit.
 
+- **New sizing circuit — current-mirror OTA** (`studio_circuits/`, the 27th
+  Sizing entry).  Every other open, device-accurate, licensed circuit source
+  is already wired in (AnalogGym's 20 SKY130 circuits + circuit-skills' 6 PTM
+  entries); the remaining open LLM-benchmark repos (AnalogCoder, Analogagent)
+  ship only level-1 ideal MOSFET models — and AnalogCoder has no license —
+  so they don't fit the real-PDK pipeline.  This entry is therefore an
+  *original* single-stage PMOS-input symmetric OTA authored on the open SKY130
+  PDK, not vendored: it reuses the AnalogGym `.subckt gnda vdda vinn vinp vout`
+  contract + shared `TB_Amplifier_ACDC` harness, so it inherits the full
+  9-metric report (DC gain / GBW / phase margin / PSRR± / CMRR / power /
+  offset / temp-coeff) and the parallel evaluator.  Self-biased from one
+  internal reference current, it converges robustly across the whole sizing
+  box; default ≈ 42 dB / 0.37 MHz / PM 90° / 0.42 mW, with a genuine
+  gain ↔ GBW ↔ power trade-off on its 500 pF load.
 - **LLM-guided sizing algorithm**: a fourth `optimize()` algorithm where
   the configured LLM reads the circuit netlist / parameter semantics,
   bounds and targets, proposes candidate sizings round by round, and

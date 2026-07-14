@@ -19,6 +19,7 @@ on:
       - 'ngspice/**'
       - 'transistor-models/**'
       - 'analoggym/**'
+      - 'studio_circuits/**'
       - 'requirements*.txt'
       - 'app.spec'
       - '.github/workflows/build-windows.yml'
@@ -143,6 +144,7 @@ jobs:
             --include-data-dir=transistor-models/assets/models/bulk_cmos=bulk_models `
             --include-data-dir=transistor-models/assets/models/finfet=finfet_models `
             --include-data-dir=analoggym=analoggym `
+            --include-data-dir=studio_circuits=studio_circuits `
             --windows-console-mode=disable `
             --force-stderr-spec="{PROGRAM_BASE}.err.txt" `
             --force-stdout-spec="{PROGRAM_BASE}.out.txt" `

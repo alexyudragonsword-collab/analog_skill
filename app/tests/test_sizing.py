@@ -22,9 +22,11 @@ def test_registry_and_assets():
                                   'ldo_simple', 'ldo_folded_cascode',
                                   'skill_ota5t', 'skill_opamp2',
                                   'skill_ldo', 'skill_comparator',
-                                  'skill_comparator_fast', 'skill_bootstrap'}
+                                  'skill_comparator_fast', 'skill_bootstrap',
+                                  'studio_cm_ota'}
     # 15 amps + basic LDO + 4 variants + 6 circuit-skills (PTM)
-    assert len(sizing.SIZING) == 26
+    # + 1 studio_circuits amp (current-mirror OTA)
+    assert len(sizing.SIZING) == 27
     for key, spec in sizing.SIZING.items():
         assert spec.metrics, key
         assert sizing.parse_variables(key), key
@@ -33,7 +35,7 @@ def test_registry_and_assets():
             assert spec.skill_key in circuits.CIRCUITS, key
             assert sizing.schematic_path(key) is not None, key
             continue
-        root = paths.analoggym_dir() / spec.kind
+        root = sizing._pkg_root(spec) / spec.kind
         assert (root / 'netlist' / spec.netlist).is_file(), key
         assert (root / 'variables' / spec.variables).is_file(), key
         assert (root / 'testbench' / spec.testbench).is_file(), key
@@ -158,6 +160,30 @@ def test_ldo_variant_evaluate():
     m = sizing.evaluate('ldo_1', values)
     for k in ('pm_maxload', 'gbw_maxload', 'lnr', 'lr', 'iq'):
         assert k in m, k
+
+
+@needs_ngspice
+def test_studio_cm_ota_evaluate_and_optimize():
+    """The original current-mirror OTA (studio_circuits, not AnalogGym)
+    reuses the shared amp harness via _pkg_root and yields the full
+    9-metric report; a micro-optimization must not raise its cost."""
+    spec = sizing.SIZING['studio_cm_ota']
+    assert spec.pkg == 'studio'
+    variables = sizing.parse_variables('studio_cm_ota')
+    names = {v.name for v in variables}
+    assert {'CURRENT_0_BIAS', 'W_IN', 'M_MIRO', 'L_LOAD'} <= names
+    assert 'CLOAD' not in names and 'VCM' not in names   # TB conditions fixed
+    values = {v.name: v.default for v in variables}
+    m = sizing.evaluate('studio_cm_ota', values)
+    # single-stage current-mirror OTA on a 500 pF load: ~42 dB / ~0.37 MHz
+    assert 30 < m['dcgain'] < 55
+    assert m['gain_bandwidth_product'] > 1e5
+    assert m['phase_in_deg'] > 45
+    assert 0 < m['power'] < 5e-3
+    run = sizing.optimize('studio_cm_ota', variables, budget=6,
+                          algo='sobol_powell', workers=2)
+    assert run.evals == 6
+    assert run.best_cost <= run.initial_cost
 
 
 @needs_ngspice

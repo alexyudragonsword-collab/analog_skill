@@ -51,6 +51,9 @@ datas = (
     + collect_tree(REPO / 'circuit-skills', 'circuit_skills')
     # vendored AnalogGym subset (Sizing tab): netlists/testbenches + PDK zip
     + collect_tree(REPO / 'analoggym', 'analoggym')
+    # original (non-vendored) Analog Studio sizing circuits — same layout,
+    # reuse the AnalogGym harness/PDK at render time
+    + collect_tree(REPO / 'studio_circuits', 'studio_circuits')
 )
 
 a = Analysis(

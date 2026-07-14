@@ -1,0 +1,19 @@
+.subckt cm_ota_pin_3 gnda vdda vinn vinp vout
+* PMOS-input current-mirror (symmetric) OTA, self-biased single internal Iref
+* --- bias: pull Iref from a PMOS diode at vdda -> tail bias node npb ---
+Ibias npb gnda 'CURRENT_0_BIAS'
+XMB  npb npb vdda vdda sky130_fd_pr__pfet_01v8 L='L_TAIL' W='W_TAIL' m='M_MB'
+XM0  nt  npb vdda vdda sky130_fd_pr__pfet_01v8 L='L_TAIL' W='W_TAIL' m='M_TAIL'
+* --- PMOS input pair ---
+XM1  n1  vinn nt vdda sky130_fd_pr__pfet_01v8 L='L_IN' W='W_IN' m='M_IN'
+XM2  n2  vinp nt vdda sky130_fd_pr__pfet_01v8 L='L_IN' W='W_IN' m='M_IN'
+* --- NMOS mirror inputs (diode) ---
+XM3  n1  n1  gnda gnda sky130_fd_pr__nfet_01v8 L='L_MIR' W='W_MIR' m='M_MIR'
+XM4  n2  n2  gnda gnda sky130_fd_pr__nfet_01v8 L='L_MIR' W='W_MIR' m='M_MIR'
+* --- NMOS mirror outputs (ratio M_MIRO:M_MIR) ---
+XM5  n3   n1 gnda gnda sky130_fd_pr__nfet_01v8 L='L_MIR' W='W_MIR' m='M_MIRO'
+XM6  vout n2 gnda gnda sky130_fd_pr__nfet_01v8 L='L_MIR' W='W_MIR' m='M_MIRO'
+* --- top PMOS mirror (n3 diode -> vout) ---
+XM7  n3   n3 vdda vdda sky130_fd_pr__pfet_01v8 L='L_LOAD' W='W_LOAD' m='M_LOAD'
+XM8  vout n3 vdda vdda sky130_fd_pr__pfet_01v8 L='L_LOAD' W='W_LOAD' m='M_LOAD'
+.ends cm_ota_pin_3

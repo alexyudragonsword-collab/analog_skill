@@ -162,6 +162,23 @@ def analoggym_dir() -> Path:
     return repo_root() / 'analoggym'
 
 
+def studio_circuits_dir() -> Path:
+    """Root of the original (non-vendored) Analog Studio sizing circuits.
+
+    Dev: studio_circuits/ in the repo.  Frozen: bundled read-only copy —
+    same treatment as analoggym_dir(); the shared testbench + PDK still
+    come from their own trees at render time.
+    """
+    if is_frozen():
+        base = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
+        for cand in (base / 'studio_circuits',
+                     Path(sys.executable).parent / '_internal'
+                     / 'studio_circuits'):
+            if cand.is_dir():
+                return cand
+    return repo_root() / 'studio_circuits'
+
+
 def sky130_pdk_dir() -> Path:
     """SKY130 ngspice model root, extracted from the vendored zip on first
     use.  Lives *next to* the versioned workspace (it is version-independent

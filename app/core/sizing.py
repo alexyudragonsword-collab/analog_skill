@@ -74,6 +74,7 @@ class SizingSpec:
     skill_key: str | None = None  # kind='skill': key into circuits.CIRCUITS
     mode: str = ''                # skill variant: '' | 'fast' | 'ron'
     verify_key: str | None = None # re-evaluate the best point on this circuit
+    pkg: str = 'analoggym'        # asset tree: 'analoggym' | 'studio'
 
 
 def _amp_metrics() -> list:
@@ -89,6 +90,30 @@ def _amp_metrics() -> list:
         MetricSpec('power', 'Power', 'W', 0.5e-3, 'min', 1.0),
         MetricSpec('vos25', 'Offset (25C)', 'V', 0.1e-3, 'absmin', 0.5),
         MetricSpec('tc', 'Temp. coeff.', 'V/°C', 10e-6, 'absmin', 0.5),
+    ]
+
+
+def _cm_ota_metrics() -> list:
+    """Targets for the single-stage current-mirror OTA (studio_circuits).
+
+    Same TB_Amplifier_ACDC metric keys as the AnalogGym amps, but the
+    targets are calibrated for a single-stage topology on a 500 pF load
+    (measured default: 42 dB / 0.37 MHz / PM 90° / 0.42 mW).  A single
+    stage tops out near ~45 dB, and GBW trades directly against power and
+    (weakly) against gain — so gain 44 dB and GBW 0.6 MHz are reachable
+    but not simultaneously free, which is the whole point of the sizing."""
+    return [
+        MetricSpec('dcgain', 'DC gain', 'dB', 44.0, 'max', 2.0),
+        MetricSpec('gain_bandwidth_product', 'GBW', 'Hz', 0.6e6, 'max', 2.0),
+        # single-pole-dominated → naturally ~90°; require ≥ 55°, no penalty
+        # for the extra stability
+        MetricSpec('phase_in_deg', 'Phase margin', 'deg', 55.0, 'max', 1.0),
+        MetricSpec('cmrrdc', 'CMRR (dc)', 'dB', -60.0, 'min', 1.0),
+        MetricSpec('dcpsrp', 'PSRR+ (dc)', 'dB', -45.0, 'min', 1.0),
+        MetricSpec('dcpsrn', 'PSRR- (dc)', 'dB', -50.0, 'min', 1.0),
+        MetricSpec('power', 'Power', 'W', 1.0e-3, 'min', 1.0),
+        MetricSpec('vos25', 'Offset (25C)', 'V', 5e-3, 'absmin', 0.5),
+        MetricSpec('tc', 'Temp. coeff.', 'V/°C', 60e-6, 'absmin', 0.5),
     ]
 
 
@@ -242,6 +267,15 @@ def _build_registry() -> dict[str, SizingSpec]:
             MetricSpec('ron_flat', 'Ron max/min', '', 1.2, 'min', 1.5),
         ],
         fixed=(), eval_seconds=1.5, skill_key='bootstrap', mode='ron')
+    # original studio_circuits (authored for this app, not vendored):
+    # single-stage PMOS-input current-mirror OTA on SKY130, reusing the
+    # AnalogGym amp testbench/harness for the full 9-metric report
+    reg['studio_cm_ota'] = SizingSpec(
+        title='Current-mirror OTA — Analog Studio (SKY130, 1.8 V)',
+        kind='amp', netlist='CM_OTA_Pin_3', variables='CM_OTA_Pin_3',
+        testbench='TB_Amplifier_ACDC.cir', metrics=_cm_ota_metrics(),
+        fixed=('CLOAD', 'VCM'), eval_seconds=3.5,
+        subckt='CM_OTA_Pin_3', pkg='studio')
     return reg
 
 
@@ -277,8 +311,16 @@ def _default_bounds(name: str, default: float) -> tuple[float, float, bool]:
         default * 4 if default > 0 else default / 4, False
 
 
+def _pkg_root(spec: SizingSpec) -> Path:
+    """Asset tree for a netlist/variables/testbench circuit: the vendored
+    AnalogGym subset or the original studio_circuits tree (both share the
+    <root>/<kind>/{netlist,variables,testbench} layout)."""
+    return (paths.studio_circuits_dir() if spec.pkg == 'studio'
+            else paths.analoggym_dir())
+
+
 def _variables_path(spec: SizingSpec) -> Path:
-    return (paths.analoggym_dir() / spec.kind / 'variables' / spec.variables)
+    return (_pkg_root(spec) / spec.kind / 'variables' / spec.variables)
 
 
 def _skill_variables(spec: SizingSpec) -> list[VarSpec]:
@@ -346,7 +388,7 @@ def schematic_path(circuit: str) -> Path | None:
         return circuits.schematic_path(spec.skill_key)
     if not spec.schematic:
         return None
-    p = paths.analoggym_dir() / spec.kind / 'schematic' / spec.schematic
+    p = _pkg_root(spec) / spec.kind / 'schematic' / spec.schematic
     return p if p.is_file() else None
 
 
@@ -382,8 +424,8 @@ def _render_testbench(spec: SizingSpec, run: Path,
     single_thread injects `set num_threads=1` into the control block:
     ngspice's internal threading spin-waits badly under concurrent
     instances (measured: 4 parallel runs 10.2 s → 4.5 s wall with it)."""
-    src = paths.analoggym_dir() / spec.kind / 'testbench' / spec.testbench
-    netlist_dir = paths.analoggym_dir() / spec.kind / 'netlist'
+    src = _pkg_root(spec) / spec.kind / 'testbench' / spec.testbench
+    netlist_dir = _pkg_root(spec) / spec.kind / 'netlist'
     netlist = netlist_dir / spec.netlist
     pdk = paths.sky130_pdk_dir()
     out_lines = []

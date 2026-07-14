@@ -261,6 +261,18 @@ max/min,变量为开关宽度 W.sw 与时钟频率,约 0.5 秒/次)。
 变量即 Circuits 页的同一组参数(含 W.xxx 宽度字典);优化在 PTM 模型上进行,
 结果可回填到 Circuits 页复跑完整表征。</p>
 
+<p><b>自建电流镜 OTA</b>(下拉中 "Current-mirror OTA — Analog Studio"):
+其它开源、器件级精确、许可清晰的电路源已全部接入(AnalogGym 20 个 +
+circuit-skills 6 个);外部 LLM 基准库(AnalogCoder / Analogagent)只用
+level-1 理想模型、且 AnalogCoder 无 LICENSE,不适合本真实 PDK 流程。
+因此这条是<b>自建</b>(非 vendored,<code>studio_circuits/</code>)的
+单级 PMOS 输入电流镜(对称)OTA:复用 AnalogGym 的
+<code>.subckt gnda vdda vinn vinp vout</code> 契约与共享测试台,自动获得完整
+9 指标。单内部基准电流自偏置,每个内部节点都是二极管接法,故全尺寸区间
+稳健收敛(不像共源共栅需精细外偏置);默认 ≈ 42 dB / 0.37 MHz / PM 90° /
+0.42 mW,在 500 pF 负载上呈现真实的增益↔GBW↔功耗折衷。可与 AnalogGym
+运放一样并行评估。</p>
+
 <p><b>运行管理</b>:每次优化完成后自动保存为 JSON(工作区
 <code>sizing_runs/</code>);点 <b>Runs…</b> 打开已存运行列表——<b>Load</b>
 恢复报告与收敛曲线,<b>Compare</b> 多选叠加多次运行的收敛曲线,

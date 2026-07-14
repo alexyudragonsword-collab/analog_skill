@@ -320,6 +320,21 @@ Variables are the same parameter set as the Circuits tab (incl. the W.xxx
 width dictionary); optimization runs on the PTM models and the best
 sizing can be fed back into the Circuits tab for full characterization.</p>
 
+<p><b>Current-mirror OTA</b> ("Current-mirror OTA — Analog Studio" in the
+drop-down): every other open, device-accurate, licensed circuit source is
+already wired in (AnalogGym's 20 + circuit-skills' 6); the external
+LLM-benchmark repos (AnalogCoder, Analogagent) ship only level-1 ideal
+MOSFET models — and AnalogCoder has no license — so they don't fit this
+real-PDK pipeline. This entry is therefore an <b>original</b> (non-vendored,
+<code>studio_circuits/</code>) single-stage PMOS-input symmetric OTA that
+reuses the AnalogGym <code>.subckt gnda vdda vinn vinp vout</code> contract
+and shared testbench, so it earns the same full 9-metric report. Self-biased
+from one internal reference current with every internal node diode-connected,
+it converges robustly across the whole sizing box (unlike a cascode topology
+that needs delicate external bias voltages); default ≈ 42 dB / 0.37 MHz /
+PM 90° / 0.42 mW, with a genuine gain ↔ GBW ↔ power trade-off on its 500 pF
+load. It evaluates in parallel like the AnalogGym amps.</p>
+
 <p><b>Run management</b>: every completed optimization is auto-saved as
 JSON (workspace <code>sizing_runs/</code>). <b>Runs…</b> opens the list of
 saved runs — <b>Load</b> restores the report and convergence curve,
