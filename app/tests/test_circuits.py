@@ -95,3 +95,23 @@ def test_ldo_auto_design():
     pngs, report = res.render()
     assert 'Auto-Design Report' in report
     assert pngs
+
+
+def test_repoint_models_uses_workspace():
+    """Every skill's model dir must resolve to the space-free workspace copy
+    (NGSPICE_ASSETS), not its read-only install dir — an install path with a
+    space breaks ngspice's unquoted .include (frozen Windows bug)."""
+    import importlib
+    from app.core import circuits
+    for skill, sub, common_mod, lib in (
+            ('ota5t', 'five_transistor_ota/scripts', 'ota_common',
+             'ptm180.lib'),
+            ('comparator', 'comparator/scripts', 'comparator_common',
+             'ptm45hp.lib')):
+        scripts = paths.circuit_skills_dir() / sub
+        with circuits.skill_context(scripts):
+            common = importlib.import_module(common_mod)
+            circuits._repoint_models(common, lib)
+            assert str(paths.NGSPICE_ASSETS) in str(common.MODEL_PATH)
+            assert common.MODEL_PATH.endswith(lib)
+            assert (paths.NGSPICE_ASSETS / 'models' / lib).is_file()

@@ -132,6 +132,27 @@ def _apply_params(common, values: dict):
             setattr(common, attr, val)
 
 
+def _repoint_models(common, libname: str):
+    """Point a skill's model directory at the space-free workspace copy.
+
+    Skill modules resolve ``MODEL_DIR`` relative to their own ``__file__`` —
+    i.e. the read-only install directory.  On Windows that path can contain
+    a space (e.g. a zip re-extracted to ``AnalogStudio-... (1)\\``), and
+    ngspice's *unquoted* ``.include`` truncates the model path at the space,
+    failing with "Could not find include file ...".  The synced
+    ``NGSPICE_ASSETS/models`` copy lives under the app workspace (space-free)
+    and ships drop-in PTM models (ptm180.lib level-49 NMOS/PMOS, ptm45hp.lib
+    level-54 nmos/pmos), so repoint every skill there — the same fix
+    bootstrap already relied on.  Must run before the ``simulate_*`` modules
+    are imported, since they cache ``MODEL_PATH`` from ``ngspice_common``."""
+    import ngspice_common
+    from ngspice_common import spath
+    models = paths.NGSPICE_ASSETS / 'models'
+    ngspice_common.MODEL_DIR = models        # simulate_* read this at import
+    common.MODEL_DIR = models
+    common.MODEL_PATH = spath(models / libname)
+
+
 def _snapshot_pngs(plot_dir: Path) -> dict:
     if not plot_dir.is_dir():
         return {}
@@ -285,6 +306,7 @@ def _fmt(v, nd=2):
 def _run_ota(analysis, values):
     import ota_common as common
     _apply_params(common, values)
+    _repoint_models(common, 'ptm180.lib')
     from ngspice_common import PLOT_DIR
     import simulate_ota_dc, simulate_ota_ac, simulate_ota_noise
     import plot_ota
@@ -328,6 +350,7 @@ def _run_ota(analysis, values):
 def _run_opamp(analysis, values):
     import opamp_common as common
     _apply_params(common, values)
+    _repoint_models(common, 'ptm180.lib')
     from ngspice_common import PLOT_DIR
     import simulate_opamp_dc, simulate_opamp_ac, simulate_opamp_pz, \
         simulate_opamp_noise
@@ -394,6 +417,7 @@ def _run_opamp(analysis, values):
 
 def _run_ldo(analysis, values):
     import ldo_common as common
+    _repoint_models(common, 'ptm180.lib')
     from ngspice_common import PLOT_DIR
 
     if analysis == 'auto':
@@ -475,6 +499,7 @@ def _run_ldo_auto(values, plot_dir):
 def _run_comparator(analysis, values):
     import comparator_common as common
     _apply_params(common, values)
+    _repoint_models(common, 'ptm45hp.lib')
     from ngspice_common import PLOT_DIR
 
     if analysis.startswith('sweep_'):
@@ -739,9 +764,7 @@ def _run_bootstrap(analysis, values):
     import bootstrap_common as common
     # the vendored skill expects the ngspice-skill models at a hardcoded
     # path that doesn't exist here — point it at the app's synced copy
-    from ngspice_common import spath
-    common.MODEL_DIR = paths.NGSPICE_ASSETS / 'models'
-    common.MODEL_PATH = spath(common.MODEL_DIR / 'ptm180.lib')
+    _repoint_models(common, 'ptm180.lib')
     _apply_params(common, values)
     if 'FCLK' in values:
         common.TCLK = 1.0 / common.FCLK

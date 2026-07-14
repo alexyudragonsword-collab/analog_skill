@@ -468,6 +468,12 @@ def _evaluate_skill(spec: SizingSpec, values: dict) -> dict:
     with circuits.skill_context(scripts):
         common = importlib.import_module(cspec.common_mod)
         circuits._apply_params(common, values)
+        # point the model dir at the space-free workspace copy before the
+        # simulate_* modules load — see circuits._repoint_models (Windows
+        # installs with a space in the path break ngspice's .include)
+        circuits._repoint_models(
+            common, 'ptm45hp.lib' if spec.skill_key == 'comparator'
+            else 'ptm180.lib')
         if spec.skill_key == 'ota5t':
             import simulate_ota_ac
             m = dict(simulate_ota_ac.simulate_ac()['metrics'])
@@ -500,10 +506,6 @@ def _evaluate_skill(spec: SizingSpec, values: dict) -> dict:
             import simulate_tran_strongarm_noise as noise_mod
             return dict(noise_mod.compute_fom(noise_mod.simulate_noise()))
         if spec.skill_key == 'bootstrap':
-            # repoint the skill's hardcoded model path (same as circuits.py)
-            from ngspice_common import spath
-            common.MODEL_DIR = paths.NGSPICE_ASSETS / 'models'
-            common.MODEL_PATH = spath(common.MODEL_DIR / 'ptm180.lib')
             if 'FCLK' in values:
                 common.TCLK = 1.0 / common.FCLK
             import simulate_tran_bts_ron as sim_ron

@@ -21,6 +21,15 @@ AI-assisted design (optional, bring-your-own LLM API).
   budget, applied to the tables on confirmation.
 - **AI explain**: one-click English design critique of a finished run's
   report, appended below the report.
+- **Fix: Circuits tab circuits failed on Windows installs with a space in
+  the path.** The 5T OTA / two-stage op amp / LDO / StrongArm comparator
+  loaded their PTM model from the read-only install directory, and
+  ngspice's *unquoted* `.include` truncates a path at the first space
+  (e.g. a zip re-extracted to `…-pyinstaller (1)\`), so the model was
+  "not found" and every one of them failed — only the bootstrapped
+  switch worked, because it already repointed its model to the
+  space-free workspace copy. All skill circuits (Circuits tab and the
+  Sizing tab) now repoint to `NGSPICE_ASSETS/models` before simulating.
 - **Smaller bundles**: the frozen builds no longer ship optuna and its
   dependency tree (SQLAlchemy, greenlet, alembic, …) — it is a
   source-only optional and the GUI hides the TPE option when absent.
