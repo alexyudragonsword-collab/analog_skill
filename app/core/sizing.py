@@ -529,6 +529,11 @@ def schematic_path(circuit: str) -> Path | None:
     if spec.kind == 'skill':
         from app.core import circuits
         return circuits.schematic_path(spec.skill_key)
+    # schemdraw redraws (tools/gen_sizing_schematics.py) take precedence —
+    # the vendored AnalogGym PNGs are low-res screenshots and stay untouched
+    p = paths.resources_dir() / 'schematics' / 'sizing' / f'{circuit}.png'
+    if p.is_file():
+        return p
     if not spec.schematic:
         return None
     p = _pkg_root(spec) / spec.kind / 'schematic' / spec.schematic
