@@ -30,6 +30,7 @@ class SizingTab(QWidget, JobTabMixin):
         self.init_job_runner(worker)
         self._cancel = threading.Event()
         self._last_run: sizing.SizingRun | None = None
+        self._last_pngs: list = []
 
         self.circuit_combo = QComboBox()
         for key, spec in sizing.SIZING.items():
@@ -92,6 +93,14 @@ class SizingTab(QWidget, JobTabMixin):
                                     "last run's report (Chinese).")
         self.explain_btn.setEnabled(False)
         self.explain_btn.clicked.connect(self._ai_explain)
+        self.waves_btn = QPushButton('Waves…')
+        self.waves_btn.setToolTip(
+            'Re-characterize the default and the optimized sizing with the '
+            'swept curves captured, and overlay them (gain/phase/PSRR vs '
+            'frequency, Vout vs temperature). Two extra ngspice runs, ~10 s. '
+            'Available for the shared-testbench amplifiers only.')
+        self.waves_btn.setEnabled(False)
+        self.waves_btn.clicked.connect(self._compare_waves)
 
         self._status = QLabel('')
         self._status.setWordWrap(True)
@@ -127,6 +136,7 @@ class SizingTab(QWidget, JobTabMixin):
         ai_row = QHBoxLayout()
         ai_row.addWidget(self.advise_btn)
         ai_row.addWidget(self.explain_btn)
+        ai_row.addWidget(self.waves_btn)
         ai_row.addStretch(1)
 
         left = QWidget()
@@ -274,6 +284,21 @@ class SizingTab(QWidget, JobTabMixin):
                                          + str(result))
             self._status.setText('AI analysis appended below the report.')
             return
+        if slot == 'waves':
+            key, before, after = result
+            self.waves_btn.setEnabled(True)
+            try:
+                png = sizing.render_wave_comparison(key, before, after)
+            except Exception as exc:
+                self._status.setText(
+                    f'<font color="red">Wave plot failed: {exc}</font>')
+                return
+            pngs = list(getattr(self, '_last_pngs', [])) + [png]
+            self._last_pngs = pngs
+            self._viewer.show_pngs(pngs, current=len(pngs) - 1)
+            self._status.setText('Waveform comparison added '
+                                 '(default vs optimized).')
+            return
         run: sizing.SizingRun = result
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
@@ -293,6 +318,8 @@ class SizingTab(QWidget, JobTabMixin):
         self._last_run = run
         self.export_btn.setEnabled(True)
         self.explain_btn.setEnabled(True)
+        # before/after waveform capture relies on the shared amp testbench
+        self.waves_btn.setEnabled(sizing.SIZING[run.circuit].kind == 'amp')
         self._report.setPlainText(run.report())
         try:
             png = sizing.render_convergence(run)   # GUI thread (mpl policy)
@@ -303,13 +330,35 @@ class SizingTab(QWidget, JobTabMixin):
         sch = sizing.schematic_path(run.circuit)
         if sch is not None:
             pngs.insert(0, sch)
+        self._last_pngs = pngs
         self._viewer.show_pngs(pngs, current=len(pngs) - 1)
+
+    # ── before/after waveform comparison (two evals on the worker) ────────
+    def _compare_waves(self):
+        if self.has_job('waves') or self._last_run is None:
+            return
+        run = self._last_run
+        key = run.circuit
+        defaults = {v.name: v.default for v in sizing.parse_variables(key)}
+
+        def job():
+            before = sizing.capture_waves(key, defaults, 'before')
+            after = sizing.capture_waves(key, run.best_values, 'after')
+            return key, before, after
+
+        self.submit_job('waves', Job(kind='sizing', fn=job,
+                                     label=f'waves: {key} (2 evals)'))
+        self.waves_btn.setEnabled(False)
+        self._status.setText('Characterizing default vs optimized sizing '
+                             '(2 ngspice runs)…')
 
     def on_job_failed(self, slot, err):
         if slot == 'advise':
             self.advise_btn.setEnabled(True)
         elif slot == 'explain':
             self.explain_btn.setEnabled(self._last_run is not None)
+        elif slot == 'waves':
+            self.waves_btn.setEnabled(self._last_run is not None)
         else:
             self.run_btn.setEnabled(True)
             self.cancel_btn.setEnabled(False)

@@ -5,6 +5,27 @@ development milestones on the `claude/gmoverid-skill-analysis-7ron1c` branch;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
+## v1.3 — 2026-07-15
+
+Before/after characterization for sizing results.
+
+- **Waves… (before vs after)**: for the shared-testbench amplifiers (the
+  15 AnalogGym amps + the studio current-mirror OTA) a new button
+  re-characterizes the *default* and the *optimized* sizing with the swept
+  curves captured (`wrdata` injected after each testbench analysis) and
+  overlays them: differential gain and phase vs frequency, PSRR± vs
+  frequency, and Vout vs temperature. Two extra ngspice runs (~10 s);
+  also works on runs loaded from **Runs…**.  The capture cross-checks
+  itself against the `.meas` values (first AC point == dcgain).
+- **Device-change summary in every report**: the run report now includes a
+  `device changes vs default` section — AnalogGym variables are grouped
+  per device (`MOSFET_9_2  gm1_PMOS  W 1->5.89  L 1.5->1.52  M 14`),
+  ordered by how much each device changed, with capacitors/bias currents
+  as flat lines and unchanged variables collapsed into a count.  Applies
+  to all 27 circuits (skill circuits fall back to flat per-variable
+  lines) and reaches the GUI report box, **Runs… → Load**, and the AI
+  explain prompt automatically.
+
 ## v1.2 — 2026-07-11
 
 AI-assisted design (optional, bring-your-own LLM API) + a new sizing circuit.

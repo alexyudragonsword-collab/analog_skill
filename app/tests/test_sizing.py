@@ -82,6 +82,41 @@ def test_parse_variables():
     assert 'm_cl' not in m_cl                            # board-level cap
 
 
+def test_change_summary():
+    """Device-grouped before/after table; unchanged variables collapse."""
+    defaults = {v.name: v.default
+                for v in sizing.parse_variables('amp_hoilee_affc')}
+    # no changes at all
+    s = sizing.change_summary('amp_hoilee_affc', dict(defaults))
+    assert 'unchanged' in s and 'MOSFET' not in s
+    # one device + one flat variable changed
+    best = dict(defaults)
+    best['MOSFET_9_2_W_gm1_PMOS'] = defaults['MOSFET_9_2_W_gm1_PMOS'] * 4
+    best['CURRENT_0_BIAS'] = defaults['CURRENT_0_BIAS'] / 2
+    s = sizing.change_summary('amp_hoilee_affc', best)
+    assert 'MOSFET_9_2' in s and 'gm1_PMOS' in s and '->' in s
+    assert 'CURRENT_0_BIAS' in s
+    assert 'unchanged' in s
+    # skill circuits fall back to flat per-variable lines
+    d2 = {v.name: v.default
+          for v in sizing.parse_variables('skill_comparator_fast')}
+    b2 = dict(d2)
+    k = next(iter(b2))
+    b2[k] = b2[k] * 2
+    s2 = sizing.change_summary('skill_comparator_fast', b2)
+    assert k in s2 and '->' in s2
+
+
+def test_report_includes_change_summary():
+    run = sizing.SizingRun(
+        circuit='amp_hoilee_affc', best_values={'CURRENT_0_BIAS': 1e-5},
+        best_metrics={'dcgain': 92.0}, initial_cost=3.4, best_cost=1.2,
+        history=[(1, 3.4), (2, 1.2)], evals=2, cancelled=False, elapsed=1.0)
+    rep = run.report()
+    assert 'device changes vs default' in rep
+    assert 'CURRENT_0_BIAS' in rep
+
+
 def test_score_directions():
     spec_key = 'amp_hoilee_affc'
     perfect = {'dcgain': 120, 'gain_bandwidth_product': 2e6,
@@ -184,6 +219,26 @@ def test_studio_cm_ota_evaluate_and_optimize():
                           algo='sobol_powell', workers=2)
     assert run.evals == 6
     assert run.best_cost <= run.initial_cost
+
+
+@needs_ngspice
+def test_wave_capture_and_compare(tmp_path):
+    """Waveform capture cross-checks its own .meas values and renders the
+    before/after overlay; non-amp circuits are rejected."""
+    import numpy as np
+    defaults = {v.name: v.default
+                for v in sizing.parse_variables('amp_hoilee_affc')}
+    w = sizing.capture_waves('amp_hoilee_affc', defaults, 'test')
+    assert {'freq', 'adm_db', 'adm_ph', 'psrp_db', 'psrn_db',
+            'temp', 'vout'} <= set(w)
+    assert np.all(np.diff(w['freq']) > 0)
+    assert len(w['freq']) == len(w['adm_db'])
+    # the first AC point (0.1 Hz) IS the dcgain .meas point
+    assert abs(w['adm_db'][0] - w['metrics']['dcgain']) < 0.1
+    png = sizing.render_wave_comparison('amp_hoilee_affc', w, w)
+    assert png.is_file() and png.stat().st_size > 1000
+    with pytest.raises(ValueError):
+        sizing.capture_waves('skill_ota5t', {}, 'test')
 
 
 @needs_ngspice
@@ -333,6 +388,24 @@ def test_runs_dialog_and_warm_start(tmp_path, monkeypatch):
         vals = {tab._table.item(r, 0).text(): tab._table.item(r, 1).text()
                 for r in range(tab._table.rowCount())}
         assert vals['CURRENT_0_BIAS'] == '2.5e-06'
+    finally:
+        worker.stop()
+
+
+def test_waves_button_enablement():
+    """Waves… is amp-only (the capture relies on the shared amp TB)."""
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from app.core.worker import SimWorker
+    from app.ui.sizing_tab import SizingTab
+    worker = SimWorker()
+    try:
+        tab = SizingTab(worker)
+        assert not tab.waves_btn.isEnabled()
+        tab._show_run(_fake_run())                       # amp_hoilee_affc
+        assert tab.waves_btn.isEnabled()
+        tab._show_run(_fake_run('skill_ota5t', cost=0.5))
+        assert not tab.waves_btn.isEnabled()
     finally:
         worker.stop()
 

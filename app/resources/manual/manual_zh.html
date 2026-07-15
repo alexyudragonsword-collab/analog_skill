@@ -273,6 +273,21 @@ level-1 理想模型、且 AnalogCoder 无 LICENSE,不适合本真实 PDK 流程
 0.42 mW,在 500 pF 负载上呈现真实的增益↔GBW↔功耗折衷。可与 AnalogGym
 运放一样并行评估。</p>
 
+<p><b>波形对比(Waves…)</b>:对共享测试台的运放(15 个 AnalogGym 运放 +
+自建电流镜 OTA),优化完成(或从 Runs… 加载)后点 <b>Waves…</b>,
+会对<b>默认尺寸</b>与<b>最优尺寸</b>各补跑一次完整表征(约 10 秒,
+2 次 ngspice),并把扫描曲线叠画成 2×2 对比图:差分增益与相位 Bode 图、
+PSRR± 频响、Vout-温度曲线(灰虚线=默认,实线=优化后)。图加入右侧
+缩略图栏。LDO 与 circuit-skills 电路的测试台结构不同,此功能暂不覆盖
+(按钮自动置灰)。</p>
+
+<p><b>器件变更总结</b>:每份运行报告自动包含 "device changes vs default"
+一节——AnalogGym 变量按器件分组(如
+<code>MOSFET_9_2  gm1_PMOS  W 1-&gt;5.89  M 4-&gt;14</code>),按变化幅度
+排序,电容/偏置电流单列,未变的变量归并为一行计数;27 个电路全部适用
+(skill 电路退化为逐变量平铺)。报告框、Runs… 加载与 AI explain
+的提示词中都会带上这份总结。</p>
+
 <p><b>运行管理</b>:每次优化完成后自动保存为 JSON(工作区
 <code>sizing_runs/</code>);点 <b>Runs…</b> 打开已存运行列表——<b>Load</b>
 恢复报告与收敛曲线,<b>Compare</b> 多选叠加多次运行的收敛曲线,

@@ -415,7 +415,8 @@ def _write_params(spec: SizingSpec, values: dict, dst: Path):
 
 
 def _render_testbench(spec: SizingSpec, run: Path,
-                      single_thread: bool = False) -> Path:
+                      single_thread: bool = False,
+                      dump_waves: bool = False) -> Path:
     """Rewrite the vendored testbench's include lines with absolute paths
     (netlist / generated params / extracted PDK), substitute the DUT subckt
     name (the shared amp TB is written against HoiLee_AFFC) and drop
@@ -423,7 +424,13 @@ def _render_testbench(spec: SizingSpec, run: Path,
 
     single_thread injects `set num_threads=1` into the control block:
     ngspice's internal threading spin-waits badly under concurrent
-    instances (measured: 4 parallel runs 10.2 s → 4.5 s wall with it)."""
+    instances (measured: 4 parallel runs 10.2 s → 4.5 s wall with it).
+
+    dump_waves (amp TB only) injects a `wrdata` after each analysis in the
+    control block so the swept curves land next to the log — relative
+    filenames, written into the run cwd, so spaced paths never bite:
+      DC temp sweep -> waves_dc.dat  (v(vout6) vs temperature)
+      ac sweep      -> waves_ac.dat  (ADM dB/phase, CM, PSRR± vs freq)"""
     src = _pkg_root(spec) / spec.kind / 'testbench' / spec.testbench
     netlist_dir = _pkg_root(spec) / spec.kind / 'netlist'
     netlist = netlist_dir / spec.netlist
@@ -458,6 +465,11 @@ def _render_testbench(spec: SizingSpec, run: Path,
         elif spec.subckt and spec.subckt != 'HoiLee_AFFC_Pin_3':
             line = re.sub(r'\bHoiLee_AFFC_Pin_3\b', spec.subckt, line)
         out_lines.append(line)
+        if dump_waves and ls.startswith('dc temp'):
+            out_lines.append('wrdata waves_dc.dat v(vout6)')
+        elif dump_waves and ls.startswith('ac dec'):
+            out_lines.append('wrdata waves_ac.dat vdb(opout) vp(opout) '
+                             'vdb(cm3) vdb(ppsr1) vdb(npsr1)')
     tb = run / spec.testbench
     tb.write_text('\n'.join(out_lines) + '\n')
     return tb
@@ -593,6 +605,53 @@ def evaluate(circuit: str, values: dict, slot: int = 0,
     return metrics
 
 
+def _read_wave_file(path: Path) -> list[np.ndarray] | None:
+    """Parse a wrdata sweep file: interleaved (x, y) column pairs, one row
+    per sweep point.  Returns [x, y1, y2, ...] or None."""
+    try:
+        a = np.loadtxt(path, ndmin=2)
+    except Exception:
+        return None
+    if a.shape[0] < 2 or a.shape[1] < 2:
+        return None
+    return [a[:, 0]] + [a[:, i] for i in range(1, a.shape[1], 2)]
+
+
+def capture_waves(circuit: str, values: dict, tag: str) -> dict:
+    """One characterization run of an amp-testbench circuit with the swept
+    curves captured (see _render_testbench dump_waves).  Returns
+    {freq, adm_db, adm_ph, cm_db, psrp_db, psrn_db, temp, vout, metrics};
+    wave keys are absent when a sweep failed to produce data.
+
+    Used for the before/after waveform comparison — 'before' is the shipped
+    default sizing, 'after' a run's best point.  Only kind='amp' circuits
+    share the TB_Amplifier_ACDC node names this relies on.
+    """
+    spec = SIZING[circuit]
+    if spec.kind != 'amp':
+        raise ValueError(f'waveform capture supports amp circuits only, '
+                         f'not {circuit} (kind={spec.kind})')
+    paths.ensure_sky130()
+    run = _run_dir(circuit) / f'waves_{tag}'
+    run.mkdir(parents=True, exist_ok=True)
+    _write_params(spec, values, run / 'params.spice')
+    tb = _render_testbench(spec, run, dump_waves=True)
+    log = run / 'log.txt'
+    if log.exists():
+        log.unlink()
+    subprocess.run([_ngspice_cmd(), '-o', str(log), '-b', str(tb)],
+                   cwd=run, capture_output=True, timeout=300)
+    out: dict = {'metrics': _parse_meas_log(log)}
+    ac = _read_wave_file(run / 'waves_ac.dat')
+    if ac and len(ac) >= 6:
+        out.update(freq=ac[0], adm_db=ac[1], adm_ph=ac[2],
+                   cm_db=ac[3], psrp_db=ac[4], psrn_db=ac[5])
+    dc = _read_wave_file(run / 'waves_dc.dat')
+    if dc and len(dc) >= 2:
+        out.update(temp=dc[0], vout=dc[1])
+    return out
+
+
 def _ldo_metrics(run: Path, meas: dict, prefix: str) -> dict:
     """Fold the LDO testbench's wrdata outputs into named metrics.
 
@@ -713,6 +772,9 @@ class SizingRun:
                 m = self.verified.get(ms.key)
                 val = f'{m:.4g}' if m is not None else 'n/a'
                 lines.append(f'  {ms.label:<20}{val:>14} {ms.unit}')
+        lines += ['', 'device changes vs default '
+                      '(W/L um, M multiplier; before->after):',
+                  change_summary(self.circuit, self.best_values)]
         lines += ['', 'best design variables:']
         for k, v in self.best_values.items():
             lines.append(f'  {k} = {_fmt_num(v)}')
@@ -728,6 +790,67 @@ class SizingRun:
         buf = Path(_run_dir(self.circuit) / 'best_params.spice')
         _write_params(spec, self.best_values, buf)
         return buf.read_text()
+
+
+_MOS_VAR = re.compile(r'^(MOSFET_\d+_\d+)_([WLM])_(\w+)$')
+
+
+def change_summary(circuit: str, best_values: dict) -> str:
+    """Per-device summary of the best sizing vs the shipped defaults.
+
+    AnalogGym variables (MOSFET_<i>_<j>_{W,L,M}_<role>) are grouped into
+    one line per device showing its W/L/M before -> after; everything else
+    (capacitors, bias currents, skill W.xxx dict entries) gets a flat line.
+    Devices are ordered by how much they changed (largest |log ratio|
+    first); unchanged variables collapse into a trailing count.
+    """
+    defaults = {v.name: v.default for v in parse_variables(circuit)}
+
+    def fmt(a: float, b: float) -> str:
+        if a == b:
+            return _fmt_num(a)
+        return f'{_fmt_num(a)}->{_fmt_num(b)}'
+
+    def ratio(a: float, b: float) -> float:
+        if a == b:
+            return 0.0
+        if a == 0 or b == 0:
+            return float('inf')
+        return abs(np.log(abs(b / a)))
+
+    groups: dict[str, dict] = {}      # device -> {'role':…, 'W':(a,b), …}
+    flat: list[tuple[str, float, float]] = []
+    unchanged = 0
+    for name, a in defaults.items():
+        b = best_values.get(name, a)
+        m = _MOS_VAR.match(name)
+        if m:
+            dev, dim, role = m.groups()
+            g = groups.setdefault(dev, {'role': role})
+            g[dim] = (a, b)
+        elif a == b:
+            unchanged += 1
+        else:
+            flat.append((name, a, b))
+
+    lines = []
+    dev_rows = []
+    for dev, g in groups.items():
+        r = max(ratio(*g[d]) for d in 'WLM' if d in g)
+        if r == 0.0:
+            unchanged += sum(1 for d in 'WLM' if d in g)
+            continue
+        cell = '  '.join(f'{d} {fmt(*g[d])}' for d in 'WLM' if d in g)
+        dev_rows.append((r, f'  {dev:<14}{g["role"]:<18}{cell}'))
+    for r, row in sorted(dev_rows, key=lambda t: -t[0]):
+        lines.append(row)
+    for name, a, b in sorted(flat, key=lambda t: -ratio(t[1], t[2])):
+        lines.append(f'  {name:<32}{fmt(a, b)}')
+    if unchanged:
+        lines.append(f'  ({unchanged} variable(s) unchanged)')
+    if not lines:
+        lines.append('  (no changes vs default)')
+    return '\n'.join(lines)
 
 
 def optuna_available() -> bool:
@@ -970,6 +1093,60 @@ def render_convergence(run: SizingRun) -> Path:
     ax.set_title(f'Sizing convergence — {title}', fontsize=10)
     ax.grid(alpha=0.3)
     out = _run_dir(run.circuit) / 'convergence.png'
+    fig.savefig(out, dpi=130)
+    plt.close(fig)
+    return out
+
+
+def render_wave_comparison(circuit: str, before: dict, after: dict) -> Path:
+    """Overlay the default-sizing vs best-sizing characterization sweeps
+    (GUI thread — matplotlib policy).  2x2: differential gain / phase /
+    PSRR± vs frequency, and Vout vs temperature."""
+    import matplotlib
+    matplotlib.use('Agg', force=False)
+    import matplotlib.pyplot as plt
+    B_STY = dict(color='#95a5a6', ls='--', lw=1.6)
+    A_STY = dict(color='#2874a6', lw=1.8)
+    fig, axes = plt.subplots(2, 2, figsize=(9.6, 7.0), constrained_layout=True)
+    (ax_g, ax_p), (ax_r, ax_t) = axes
+    have_ac = 'freq' in before and 'freq' in after
+
+    if have_ac:
+        ax_g.semilogx(before['freq'], before['adm_db'],
+                      label='default', **B_STY)
+        ax_g.semilogx(after['freq'], after['adm_db'],
+                      label='optimized', **A_STY)
+        ax_g.axhline(0, color='#c0392b', ls=':', lw=1)
+        ax_p.semilogx(before['freq'], before['adm_ph'], **B_STY)
+        ax_p.semilogx(after['freq'], after['adm_ph'], **A_STY)
+        ax_r.semilogx(before['freq'], before['psrp_db'],
+                      label='PSRR+ default', **B_STY)
+        ax_r.semilogx(after['freq'], after['psrp_db'],
+                      label='PSRR+ optimized', **A_STY)
+        ax_r.semilogx(before['freq'], before['psrn_db'], color='#95a5a6',
+                      ls=':', lw=1.6, label='PSRR− default')
+        ax_r.semilogx(after['freq'], after['psrn_db'], color='#148f77',
+                      lw=1.8, label='PSRR− optimized')
+        ax_r.legend(fontsize=7)
+    ax_g.set_xlabel('frequency (Hz)'); ax_g.set_ylabel('|Adm| (dB)')
+    ax_g.set_title('Differential gain', fontsize=10)
+    ax_g.legend(fontsize=8)
+    ax_p.set_xlabel('frequency (Hz)'); ax_p.set_ylabel('phase (deg)')
+    ax_p.set_title('Phase', fontsize=10)
+    ax_r.set_xlabel('frequency (Hz)'); ax_r.set_ylabel('PSRR (dB)')
+    ax_r.set_title('Supply rejection', fontsize=10)
+
+    if 'temp' in before and 'temp' in after:
+        ax_t.plot(before['temp'], before['vout'] * 1e3, **B_STY)
+        ax_t.plot(after['temp'], after['vout'] * 1e3, **A_STY)
+    ax_t.set_xlabel('temperature (°C)'); ax_t.set_ylabel('Vout (mV)')
+    ax_t.set_title('Output vs temperature (offset drift)', fontsize=10)
+
+    for ax in axes.flat:
+        ax.grid(alpha=0.3, which='both')
+    fig.suptitle(f'Before/after characterization — {SIZING[circuit].title}',
+                 fontsize=11)
+    out = _run_dir(circuit) / 'wave_compare.png'
     fig.savefig(out, dpi=130)
     plt.close(fig)
     return out

@@ -335,6 +335,26 @@ that needs delicate external bias voltages); default ≈ 42 dB / 0.37 MHz /
 PM 90° / 0.42 mW, with a genuine gain ↔ GBW ↔ power trade-off on its 500 pF
 load. It evaluates in parallel like the AnalogGym amps.</p>
 
+<p><b>Waveform comparison (Waves…)</b>: for the shared-testbench
+amplifiers (the 15 AnalogGym amps + the studio current-mirror OTA), after
+a run finishes (or is loaded from Runs…) the <b>Waves…</b> button
+re-characterizes the <b>default</b> and the <b>optimized</b> sizing with
+the swept curves captured (~10 s, two ngspice runs) and overlays them in
+a 2×2 figure: differential-gain and phase Bode plots, PSRR± vs frequency,
+and Vout vs temperature (grey dashed = default, solid = optimized). The
+figure joins the thumbnail strip. LDO and circuit-skills circuits use
+structurally different testbenches, so the button is greyed out for
+them.</p>
+
+<p><b>Device-change summary</b>: every run report now includes a
+"device changes vs default" section — AnalogGym variables are grouped
+per device (e.g. <code>MOSFET_9_2  gm1_PMOS  W 1-&gt;5.89  M
+4-&gt;14</code>), ordered by how much each device changed, with
+capacitors / bias currents as flat lines and unchanged variables
+collapsed into a count. It applies to all 27 circuits (skill circuits
+fall back to flat per-variable lines) and shows up in the report box,
+in <b>Runs… → Load</b>, and in the AI-explain prompt.</p>
+
 <p><b>Run management</b>: every completed optimization is auto-saved as
 JSON (workspace <code>sizing_runs/</code>). <b>Runs…</b> opens the list of
 saved runs — <b>Load</b> restores the report and convergence curve,
