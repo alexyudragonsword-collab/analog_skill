@@ -335,16 +335,20 @@ that needs delicate external bias voltages); default ≈ 42 dB / 0.37 MHz /
 PM 90° / 0.42 mW, with a genuine gain ↔ GBW ↔ power trade-off on its 500 pF
 load. It evaluates in parallel like the AnalogGym amps.</p>
 
-<p><b>Waveform comparison (Waves…)</b>: for the shared-testbench
-amplifiers (the 15 AnalogGym amps + the studio current-mirror OTA), after
-a run finishes (or is loaded from Runs…) the <b>Waves…</b> button
-re-characterizes the <b>default</b> and the <b>optimized</b> sizing with
-the swept curves captured (~10 s, two ngspice runs) and overlays them in
-a 2×2 figure: differential-gain and phase Bode plots, PSRR± vs frequency,
-and Vout vs temperature (grey dashed = default, solid = optimized). The
-figure joins the thumbnail strip. LDO and circuit-skills circuits use
-structurally different testbenches, so the button is greyed out for
-them.</p>
+<p><b>Waveform comparison (Waves…)</b>: available for <b>all 27
+circuits</b>. After a run finishes (or is loaded from Runs…) the
+<b>Waves…</b> button re-characterizes the <b>default</b> and the
+<b>optimized</b> sizing and overlays the swept curves (grey dashed =
+default, solid = optimized), with panels per circuit family: amplifiers
+(15 AnalogGym + studio CM-OTA) — differential gain/phase Bode, PSRR± vs
+frequency, Vout vs temperature; LDOs (basic + 4 variants) — loop gain and
+phase at max/min load, PSRR, and the Vout-vs-VDD line-regulation sweep;
+5T OTA / two-stage op amp — gain/phase Bode; the skill LDO — loop
+gain/phase + PSRR + output impedance; the StrongArm comparator (both
+entries) — latch and output transients with τ annotated; the bootstrapped
+switch — Ron vs Vin plus a switch-type comparison. Seconds for the skill
+circuits, ~10–20 s (two ngspice runs) for amps/LDOs. The figure joins the
+thumbnail strip.</p>
 
 <p><b>Device-change summary</b>: every run report now includes a
 "device changes vs default" section — AnalogGym variables are grouped

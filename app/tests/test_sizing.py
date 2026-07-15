@@ -237,8 +237,50 @@ def test_wave_capture_and_compare(tmp_path):
     assert abs(w['adm_db'][0] - w['metrics']['dcgain']) < 0.1
     png = sizing.render_wave_comparison('amp_hoilee_affc', w, w)
     assert png.is_file() and png.stat().st_size > 1000
-    with pytest.raises(ValueError):
-        sizing.capture_waves('skill_ota5t', {}, 'test')
+
+
+@needs_ngspice
+def test_wave_capture_ldo():
+    """LDO capture harvests both AC sweeps from the TB's plot lines and
+    the line-regulation DC sweep (injected for ldo_basic)."""
+    import numpy as np
+    defaults = {v.name: v.default for v in sizing.parse_variables('ldo_basic')}
+    w = sizing.capture_waves('ldo_basic', defaults, 'test')
+    assert w['kind'] == 'ldo'
+    assert 'lg_max' in w and 'lg_min' in w and 'vin' in w
+    g = w['lg_max']
+    assert np.all(np.diff(g['freq']) > 0)
+    # first AC point (0.1 Hz) is the dcgain_maxload .meas point
+    assert abs(g['gain_db'][0] - w['metrics']['dcgain_maxload']) < 0.1
+    png = sizing.render_wave_comparison('ldo_basic', w, w)
+    assert png.is_file() and png.stat().st_size > 1000
+
+
+@needs_ngspice
+def test_wave_capture_skill():
+    """Skill captures reuse the simulate_* arrays (no netlist changes)."""
+    import numpy as np
+    ota = {v.name: v.default for v in sizing.parse_variables('skill_ota5t')}
+    w = sizing.capture_waves('skill_ota5t', ota, 'test')
+    assert w['kind'] == 'skill_ac'
+    assert np.all(np.diff(w['freq']) > 0)
+    assert abs(w['gain_db'][0] - w['metrics']['dc_gain_db']) < 0.5
+    assert sizing.render_wave_comparison('skill_ota5t', w, w).is_file()
+
+    bts = {v.name: v.default
+           for v in sizing.parse_variables('skill_bootstrap')}
+    w2 = sizing.capture_waves('skill_bootstrap', bts, 'test')
+    assert w2['kind'] == 'skill_ron'
+    assert len(w2['vin_pts']) == len(w2['ron_bts']) > 10
+    assert sizing.render_wave_comparison('skill_bootstrap', w2, w2).is_file()
+
+    cmp_ = {v.name: v.default
+            for v in sizing.parse_variables('skill_comparator_fast')}
+    w3 = sizing.capture_waves('skill_comparator_fast', cmp_, 'test')
+    assert w3['kind'] == 'skill_wave'
+    assert w3['metrics']['tau_ps'] > 0 and len(w3['time']) > 100
+    assert sizing.render_wave_comparison(
+        'skill_comparator_fast', w3, w3).is_file()
 
 
 @needs_ngspice
@@ -393,7 +435,7 @@ def test_runs_dialog_and_warm_start(tmp_path, monkeypatch):
 
 
 def test_waves_button_enablement():
-    """Waves… is amp-only (the capture relies on the shared amp TB)."""
+    """Waves… enables for every circuit kind once a run is shown."""
     from PySide6.QtWidgets import QApplication
     QApplication.instance() or QApplication([])
     from app.core.worker import SimWorker
@@ -405,7 +447,7 @@ def test_waves_button_enablement():
         tab._show_run(_fake_run())                       # amp_hoilee_affc
         assert tab.waves_btn.isEnabled()
         tab._show_run(_fake_run('skill_ota5t', cost=0.5))
-        assert not tab.waves_btn.isEnabled()
+        assert tab.waves_btn.isEnabled()                 # skill too now
     finally:
         worker.stop()
 

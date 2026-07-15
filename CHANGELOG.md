@@ -9,14 +9,27 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 Before/after characterization for sizing results.
 
-- **Waves… (before vs after)**: for the shared-testbench amplifiers (the
-  15 AnalogGym amps + the studio current-mirror OTA) a new button
+- **Waves… (before vs after) — all 27 circuits**: a new button
   re-characterizes the *default* and the *optimized* sizing with the swept
-  curves captured (`wrdata` injected after each testbench analysis) and
-  overlays them: differential gain and phase vs frequency, PSRR± vs
-  frequency, and Vout vs temperature. Two extra ngspice runs (~10 s);
-  also works on runs loaded from **Runs…**.  The capture cross-checks
-  itself against the `.meas` values (first AC point == dcgain).
+  curves captured and overlays them, with panels per circuit family:
+  - *amps* (15 AnalogGym + studio CM-OTA): differential gain and phase vs
+    frequency, PSRR± vs frequency, Vout vs temperature (`wrdata` injected
+    after each testbench analysis);
+  - *LDOs* (basic + 4 variants): loop gain and phase at max/min load,
+    PSRR, and the Vout-vs-VDD line-regulation sweep — the AC vectors are
+    harvested from each testbench's own `plot` line (node names differ
+    per circuit), the DC sweep reuses the TB's `_Vdrop` file (injected
+    for ldo_basic, which lacks one);
+  - *circuit-skills*: the simulate_* modules already return the arrays,
+    so no netlist changes — 5T OTA / two-stage op amp get gain+phase
+    Bode, the skill LDO gets loop gain/phase + PSRR + Zout, the StrongArm
+    comparator (both entries) gets the latch and output transients with
+    τ annotated, and the bootstrapped switch gets Ron-vs-Vin plus a
+    switch-type comparison.
+  Two extra evaluations (seconds for skill circuits, ~10-20 s for
+  amps/LDOs); also works on runs loaded from **Runs…**.  Captures
+  cross-check themselves against the `.meas` values (first AC point ==
+  DC gain).
 - **Device-change summary in every report**: the run report now includes a
   `device changes vs default` section — AnalogGym variables are grouped
   per device (`MOSFET_9_2  gm1_PMOS  W 1->5.89  L 1.5->1.52  M 14`),

@@ -96,9 +96,13 @@ class SizingTab(QWidget, JobTabMixin):
         self.waves_btn = QPushButton('Waves…')
         self.waves_btn.setToolTip(
             'Re-characterize the default and the optimized sizing with the '
-            'swept curves captured, and overlay them (gain/phase/PSRR vs '
-            'frequency, Vout vs temperature). Two extra ngspice runs, ~10 s. '
-            'Available for the shared-testbench amplifiers only.')
+            'swept curves captured, and overlay them. Panels per family: '
+            'amps — gain/phase/PSRR± vs frequency + Vout vs temperature; '
+            'LDOs — loop gain/phase (max+min load), PSRR, line regulation; '
+            '5T OTA / op amp — gain/phase Bode; skill LDO — loop gain/'
+            'phase/PSRR/Zout; comparator — latch + output transients with '
+            'τ; bootstrap — Ron vs Vin. Two extra evaluations '
+            '(seconds for skill circuits, ~10-20 s for amps/LDOs).')
         self.waves_btn.setEnabled(False)
         self.waves_btn.clicked.connect(self._compare_waves)
 
@@ -318,8 +322,7 @@ class SizingTab(QWidget, JobTabMixin):
         self._last_run = run
         self.export_btn.setEnabled(True)
         self.explain_btn.setEnabled(True)
-        # before/after waveform capture relies on the shared amp testbench
-        self.waves_btn.setEnabled(sizing.SIZING[run.circuit].kind == 'amp')
+        self.waves_btn.setEnabled(True)     # all kinds have wave capture
         self._report.setPlainText(run.report())
         try:
             png = sizing.render_convergence(run)   # GUI thread (mpl policy)

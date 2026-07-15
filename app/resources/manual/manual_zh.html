@@ -273,13 +273,16 @@ level-1 理想模型、且 AnalogCoder 无 LICENSE,不适合本真实 PDK 流程
 0.42 mW,在 500 pF 负载上呈现真实的增益↔GBW↔功耗折衷。可与 AnalogGym
 运放一样并行评估。</p>
 
-<p><b>波形对比(Waves…)</b>:对共享测试台的运放(15 个 AnalogGym 运放 +
-自建电流镜 OTA),优化完成(或从 Runs… 加载)后点 <b>Waves…</b>,
-会对<b>默认尺寸</b>与<b>最优尺寸</b>各补跑一次完整表征(约 10 秒,
-2 次 ngspice),并把扫描曲线叠画成 2×2 对比图:差分增益与相位 Bode 图、
-PSRR± 频响、Vout-温度曲线(灰虚线=默认,实线=优化后)。图加入右侧
-缩略图栏。LDO 与 circuit-skills 电路的测试台结构不同,此功能暂不覆盖
-(按钮自动置灰)。</p>
+<p><b>波形对比(Waves…)</b>:<b>全部 27 个电路可用</b>。优化完成(或从
+Runs… 加载)后点 <b>Waves…</b>,对<b>默认尺寸</b>与<b>最优尺寸</b>各补跑
+一次表征并叠画对比图(灰虚线=默认,实线=优化后),面板按电路族:
+运放(AnalogGym 15 + 自建 CM-OTA)——差分增益/相位 Bode、PSRR± 频响、
+Vout-温度曲线;LDO(basic + 4 变体)——最大/最小负载环路增益与相位、
+PSRR、Vout-VDD 线性调整率曲线;5T OTA / 两级运放——增益/相位 Bode;
+skill LDO——环路增益/相位 + PSRR + 输出阻抗;StrongArm 比较器(两档)——
+锁存节点与输出瞬态波形(标注 τ);自举开关——Ron-Vin 曲线 + 四种开关
+类型对照。skill 电路秒级,运放/LDO 约 10–20 秒(2 次 ngspice)。
+图加入右侧缩略图栏。</p>
 
 <p><b>器件变更总结</b>:每份运行报告自动包含 "device changes vs default"
 一节——AnalogGym 变量按器件分组(如

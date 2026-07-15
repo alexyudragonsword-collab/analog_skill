@@ -426,16 +426,26 @@ def _render_testbench(spec: SizingSpec, run: Path,
     ngspice's internal threading spin-waits badly under concurrent
     instances (measured: 4 parallel runs 10.2 s → 4.5 s wall with it).
 
-    dump_waves (amp TB only) injects a `wrdata` after each analysis in the
-    control block so the swept curves land next to the log — relative
-    filenames, written into the run cwd, so spaced paths never bite:
-      DC temp sweep -> waves_dc.dat  (v(vout6) vs temperature)
-      ac sweep      -> waves_ac.dat  (ADM dB/phase, CM, PSRR± vs freq)"""
+    dump_waves injects a `wrdata` after each analysis in the control block
+    so the swept curves land next to the log — relative filenames, written
+    into the run cwd, so spaced paths never bite:
+      amp TB:  DC temp sweep -> waves_dc.dat  (v(vout6) vs temperature)
+               ac sweep      -> waves_ac.dat  (ADM dB/phase, CM, PSRR±)
+      ldo TBs: the vector names differ per circuit (vout1/ppsr1 vs
+               Vreg1/Vreg2), but every `ac dec` is followed by a
+               `plot <loop dB> <PSRR dB> <loop phase>` line — harvest those
+               tokens into waves_ac_<n>.dat (n=0 maxload, n=1 minload).
+               ldo_basic additionally gets waves_dc.dat after its first
+               VDD sweep (the variants already write a _Vdrop_maxload
+               sweep file the capture reads directly)."""
     src = _pkg_root(spec) / spec.kind / 'testbench' / spec.testbench
     netlist_dir = _pkg_root(spec) / spec.kind / 'netlist'
     netlist = netlist_dir / spec.netlist
     pdk = paths.sky130_pdk_dir()
     out_lines = []
+    n_ac = 0                 # ldo: AC sweeps seen (0=maxload, 1=minload)
+    pending_ac = False       # ldo: harvest the next plot line's vectors
+    dc_injected = False      # ldo_basic: only the first VDD sweep
     for line in src.read_text().splitlines():
         ls = line.strip().lower()
         if ls.startswith('.include'):
@@ -458,6 +468,11 @@ def _render_testbench(spec: SizingSpec, run: Path,
                 else:
                     line = f'.include "{netlist}"'
         elif ls.startswith('plot ') or ls == 'plot':
+            if dump_waves and spec.kind == 'ldo' and pending_ac:
+                vecs = line.strip()[4:].strip()
+                out_lines.append(f'wrdata waves_ac_{n_ac}.dat {vecs}')
+                n_ac += 1
+                pending_ac = False
             continue
         elif ls == '.control' and single_thread:
             out_lines.append(line)
@@ -465,11 +480,21 @@ def _render_testbench(spec: SizingSpec, run: Path,
         elif spec.subckt and spec.subckt != 'HoiLee_AFFC_Pin_3':
             line = re.sub(r'\bHoiLee_AFFC_Pin_3\b', spec.subckt, line)
         out_lines.append(line)
-        if dump_waves and ls.startswith('dc temp'):
-            out_lines.append('wrdata waves_dc.dat v(vout6)')
-        elif dump_waves and ls.startswith('ac dec'):
-            out_lines.append('wrdata waves_ac.dat vdb(opout) vp(opout) '
-                             'vdb(cm3) vdb(ppsr1) vdb(npsr1)')
+        if not dump_waves:
+            continue
+        if spec.kind == 'amp':
+            if ls.startswith('dc temp'):
+                out_lines.append('wrdata waves_dc.dat v(vout6)')
+            elif ls.startswith('ac dec'):
+                out_lines.append('wrdata waves_ac.dat vdb(opout) vp(opout) '
+                                 'vdb(cm3) vdb(ppsr1) vdb(npsr1)')
+        elif spec.kind == 'ldo':
+            if ls.startswith('ac dec'):
+                pending_ac = True
+            elif (ls.startswith('dc vvdd') and not dc_injected
+                    and spec.wrdata_prefix == 'LDO_TB_ACDC'):
+                out_lines.append('wrdata waves_dc.dat v(vout6)')
+                dc_injected = True
     tb = run / spec.testbench
     tb.write_text('\n'.join(out_lines) + '\n')
     return tb
@@ -618,19 +643,24 @@ def _read_wave_file(path: Path) -> list[np.ndarray] | None:
 
 
 def capture_waves(circuit: str, values: dict, tag: str) -> dict:
-    """One characterization run of an amp-testbench circuit with the swept
-    curves captured (see _render_testbench dump_waves).  Returns
-    {freq, adm_db, adm_ph, cm_db, psrp_db, psrn_db, temp, vout, metrics};
-    wave keys are absent when a sweep failed to produce data.
+    """One characterization run with the swept curves captured, for the
+    before/after waveform comparison ('before' = shipped defaults,
+    'after' = a run's best point).  The returned dict always carries
+    'kind' (drives the comparison panels) and 'metrics'; wave keys are
+    absent when a sweep failed to produce data.
 
-    Used for the before/after waveform comparison — 'before' is the shipped
-    default sizing, 'after' a run's best point.  Only kind='amp' circuits
-    share the TB_Amplifier_ACDC node names this relies on.
+      amp       freq/adm_db/adm_ph/cm_db/psrp_db/psrn_db + temp/vout
+      ldo       lg_max, lg_min = {freq, gain_db, psrr_db, phase}
+                (phase already in degrees — the LDO TBs `set units=degrees`)
+                + vin/vout line-regulation sweep
+      skill_ac  freq/gain_db/phase             (ota5t, opamp2)
+      skill_ldo loopgain/psrr/zout = {freq, mag_db, phase_deg}
+      skill_wave time/clk/vlp/vln/outp/outn + tau_ps   (comparator)
+      skill_ron vin_pts/ron_bts/ron_cmos/ron_nmos/ron_pmos  (bootstrap)
     """
     spec = SIZING[circuit]
-    if spec.kind != 'amp':
-        raise ValueError(f'waveform capture supports amp circuits only, '
-                         f'not {circuit} (kind={spec.kind})')
+    if spec.kind == 'skill':
+        return _capture_skill_waves(spec, values)
     paths.ensure_sky130()
     run = _run_dir(circuit) / f'waves_{tag}'
     run.mkdir(parents=True, exist_ok=True)
@@ -641,15 +671,93 @@ def capture_waves(circuit: str, values: dict, tag: str) -> dict:
         log.unlink()
     subprocess.run([_ngspice_cmd(), '-o', str(log), '-b', str(tb)],
                    cwd=run, capture_output=True, timeout=300)
-    out: dict = {'metrics': _parse_meas_log(log)}
-    ac = _read_wave_file(run / 'waves_ac.dat')
-    if ac and len(ac) >= 6:
-        out.update(freq=ac[0], adm_db=ac[1], adm_ph=ac[2],
-                   cm_db=ac[3], psrp_db=ac[4], psrn_db=ac[5])
-    dc = _read_wave_file(run / 'waves_dc.dat')
-    if dc and len(dc) >= 2:
-        out.update(temp=dc[0], vout=dc[1])
+    out: dict = {'kind': spec.kind, 'metrics': _parse_meas_log(log)}
+    if spec.kind == 'amp':
+        ac = _read_wave_file(run / 'waves_ac.dat')
+        if ac and len(ac) >= 6:
+            out.update(freq=ac[0], adm_db=ac[1], adm_ph=ac[2],
+                       cm_db=ac[3], psrp_db=ac[4], psrn_db=ac[5])
+        dc = _read_wave_file(run / 'waves_dc.dat')
+        if dc and len(dc) >= 2:
+            out.update(temp=dc[0], vout=dc[1])
+        return out
+    # ldo: two harvested AC sweeps (loop dB, PSRR dB, loop phase) ...
+    out['metrics'] = _ldo_metrics(run, out['metrics'], spec.wrdata_prefix)
+    for i, load in ((0, 'max'), (1, 'min')):
+        ac = _read_wave_file(run / f'waves_ac_{i}.dat')
+        if ac and len(ac) >= 4:
+            out[f'lg_{load}'] = dict(freq=ac[0], gain_db=ac[1],
+                                     psrr_db=ac[2], phase=ac[3])
+    # ... plus the Vout-vs-VDD line-regulation sweep (the variant TBs write
+    # a _Vdrop_maxload sweep themselves; ldo_basic gets waves_dc.dat)
+    vd = _read_wave_file(run / f'{spec.wrdata_prefix}_Vdrop_maxload')
+    if vd is None:
+        vd = _read_wave_file(run / 'waves_dc.dat')
+    if vd and len(vd) >= 2:
+        out.update(vin=vd[0], vout=vd[1])
     return out
+
+
+def _capture_skill_waves(spec: SizingSpec, values: dict) -> dict:
+    """Swept curves for a circuit-skills circuit — the simulate_* modules
+    already return the arrays, so this mirrors _evaluate_skill's import
+    isolation and just picks them out (no netlist changes)."""
+    import importlib
+    from app.core import circuits
+    cspec = circuits.CIRCUITS[spec.skill_key]
+    scripts = paths.circuit_skills_dir() / cspec.subdir
+    with circuits.skill_context(scripts):
+        common = importlib.import_module(cspec.common_mod)
+        circuits._apply_params(common, values)
+        circuits._repoint_models(
+            common, 'ptm45hp.lib' if spec.skill_key == 'comparator'
+            else 'ptm180.lib')
+        if spec.skill_key in ('ota5t', 'opamp2'):
+            mod = importlib.import_module(
+                'simulate_ota_ac' if spec.skill_key == 'ota5t'
+                else 'simulate_opamp_ac')
+            r = mod.simulate_ac()
+            out = {'kind': 'skill_ac', 'metrics': dict(r['metrics'])}
+            ac = r.get('ac') or {}
+            if ac.get('freq') is not None:
+                out.update(freq=np.asarray(ac['freq'], float),
+                           gain_db=np.asarray(ac['gain_db'], float),
+                           phase=np.asarray(ac['phase'], float))
+            return out
+        if spec.skill_key == 'ldo':
+            import simulate_ldo_ac
+            r = simulate_ldo_ac.simulate_ac()
+            out = {'kind': 'skill_ldo', 'metrics': dict(r['metrics'])}
+            for k in ('loopgain', 'psrr', 'zout'):
+                s = r.get(k) or {}
+                if s.get('freq') is not None and s.get('mag_db') is not None:
+                    out[k] = {kk: np.asarray(s[kk], float)
+                              for kk in ('freq', 'mag_db', 'phase_deg')
+                              if s.get(kk) is not None}
+            return out
+        if spec.skill_key == 'comparator':
+            import simulate_tran_strongarm_wave as wave_mod
+            w = wave_mod.simulate_wave()['wave']
+            out = {'kind': 'skill_wave',
+                   'metrics': {'tau_ps': float(w['tau_ps'])}}
+            for k in ('time', 'clk', 'vlp', 'vln', 'outp', 'outn'):
+                if w.get(k) is not None:
+                    out[k] = np.asarray(w[k], float)
+            return out
+        if spec.skill_key == 'bootstrap':
+            if 'FCLK' in values:
+                common.TCLK = 1.0 / common.FCLK
+            import simulate_tran_bts_ron as sim_ron
+            cfg = dict(sim_ron.NODE_CONFIGS[0])
+            cfg['W_sw'] = float(common.W['sw'])
+            r = sim_ron.simulate_ron(cfg)
+            out = {'kind': 'skill_ron', 'metrics': {}}
+            for k in ('vin_pts', 'ron_bts', 'ron_cmos', 'ron_nmos',
+                      'ron_pmos'):
+                if r.get(k) is not None:
+                    out[k] = np.asarray(r[k], float)
+            return out
+    raise KeyError(spec.skill_key)
 
 
 def _ldo_metrics(run: Path, meas: dict, prefix: str) -> dict:
@@ -1098,52 +1206,178 @@ def render_convergence(run: SizingRun) -> Path:
     return out
 
 
-def render_wave_comparison(circuit: str, before: dict, after: dict) -> Path:
-    """Overlay the default-sizing vs best-sizing characterization sweeps
-    (GUI thread — matplotlib policy).  2x2: differential gain / phase /
-    PSRR± vs frequency, and Vout vs temperature."""
-    import matplotlib
-    matplotlib.use('Agg', force=False)
-    import matplotlib.pyplot as plt
-    B_STY = dict(color='#95a5a6', ls='--', lw=1.6)
-    A_STY = dict(color='#2874a6', lw=1.8)
-    fig, axes = plt.subplots(2, 2, figsize=(9.6, 7.0), constrained_layout=True)
-    (ax_g, ax_p), (ax_r, ax_t) = axes
-    have_ac = 'freq' in before and 'freq' in after
+_WAVE_B = dict(color='#95a5a6', ls='--', lw=1.6)     # 'default' style
+_WAVE_A = dict(color='#2874a6', lw=1.8)              # 'optimized' style
+_WAVE_B2 = dict(color='#95a5a6', ls=':', lw=1.3)     # secondary pair
+_WAVE_A2 = dict(color='#148f77', lw=1.5)
 
-    if have_ac:
+
+def _wave_panels_amp(axes, before, after):
+    (ax_g, ax_p), (ax_r, ax_t) = axes
+    if 'freq' in before and 'freq' in after:
         ax_g.semilogx(before['freq'], before['adm_db'],
-                      label='default', **B_STY)
+                      label='default', **_WAVE_B)
         ax_g.semilogx(after['freq'], after['adm_db'],
-                      label='optimized', **A_STY)
+                      label='optimized', **_WAVE_A)
         ax_g.axhline(0, color='#c0392b', ls=':', lw=1)
-        # ngspice's vp() reports radians — plot in degrees
-        ax_p.semilogx(before['freq'], np.degrees(before['adm_ph']), **B_STY)
-        ax_p.semilogx(after['freq'], np.degrees(after['adm_ph']), **A_STY)
+        # the amp TB doesn't `set units=degrees`, so vp() is radians
+        ax_p.semilogx(before['freq'], np.degrees(before['adm_ph']), **_WAVE_B)
+        ax_p.semilogx(after['freq'], np.degrees(after['adm_ph']), **_WAVE_A)
         ax_r.semilogx(before['freq'], before['psrp_db'],
-                      label='PSRR+ default', **B_STY)
+                      label='PSRR+ default', **_WAVE_B)
         ax_r.semilogx(after['freq'], after['psrp_db'],
-                      label='PSRR+ optimized', **A_STY)
-        ax_r.semilogx(before['freq'], before['psrn_db'], color='#95a5a6',
-                      ls=':', lw=1.6, label='PSRR− default')
-        ax_r.semilogx(after['freq'], after['psrn_db'], color='#148f77',
-                      lw=1.8, label='PSRR− optimized')
+                      label='PSRR+ optimized', **_WAVE_A)
+        ax_r.semilogx(before['freq'], before['psrn_db'],
+                      label='PSRR− default', **_WAVE_B2)
+        ax_r.semilogx(after['freq'], after['psrn_db'],
+                      label='PSRR− optimized', **_WAVE_A2)
         ax_r.legend(fontsize=7)
     ax_g.set_xlabel('frequency (Hz)'); ax_g.set_ylabel('|Adm| (dB)')
-    ax_g.set_title('Differential gain', fontsize=10)
-    ax_g.legend(fontsize=8)
+    ax_g.set_title('Differential gain', fontsize=10); ax_g.legend(fontsize=8)
     ax_p.set_xlabel('frequency (Hz)'); ax_p.set_ylabel('phase (deg)')
     ax_p.set_title('Phase', fontsize=10)
     ax_r.set_xlabel('frequency (Hz)'); ax_r.set_ylabel('PSRR (dB)')
     ax_r.set_title('Supply rejection', fontsize=10)
-
     if 'temp' in before and 'temp' in after:
-        ax_t.plot(before['temp'], before['vout'] * 1e3, **B_STY)
-        ax_t.plot(after['temp'], after['vout'] * 1e3, **A_STY)
+        ax_t.plot(before['temp'], before['vout'] * 1e3, **_WAVE_B)
+        ax_t.plot(after['temp'], after['vout'] * 1e3, **_WAVE_A)
     ax_t.set_xlabel('temperature (°C)'); ax_t.set_ylabel('Vout (mV)')
     ax_t.set_title('Output vs temperature (offset drift)', fontsize=10)
 
-    for ax in axes.flat:
+
+def _wave_panels_ldo(axes, before, after):
+    (ax_g, ax_p), (ax_r, ax_v) = axes
+    for w, sty, sty2, lbl in ((before, _WAVE_B, _WAVE_B2, 'default'),
+                              (after, _WAVE_A, _WAVE_A2, 'optimized')):
+        if 'lg_max' in w:
+            g = w['lg_max']
+            ax_g.semilogx(g['freq'], g['gain_db'],
+                          label=f'{lbl} (max load)', **sty)
+            # LDO TBs `set units=degrees` — phase already in degrees
+            ax_p.semilogx(g['freq'], g['phase'], **sty)
+            ax_r.semilogx(g['freq'], g['psrr_db'], label=lbl, **sty)
+        if 'lg_min' in w:
+            g = w['lg_min']
+            ax_g.semilogx(g['freq'], g['gain_db'],
+                          label=f'{lbl} (min load)', **sty2)
+            ax_p.semilogx(g['freq'], g['phase'], **sty2)
+        if 'vin' in w:
+            ax_v.plot(w['vin'], w['vout'], label=lbl, **sty)
+    ax_g.axhline(0, color='#c0392b', ls=':', lw=1)
+    ax_g.set_xlabel('frequency (Hz)'); ax_g.set_ylabel('loop gain (dB)')
+    ax_g.set_title('Loop gain', fontsize=10); ax_g.legend(fontsize=7)
+    ax_p.set_xlabel('frequency (Hz)'); ax_p.set_ylabel('phase (deg)')
+    ax_p.set_title('Loop phase', fontsize=10)
+    ax_r.set_xlabel('frequency (Hz)'); ax_r.set_ylabel('PSRR (dB)')
+    ax_r.set_title('Supply rejection (max load)', fontsize=10)
+    ax_r.legend(fontsize=8)
+    ax_v.set_xlabel('VDD (V)'); ax_v.set_ylabel('Vout (V)')
+    ax_v.set_title('Line regulation (Vout vs VDD)', fontsize=10)
+    ax_v.legend(fontsize=8)
+
+
+def _wave_panels_skill_ac(axes, before, after):
+    ax_g, ax_p = axes
+    for w, sty, lbl in ((before, _WAVE_B, 'default'),
+                        (after, _WAVE_A, 'optimized')):
+        if 'freq' in w:
+            ax_g.semilogx(w['freq'], w['gain_db'], label=lbl, **sty)
+            ax_p.semilogx(w['freq'], w['phase'], **sty)
+    ax_g.axhline(0, color='#c0392b', ls=':', lw=1)
+    ax_g.set_xlabel('frequency (Hz)'); ax_g.set_ylabel('gain (dB)')
+    ax_g.set_title('Gain', fontsize=10); ax_g.legend(fontsize=8)
+    ax_p.set_xlabel('frequency (Hz)'); ax_p.set_ylabel('phase (deg)')
+    ax_p.set_title('Phase', fontsize=10)
+
+
+def _wave_panels_skill_ldo(axes, before, after):
+    (ax_g, ax_p), (ax_r, ax_z) = axes
+    for w, sty, lbl in ((before, _WAVE_B, 'default'),
+                        (after, _WAVE_A, 'optimized')):
+        lg = w.get('loopgain')
+        if lg:
+            ax_g.semilogx(lg['freq'], lg['mag_db'], label=lbl, **sty)
+            if 'phase_deg' in lg:
+                ax_p.semilogx(lg['freq'], lg['phase_deg'], **sty)
+        ps = w.get('psrr')
+        if ps:
+            ax_r.semilogx(ps['freq'], ps['mag_db'], label=lbl, **sty)
+        zo = w.get('zout')
+        if zo:
+            ax_z.semilogx(zo['freq'], zo['mag_db'], label=lbl, **sty)
+    ax_g.axhline(0, color='#c0392b', ls=':', lw=1)
+    ax_g.set_xlabel('frequency (Hz)'); ax_g.set_ylabel('loop gain (dB)')
+    ax_g.set_title('Loop gain (NaN past GBW by design)', fontsize=10)
+    ax_g.legend(fontsize=8)
+    ax_p.set_xlabel('frequency (Hz)'); ax_p.set_ylabel('phase (deg)')
+    ax_p.set_title('Loop phase', fontsize=10)
+    ax_r.set_xlabel('frequency (Hz)'); ax_r.set_ylabel('|vout/vdd| (dB)')
+    ax_r.set_title('Supply rejection', fontsize=10); ax_r.legend(fontsize=8)
+    ax_z.set_xlabel('frequency (Hz)'); ax_z.set_ylabel('|Zout| (dBΩ)')
+    ax_z.set_title('Output impedance', fontsize=10); ax_z.legend(fontsize=8)
+
+
+def _wave_panels_skill_wave(axes, before, after):
+    ax_l, ax_o = axes
+    for w, sty, sty2, lbl in ((before, _WAVE_B, _WAVE_B2, 'default'),
+                              (after, _WAVE_A, _WAVE_A2, 'optimized')):
+        if 'time' not in w:
+            continue
+        t = w['time'] * 1e9
+        tau = w['metrics'].get('tau_ps')
+        ax_l.plot(t, w['vlp'], label=f'{lbl} (τ={tau:.1f} ps)', **sty)
+        ax_l.plot(t, w['vln'], **sty2)
+        ax_o.plot(t, w['outp'], label=lbl, **sty)
+        ax_o.plot(t, w['outn'], **sty2)
+    ax_l.set_xlabel('time (ns)'); ax_l.set_ylabel('V')
+    ax_l.set_title('Latch nodes vlp/vln (regeneration)', fontsize=10)
+    ax_l.legend(fontsize=8)
+    ax_o.set_xlabel('time (ns)'); ax_o.set_ylabel('V')
+    ax_o.set_title('Outputs outp/outn', fontsize=10); ax_o.legend(fontsize=8)
+
+
+def _wave_panels_skill_ron(axes, before, after):
+    ax_b, ax_all = axes
+    for w, sty, lbl in ((before, _WAVE_B, 'default'),
+                        (after, _WAVE_A, 'optimized')):
+        if 'vin_pts' in w and 'ron_bts' in w:
+            ax_b.plot(w['vin_pts'], w['ron_bts'], label=lbl, **sty)
+    ax_b.set_xlabel('Vin (V)'); ax_b.set_ylabel('Ron (Ω)')
+    ax_b.set_title('Bootstrapped switch Ron vs Vin', fontsize=10)
+    ax_b.legend(fontsize=8)
+    styles = {'ron_bts': _WAVE_A, 'ron_cmos': _WAVE_A2,
+              'ron_nmos': dict(color='#b03a2e', lw=1.3, ls='--'),
+              'ron_pmos': dict(color='#7d3c98', lw=1.3, ls=':')}
+    for k, sty in styles.items():
+        if k in after and 'vin_pts' in after:
+            ax_all.plot(after['vin_pts'], after[k],
+                        label=k.replace('ron_', ''), **sty)
+    ax_all.set_yscale('log')
+    ax_all.set_xlabel('Vin (V)'); ax_all.set_ylabel('Ron (Ω, log)')
+    ax_all.set_title('Optimized: switch-type comparison', fontsize=10)
+    ax_all.legend(fontsize=8)
+
+
+def render_wave_comparison(circuit: str, before: dict, after: dict) -> Path:
+    """Overlay the default-sizing vs best-sizing characterization sweeps
+    (GUI thread — matplotlib policy).  Panel layout follows the wave kind
+    from capture_waves (see its docstring): amps/LDOs get 2x2 frequency +
+    DC panels; skill circuits get their family's natural curves."""
+    import matplotlib
+    matplotlib.use('Agg', force=False)
+    import matplotlib.pyplot as plt
+    kind = before.get('kind', 'amp')
+    if kind in ('amp', 'ldo', 'skill_ldo'):
+        fig, axes = plt.subplots(2, 2, figsize=(9.6, 7.0),
+                                 constrained_layout=True)
+    else:
+        fig, axes = plt.subplots(1, 2, figsize=(9.6, 4.0),
+                                 constrained_layout=True)
+    {'amp': _wave_panels_amp, 'ldo': _wave_panels_ldo,
+     'skill_ac': _wave_panels_skill_ac, 'skill_ldo': _wave_panels_skill_ldo,
+     'skill_wave': _wave_panels_skill_wave,
+     'skill_ron': _wave_panels_skill_ron}[kind](axes, before, after)
+    for ax in np.asarray(axes).flat:
         ax.grid(alpha=0.3, which='both')
     fig.suptitle(f'Before/after characterization — {SIZING[circuit].title}',
                  fontsize=11)
