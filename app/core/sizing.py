@@ -1117,8 +1117,9 @@ def render_wave_comparison(circuit: str, before: dict, after: dict) -> Path:
         ax_g.semilogx(after['freq'], after['adm_db'],
                       label='optimized', **A_STY)
         ax_g.axhline(0, color='#c0392b', ls=':', lw=1)
-        ax_p.semilogx(before['freq'], before['adm_ph'], **B_STY)
-        ax_p.semilogx(after['freq'], after['adm_ph'], **A_STY)
+        # ngspice's vp() reports radians — plot in degrees
+        ax_p.semilogx(before['freq'], np.degrees(before['adm_ph']), **B_STY)
+        ax_p.semilogx(after['freq'], np.degrees(after['adm_ph']), **A_STY)
         ax_r.semilogx(before['freq'], before['psrp_db'],
                       label='PSRR+ default', **B_STY)
         ax_r.semilogx(after['freq'], after['psrp_db'],
