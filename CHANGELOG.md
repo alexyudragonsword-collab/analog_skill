@@ -5,6 +5,32 @@ development milestones on the `claude/gmoverid-skill-analysis-7ron1c` branch;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
+## v1.4 — 2026-07-15
+
+Design import + netlist viewer in the Sizing tab.
+
+- **Import ▾ → Sizing values (.PARAM)…**: load a previously exported (or
+  hand-edited) `.PARAM` file back into the variables table's init column
+  — the counterpart of *Export best .PARAM…*; unmatched names are
+  reported, expression-valued entries skipped.
+- **Import ▾ → Custom circuit (netlist + .PARAM)…**: import your own
+  SKY130 amplifier design as a new optimizable circuit.  The netlist
+  must follow the AnalogGym amplifier contract
+  (`.subckt <name> gnda vdda vinn vinp vout`, self-biased) and come with
+  its `.PARAM` design-variables file.  The design is copied into the
+  writable workspace (`user_circuits/`), registered in the circuit
+  drop-down, validated with one real evaluation on import (a netlist
+  that produces no metrics is rejected and removed), persists across
+  sessions, and gets the full pipeline: the 9-metric report, parallel
+  evaluation, Waves… comparison, device-change summary and the AI
+  features.  Only the amplifier contract is supported in this version.
+- **Netlist…**: a viewer dialog showing the current circuit's design
+  files — the DUT netlist, the design variables (rendered with the
+  table's current init values) and the fully rendered testbench
+  (absolute includes, DUT substituted); circuit-skills circuits show
+  their `.cir.tmpl` templates instead.  For imported circuits the
+  dialog also offers *Remove this imported circuit*.
+
 ## v1.3 — 2026-07-15
 
 Before/after characterization for sizing results.

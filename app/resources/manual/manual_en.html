@@ -359,6 +359,27 @@ collapsed into a count. It applies to all 27 circuits (skill circuits
 fall back to flat per-variable lines) and shows up in the report box,
 in <b>Runs… → Load</b>, and in the AI-explain prompt.</p>
 
+<p><b>Design import &amp; netlist viewer</b>: the <b>Import ▾</b> menu
+offers two imports — "Sizing values (.PARAM)…" loads a previously
+exported (or hand-edited) parameter file back into the variables table's
+init column as a starting point; "Custom circuit…" imports your own
+SKY130 amplifier design as a new optimizable circuit.  The netlist must
+follow the AnalogGym amplifier contract
+<code>.subckt &lt;name&gt; gnda vdda vinn vinp vout</code> (self-biased, no
+extra bias pins) and come with its .PARAM design-variables file; on
+import it is copied into the writable workspace
+(<code>user_circuits/</code>, persistent across sessions), registered in
+the circuit drop-down, and validated with one real evaluation (a netlist
+that produces no metrics is rejected and removed).  Imported circuits
+get the full pipeline: 9-metric report, parallel evaluation, Waves…
+comparison, device-change summary and the AI features.  Only the
+amplifier contract is supported in this version.  <b>Netlist…</b> opens a
+viewer with the current circuit's design files — DUT netlist, design
+variables (rendered with the table's current init values) and the fully
+rendered testbench (absolute includes, DUT substituted); circuit-skills
+circuits show their <code>.cir.tmpl</code> templates; imported circuits
+can be removed from this dialog.</p>
+
 <p><b>Run management</b>: every completed optimization is auto-saved as
 JSON (workspace <code>sizing_runs/</code>). <b>Runs…</b> opens the list of
 saved runs — <b>Load</b> restores the report and convergence curve,

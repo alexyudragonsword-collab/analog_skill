@@ -10,11 +10,12 @@ sizing (exportable as a .PARAM file).
 import threading
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFontDatabase
+from PySide6.QtGui import QAction, QFontDatabase
 from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QDialog, QFileDialog, QFormLayout,
-    QGroupBox, QHBoxLayout, QLabel, QMessageBox, QPlainTextEdit, QPushButton,
-    QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QGroupBox, QHBoxLayout, QLabel, QMenu, QMessageBox, QPlainTextEdit,
+    QPushButton, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem,
+    QTabWidget, QVBoxLayout, QWidget,
 )
 
 from app.core import llm_client, sizing
@@ -31,7 +32,9 @@ class SizingTab(QWidget, JobTabMixin):
         self._cancel = threading.Event()
         self._last_run: sizing.SizingRun | None = None
         self._last_pngs: list = []
+        self._pending_import: str | None = None
 
+        sizing.load_user_circuits()          # re-register workspace imports
         self.circuit_combo = QComboBox()
         for key, spec in sizing.SIZING.items():
             self.circuit_combo.addItem(spec.title, userData=key)
@@ -105,6 +108,27 @@ class SizingTab(QWidget, JobTabMixin):
             '(seconds for skill circuits, ~10-20 s for amps/LDOs).')
         self.waves_btn.setEnabled(False)
         self.waves_btn.clicked.connect(self._compare_waves)
+        self.import_btn = QPushButton('Import ▾')
+        imp_menu = QMenu(self.import_btn)
+        act = QAction('Sizing values (.PARAM)…', imp_menu)
+        act.triggered.connect(self._import_params)
+        imp_menu.addAction(act)
+        act = QAction('Custom circuit (netlist + .PARAM)…', imp_menu)
+        act.triggered.connect(self._import_circuit)
+        imp_menu.addAction(act)
+        self.import_btn.setMenu(imp_menu)
+        self.import_btn.setToolTip(
+            'Import a sizing back into the init column, or import your own '
+            'amplifier design (.subckt <name> gnda vdda vinn vinp vout on '
+            'SKY130, self-biased, plus its .PARAM design-variables file) as '
+            'a new optimizable circuit — it persists in the workspace and '
+            'gets the full pipeline (metrics, waves, change summary).')
+        self.netlist_btn = QPushButton('Netlist…')
+        self.netlist_btn.setToolTip(
+            "View the current circuit's design files: DUT netlist, design "
+            'variables (with the current table values) and the fully '
+            'rendered testbench; skill circuits show their templates.')
+        self.netlist_btn.clicked.connect(self._show_netlist)
 
         self._status = QLabel('')
         self._status.setWordWrap(True)
@@ -141,6 +165,8 @@ class SizingTab(QWidget, JobTabMixin):
         ai_row.addWidget(self.advise_btn)
         ai_row.addWidget(self.explain_btn)
         ai_row.addWidget(self.waves_btn)
+        ai_row.addWidget(self.import_btn)
+        ai_row.addWidget(self.netlist_btn)
         ai_row.addStretch(1)
 
         left = QWidget()
@@ -288,6 +314,27 @@ class SizingTab(QWidget, JobTabMixin):
                                          + str(result))
             self._status.setText('AI analysis appended below the report.')
             return
+        if slot == 'import_check':
+            key, metrics = result
+            self._pending_import = None
+            spec = sizing.SIZING.get(key)
+            if metrics and spec is not None:
+                shown = ', '.join(f'{ms.label} {metrics[ms.key]:.4g} {ms.unit}'
+                                  for ms in spec.metrics
+                                  if ms.key in metrics)[:200]
+                self._status.setText(
+                    f'{spec.subckt} imported and validated: {shown}')
+            else:
+                # a netlist that yields no metrics is broken — don't keep it
+                self._drop_user_circuit(key)
+                QMessageBox.warning(
+                    self, 'Import failed',
+                    'The imported circuit produced no metrics (ngspice '
+                    'could not characterize it) and has been removed.\n'
+                    'Check the netlist against an AnalogGym amp: '
+                    '.subckt <name> gnda vdda vinn vinp vout, SKY130 '
+                    'devices, self-biased, sized via the .PARAM file.')
+            return
         if slot == 'waves':
             key, before, after = result
             self.waves_btn.setEnabled(True)
@@ -355,6 +402,125 @@ class SizingTab(QWidget, JobTabMixin):
         self._status.setText('Characterizing default vs optimized sizing '
                              '(2 ngspice runs)…')
 
+    # ── design import + netlist viewer ────────────────────────────────────
+    def _fill_init_values(self, values: dict) -> int:
+        """Write matching values into the init column; returns #updated."""
+        updated = 0
+        for row in range(self._table.rowCount()):
+            name = self._table.item(row, 0).text()
+            if name in values:
+                self._table.item(row, 1).setText(f'{values[name]:g}')
+                updated += 1
+        return updated
+
+    def _import_params(self):
+        fn, _ = QFileDialog.getOpenFileName(
+            self, 'Import sizing values', '',
+            'SPICE params (*.spice *.param *.txt);;All files (*)')
+        if not fn:
+            return
+        values = sizing.parse_param_file(sizing.Path(fn))
+        if not values:
+            self._status.setText('<font color="red">No name=value '
+                                 'parameters found in that file.</font>')
+            return
+        n = self._fill_init_values(values)
+        skipped = len(values) - n
+        note = f' ({skipped} name(s) not in this circuit)' if skipped else ''
+        self._status.setText(
+            f'Imported {n} init value(s) from {sizing.Path(fn).name}{note}.')
+
+    def _import_circuit(self):
+        nl, _ = QFileDialog.getOpenFileName(
+            self, 'Import circuit netlist (.subckt <name> gnda vdda vinn '
+            'vinp vout)', '', 'All files (*)')
+        if not nl:
+            return
+        vars_fn, _ = QFileDialog.getOpenFileName(
+            self, 'Design-variables file (.PARAM) for the circuit', '',
+            'SPICE params (*.spice *.param *.txt);;All files (*)')
+        if not vars_fn:
+            return
+        try:
+            key = sizing.import_user_circuit(sizing.Path(nl),
+                                             sizing.Path(vars_fn))
+        except (ValueError, OSError) as exc:
+            self._status.setText(f'<font color="red">{exc}</font>')
+            return
+        spec = sizing.SIZING[key]
+        self.circuit_combo.addItem(spec.title, userData=key)
+        self.circuit_combo.setCurrentIndex(self.circuit_combo.count() - 1)
+        defaults = {v.name: v.default for v in sizing.parse_variables(key)}
+        self._pending_import = key
+        self.submit_job('import_check',
+                        Job(kind='sizing',
+                            fn=lambda: (key, sizing.evaluate(key, defaults)),
+                            label=f'import check: {key}'))
+        self._status.setText(f'Imported {spec.subckt} — validating with one '
+                             'evaluation…')
+
+    def _drop_user_circuit(self, key: str | None):
+        """Unregister a (failed) user import and drop its combo entry."""
+        if not key:
+            return
+        try:
+            sizing.remove_user_circuit(key)
+        except ValueError:
+            pass
+        idx = self.circuit_combo.findData(key)
+        if idx >= 0:
+            self.circuit_combo.removeItem(idx)
+        self._pending_import = None
+
+    def _show_netlist(self):
+        key = self._key()
+        try:
+            values = {v.name: v.default for v in self._read_table()}
+        except ValueError:
+            values = None
+        try:
+            texts = sizing.netlist_texts(key, values)
+        except OSError as exc:
+            self._status.setText(f'<font color="red">{exc}</font>')
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f'Design files — {sizing.SIZING[key].title}')
+        dlg.resize(860, 640)
+        lay = QVBoxLayout(dlg)
+        tabs = QTabWidget()
+        mono = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        for title, text in texts:
+            ed = QPlainTextEdit()
+            ed.setReadOnly(True)
+            ed.setFont(mono)
+            ed.setPlainText(text)
+            tabs.addTab(ed, title)
+        lay.addWidget(tabs)
+        row = QHBoxLayout()
+        if sizing.SIZING[key].pkg == 'user':
+            rm = QPushButton('Remove this imported circuit')
+            rm.clicked.connect(lambda: self._remove_user(key, dlg))
+            row.addWidget(rm)
+        row.addStretch(1)
+        close = QPushButton('Close')
+        close.clicked.connect(dlg.accept)
+        row.addWidget(close)
+        lay.addLayout(row)
+        dlg.exec()
+
+    def _remove_user(self, key: str, dlg: QDialog):
+        if QMessageBox.question(
+                dlg, 'Remove circuit',
+                f'Remove {key} and delete its files from the workspace?') \
+                != QMessageBox.StandardButton.Yes:
+            return
+        sizing.remove_user_circuit(key)
+        idx = self.circuit_combo.findData(key)
+        if idx >= 0:
+            self.circuit_combo.removeItem(idx)
+        dlg.accept()
+        self._status.setText(f'{key} removed.')
+
     def on_job_failed(self, slot, err):
         if slot == 'advise':
             self.advise_btn.setEnabled(True)
@@ -362,6 +528,8 @@ class SizingTab(QWidget, JobTabMixin):
             self.explain_btn.setEnabled(self._last_run is not None)
         elif slot == 'waves':
             self.waves_btn.setEnabled(self._last_run is not None)
+        elif slot == 'import_check':
+            self._drop_user_circuit(self._pending_import)
         else:
             self.run_btn.setEnabled(True)
             self.cancel_btn.setEnabled(False)
@@ -468,14 +636,7 @@ class SizingTab(QWidget, JobTabMixin):
             if idx < 0:
                 return 0
             self.circuit_combo.setCurrentIndex(idx)   # repopulates the table
-        updated = 0
-        for row in range(self._table.rowCount()):
-            name = self._table.item(row, 0).text()
-            if name in run.best_values:
-                self._table.item(row, 1).setText(
-                    f'{run.best_values[name]:g}')
-                updated += 1
-        return updated
+        return self._fill_init_values(run.best_values)
 
     def set_sim_enabled(self, enabled: bool):
         self.run_btn.setEnabled(enabled and not self.has_job('opt'))

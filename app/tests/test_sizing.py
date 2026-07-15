@@ -25,8 +25,9 @@ def test_registry_and_assets():
                                   'skill_comparator_fast', 'skill_bootstrap',
                                   'studio_cm_ota'}
     # 15 amps + basic LDO + 4 variants + 6 circuit-skills (PTM)
-    # + 1 studio_circuits amp (current-mirror OTA)
-    assert len(sizing.SIZING) == 27
+    # + 1 studio_circuits amp (current-mirror OTA); user imports excluded
+    assert len([k for k, s in sizing.SIZING.items()
+                if s.pkg != 'user']) == 27
     for key, spec in sizing.SIZING.items():
         assert spec.metrics, key
         assert sizing.parse_variables(key), key
@@ -448,6 +449,95 @@ def test_waves_button_enablement():
         assert tab.waves_btn.isEnabled()
         tab._show_run(_fake_run('skill_ota5t', cost=0.5))
         assert tab.waves_btn.isEnabled()                 # skill too now
+    finally:
+        worker.stop()
+
+
+def test_parse_param_file(tmp_path):
+    f = tmp_path / 'x.param'
+    f.write_text('.PARAM\n+ W_A=2.5 L_A=1u\n+ M_A=4 W_B=W_A\nCLOAD=5p\n')
+    v = sizing.parse_param_file(f)
+    assert v['W_A'] == 2.5 and v['L_A'] == 1e-6 and v['M_A'] == 4
+    assert v['CLOAD'] == 5e-12
+    assert 'W_B' not in v                     # expression ref skipped
+
+
+def _user_files(tmp_path, name='my_ota_t'):
+    nl = (paths.studio_circuits_dir() / 'amp' / 'netlist' / 'CM_OTA_Pin_3'
+          ).read_text().replace('cm_ota_pin_3', name)
+    p1 = tmp_path / f'{name}.sp'
+    p1.write_text(nl)
+    p2 = tmp_path / f'{name}.param'
+    p2.write_text((paths.studio_circuits_dir() / 'amp' / 'variables'
+                   / 'CM_OTA_Pin_3').read_text())
+    return p1, p2
+
+
+def test_user_circuit_import_lifecycle(tmp_path, monkeypatch):
+    """Import -> register -> netlist view -> rescan persistence -> remove;
+    contract violations are rejected."""
+    monkeypatch.setenv('ANALOG_WORK_DIR', str(tmp_path / 'work'))
+    bad = tmp_path / 'bad.sp'
+    bad.write_text('.subckt foo a b c\n.ends\n')
+    nl, vars_f = _user_files(tmp_path)
+    with pytest.raises(ValueError, match='contract'):
+        sizing.import_user_circuit(bad, vars_f)
+    key = sizing.import_user_circuit(nl, vars_f)
+    try:
+        assert key == 'user_my_ota_t' and key in sizing.SIZING
+        assert sizing.SIZING[key].pkg == 'user'
+        assert len(sizing.parse_variables(key)) == 15
+        # duplicate import rejected
+        with pytest.raises(ValueError, match='already'):
+            sizing.import_user_circuit(nl, vars_f)
+        # netlist viewer: 3 tabs, rendered TB carries the substituted DUT
+        texts = sizing.netlist_texts(key, {'W_IN': 12.0})
+        assert [t for t, _ in texts] == [
+            'netlist (my_ota_t)', 'variables (with table values)',
+            'testbench (rendered)']
+        assert 'my_ota_t' in texts[2][1]
+        assert 'W_IN=12' in texts[1][1]
+        # persistence: drop from the registry, rescan restores it
+        del sizing.SIZING[key]
+        assert sizing.load_user_circuits() == [key]
+    finally:
+        sizing.remove_user_circuit(key)
+    assert key not in sizing.SIZING
+    assert sizing.load_user_circuits() == []          # files gone too
+
+
+@needs_ngspice
+def test_user_circuit_evaluates(tmp_path, monkeypatch):
+    """An imported design runs through the full evaluate pipeline."""
+    monkeypatch.setenv('ANALOG_WORK_DIR', str(tmp_path / 'work'))
+    nl, vars_f = _user_files(tmp_path, 'my_ota_e')
+    key = sizing.import_user_circuit(nl, vars_f)
+    try:
+        vals = {v.name: v.default for v in sizing.parse_variables(key)}
+        m = sizing.evaluate(key, vals)
+        assert 30 < m['dcgain'] < 55           # same silicon as studio CM-OTA
+        assert m['gain_bandwidth_product'] > 1e5
+    finally:
+        sizing.remove_user_circuit(key)
+
+
+def test_import_params_fill(tmp_path):
+    """Import a .PARAM back into the variables table's init column."""
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from app.core.worker import SimWorker
+    from app.ui.sizing_tab import SizingTab
+    worker = SimWorker()
+    try:
+        tab = SizingTab(worker)
+        idx = tab.circuit_combo.findData('studio_cm_ota')
+        tab.circuit_combo.setCurrentIndex(idx)
+        n = tab._fill_init_values({'W_IN': 33.0, 'NOT_A_VAR': 1.0})
+        assert n == 1
+        vals = {tab._table.item(r, 0).text(): tab._table.item(r, 1).text()
+                for r in range(tab._table.rowCount())}
+        assert vals['W_IN'] == '33'
+        assert hasattr(tab, 'import_btn') and hasattr(tab, 'netlist_btn')
     finally:
         worker.stop()
 

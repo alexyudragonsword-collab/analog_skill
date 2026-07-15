@@ -282,6 +282,135 @@ def _build_registry() -> dict[str, SizingSpec]:
 SIZING: dict[str, SizingSpec] = _build_registry()
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# User-imported circuits (workspace user_circuits/, AnalogGym amp contract)
+# ─────────────────────────────────────────────────────────────────────────────
+_USER_SUBCKT = re.compile(
+    r'(?im)^\s*\.subckt\s+(\S+)\s+gnda\s+vdda\s+vinn\s+vinp\s+vout\b')
+
+
+def parse_param_file(path: Path) -> dict[str, float]:
+    """`name = value` / .PARAM file -> {name: float}; expression-valued
+    entries (W_M2=W_M1) are skipped, same as parse_variables."""
+    out = {}
+    for name, value in re.findall(r'([A-Za-z_][\w]*)\s*=\s*([^\s]+)',
+                                  Path(path).read_text(errors='replace')):
+        try:
+            out[name] = _parse_num(value)
+        except ValueError:
+            continue
+    return out
+
+
+def _register_user_circuit(subckt: str) -> str:
+    key = f'user_{subckt.lower()}'
+    SIZING[key] = SizingSpec(
+        title=f'{subckt} — user import (SKY130, 1.8 V)',
+        kind='amp', netlist=subckt, variables=subckt,
+        testbench='TB_Amplifier_ACDC.cir', metrics=_amp_metrics(),
+        fixed=('CLOAD', 'VCM'), eval_seconds=3.5,
+        subckt=subckt, pkg='user')
+    return key
+
+
+def import_user_circuit(netlist_path: Path, vars_path: Path) -> str:
+    """Copy a user's amp design into the workspace and register it.
+
+    The netlist must follow the AnalogGym amplifier contract the shared
+    testbench is written against:
+        .subckt <name> gnda vdda vinn vinp vout
+    on SKY130 devices, self-biased (no extra bias pins).  vars_path is the
+    matching .PARAM design-variables file.  Returns the new circuit key.
+    """
+    import shutil
+    text = Path(netlist_path).read_text(errors='replace')
+    m = _USER_SUBCKT.search(text)
+    if not m:
+        raise ValueError(
+            'netlist does not match the amplifier contract — it must '
+            'declare ".subckt <name> gnda vdda vinn vinp vout" (SKY130, '
+            'self-biased; see the AnalogGym amp netlists for examples)')
+    subckt = m.group(1)
+    key = f'user_{subckt.lower()}'
+    if key in SIZING:
+        raise ValueError(f'a circuit named {subckt} is already imported — '
+                         'remove it first (Netlist… dialog)')
+    if not parse_param_file(vars_path):
+        raise ValueError('the design-variables file contains no '
+                         'name=value parameters')
+    root = user_circuits_dir() / 'amp'
+    for sub in ('netlist', 'variables', 'testbench'):
+        (root / sub).mkdir(parents=True, exist_ok=True)
+    shutil.copy(netlist_path, root / 'netlist' / subckt)
+    shutil.copy(vars_path, root / 'variables' / subckt)
+    tb = root / 'testbench' / 'TB_Amplifier_ACDC.cir'
+    if not tb.is_file():        # shared harness, copied once (studio-style)
+        shutil.copy(paths.analoggym_dir() / 'amp' / 'testbench'
+                    / 'TB_Amplifier_ACDC.cir', tb)
+    return _register_user_circuit(subckt)
+
+
+def load_user_circuits() -> list[str]:
+    """(Re-)register every circuit found in the workspace user_circuits
+    tree — called at GUI start so imports persist across sessions."""
+    nl = user_circuits_dir() / 'amp' / 'netlist'
+    keys = []
+    if nl.is_dir():
+        for p in sorted(nl.iterdir()):
+            if p.is_file() and f'user_{p.name.lower()}' not in SIZING:
+                keys.append(_register_user_circuit(p.name))
+    return keys
+
+
+def remove_user_circuit(key: str):
+    """Unregister an imported circuit and delete its workspace files."""
+    spec = SIZING.get(key)
+    if spec is None or spec.pkg != 'user':
+        raise ValueError(f'{key} is not a user-imported circuit')
+    root = user_circuits_dir() / 'amp'
+    for sub in ('netlist', 'variables'):
+        f = root / sub / spec.netlist
+        if f.is_file():
+            f.unlink()
+    del SIZING[key]
+
+
+def netlist_texts(circuit: str, values: dict | None = None) \
+        -> list[tuple[str, str]]:
+    """(title, text) pairs for the netlist viewer.
+
+    amp/ldo circuits: the DUT netlist, the design-variables file (rendered
+    with `values` when given, e.g. the table's current init column) and
+    the fully rendered testbench (absolute includes, DUT substituted).
+    skill circuits: every *.cir.tmpl template in the skill's tree.
+    """
+    spec = SIZING[circuit]
+    if spec.kind == 'skill':
+        from app.core import circuits
+        cspec = circuits.CIRCUITS[spec.skill_key]
+        skill_root = paths.circuit_skills_dir() / cspec.subdir
+        out = []
+        for p in sorted(skill_root.parent.rglob('*.cir.tmpl')):
+            out.append((p.name, p.read_text(errors='replace')))
+        return out or [('(no templates found)', '')]
+    root = _pkg_root(spec) / spec.kind
+    out = [(f'netlist ({spec.netlist})',
+            (root / 'netlist' / spec.netlist).read_text(errors='replace'))]
+    if values:
+        run = _run_dir(circuit) / 'netlist_view'
+        run.mkdir(parents=True, exist_ok=True)
+        _write_params(spec, values, run / 'params.spice')
+        out.append(('variables (with table values)',
+                    (run / 'params.spice').read_text(errors='replace')))
+        tb = _render_testbench(spec, run)
+        out.append(('testbench (rendered)',
+                    tb.read_text(errors='replace')))
+    else:
+        out.append((f'variables ({spec.variables})',
+                    _variables_path(spec).read_text(errors='replace')))
+    return out
+
+
 @dataclass
 class VarSpec:
     name: str
@@ -311,12 +440,26 @@ def _default_bounds(name: str, default: float) -> tuple[float, float, bool]:
         default * 4 if default > 0 else default / 4, False
 
 
+def user_circuits_dir() -> Path:
+    """Writable workspace tree for user-imported circuits — same
+    <root>/amp/{netlist,variables,testbench} layout as analoggym/studio,
+    persisted like runs_dir()."""
+    d = Path(os.environ.get('ANALOG_WORK_DIR',
+                            Path.home() / '.analog_studio')) / 'user_circuits'
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def _pkg_root(spec: SizingSpec) -> Path:
     """Asset tree for a netlist/variables/testbench circuit: the vendored
-    AnalogGym subset or the original studio_circuits tree (both share the
-    <root>/<kind>/{netlist,variables,testbench} layout)."""
-    return (paths.studio_circuits_dir() if spec.pkg == 'studio'
-            else paths.analoggym_dir())
+    AnalogGym subset, the original studio_circuits tree, or the workspace
+    user_circuits tree (all share <root>/<kind>/{netlist,variables,
+    testbench})."""
+    if spec.pkg == 'studio':
+        return paths.studio_circuits_dir()
+    if spec.pkg == 'user':
+        return user_circuits_dir()
+    return paths.analoggym_dir()
 
 
 def _variables_path(spec: SizingSpec) -> Path:

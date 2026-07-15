@@ -291,6 +291,20 @@ skill LDO——环路增益/相位 + PSRR + 输出阻抗;StrongArm 比较器(两
 (skill 电路退化为逐变量平铺)。报告框、Runs… 加载与 AI explain
 的提示词中都会带上这份总结。</p>
 
+<p><b>设计导入与网表查看</b>:<b>Import ▾</b> 菜单提供两种导入——
+"Sizing values (.PARAM)…" 把之前 Export 的(或手改的)参数文件回填到
+变量表 init 列,作为再优化/评估的起点;"Custom circuit…" 导入你自己的
+SKY130 运放设计并注册为新的可优化电路:网表须符合 AnalogGym 运放契约
+<code>.subckt &lt;name&gt; gnda vdda vinn vinp vout</code>(自偏置、无额外
+偏置引脚),并配套 .PARAM 设计变量文件;导入即拷入可写工作区
+(<code>user_circuits/</code>,跨会话持久)、注册进电路下拉、并自动跑一次
+真实评估验证(出不了指标的网表会被拒绝并移除)。导入电路自动获得全套
+能力:9 指标报告、并行评估、Waves… 波形对比、器件变更总结与 AI 功能。
+本版仅支持运放契约(LDO/其它拓扑暂不支持)。<b>Netlist…</b> 弹窗查看当前
+电路的设计文件:DUT 网表、设计变量(按变量表当前 init 值渲染)与渲染后
+的完整测试台(绝对 include、DUT 已替换);skill 电路显示其
+<code>.cir.tmpl</code> 模板;导入电路可在此对话框中移除。</p>
+
 <p><b>运行管理</b>:每次优化完成后自动保存为 JSON(工作区
 <code>sizing_runs/</code>);点 <b>Runs…</b> 打开已存运行列表——<b>Load</b>
 恢复报告与收敛曲线,<b>Compare</b> 多选叠加多次运行的收敛曲线,
