@@ -127,8 +127,10 @@ def draw():
     wire(d, (g25.x, 4.4), (g25.x, g25.y))        # net049 -> M25 gate
 
     # compensation: outer C0 stays on VOUT, inner C1 lands on net1
-    sh.cap('c0', (XCR, 6.3), (X3 - 0.9, 6.3), 'C0')
-    wire(d, (X3 - 0.9, 6.3), (X3, 6.3))
+    # (C0 plates pinned between the X2B and XG4 columns)
+    wire(d, (XCR, 6.3), (X2B + 0.7, 6.3))
+    sh.cap('c0', (X2B + 0.7, 6.3), (XG4 - 0.9, 6.3), 'C0')
+    wire(d, (XG4 - 0.9, 6.3), (X3, 6.3))
     dot(d, (XCR, 6.3)); dot(d, (X3, 6.3))
     sh.cap('c1', (X2B, 5.2), (XG4 - 0.9, 5.2), 'C1')
     wire(d, (XG4 - 0.9, 5.2), (XG4, 5.2))
