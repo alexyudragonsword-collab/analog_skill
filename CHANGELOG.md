@@ -30,6 +30,13 @@ Design import + netlist viewer in the Sizing tab.
   (absolute includes, DUT substituted); circuit-skills circuits show
   their `.cir.tmpl` templates instead.  For imported circuits the
   dialog also offers *Remove this imported circuit*.
+- **Redrawn Sizing schematics**: all 20 AnalogGym circuit schematics
+  (15 amplifiers + 5 LDOs) are redrawn with schemdraw, device-by-device
+  from the netlists (`tools/gen_sizing_schematics.py`, with a
+  programmatic completeness check against each netlist).  They replace
+  the low-res vendored screenshots in the GUI, and the Alfio amplifier
+  and the five LDOs — which shipped no schematic at all — now have one.
+  The vendored AnalogGym tree stays untouched.
 
 ## v1.3 — 2026-07-15
 

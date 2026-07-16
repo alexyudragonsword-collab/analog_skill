@@ -226,7 +226,9 @@ HP 与 LSTP 两档,nmos/pmos 共 20 个,下拉框中标注 <b>[FinFET]</b>)。</
 
 <p>基于 vendored <b>AnalogGym</b>(ICCAD'24,BSD-3)开源子集的自动 sizing:
 共 <b>20 个 SKY130 电路</b>(15 个文献级三级 Miller 运放 + Basic LDO + 4 个 LDO 变体),
-全部在 ngspice-42 上逐一验证过。选电路 → 编辑变量边界与指标目标 → 设预算 → Optimize:</p>
+全部在 ngspice-42 上逐一验证过。选电路 → 编辑变量边界与指标目标 → 设预算 → Optimize。
+20 张电路原理图均为按网表逐器件重绘的清晰矢量图(v1.4 起替换上游低清截图,
+且为原先无图的 Alfio 运放与全部 LDO 补齐了原理图)。</p>
 
 <ul>
   <li><b>Targets 表</b>:每个指标的目标值可改;勾选 <i>hard</i> 后该项违约代价 ×10
