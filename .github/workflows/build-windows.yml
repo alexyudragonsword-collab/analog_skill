@@ -270,12 +270,130 @@ jobs:
           if-no-files-found: error
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Tag builds publish a GitHub Release with all three packages attached and
+  # Variant 4: Linux Nuitka (standalone, compiled to C) — the protected build.
+  # app/ is compiled to native machine code: the dist contains NO app .py/.pyc,
+  # so the self-written source cannot be recovered from the install directory
+  # (the PyInstaller variants ship app/ as decompilable .pyc). Vendored skill
+  # trees stay as non-Python data ngspice reads from disk — see
+  # CODE_PROTECTION.md for what this does and does not protect.
+  # ───────────────────────────────────────────────────────────────────────────
+  linux-nuitka:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Install Qt runtime libraries
+        run: sudo apt-get update && sudo apt-get install -y
+             libegl1 libgl1 libxkbcommon-x11-0 libdbus-1-3
+
+      - name: Restore Nuitka compilation cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/Nuitka
+          key: nuitka-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-${{ github.run_id }}
+          restore-keys: |
+            nuitka-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-
+            nuitka-${{ runner.os }}-
+
+      - name: Build with Nuitka
+        # Linux mirror of the Windows Nuitka build (no --msvc / console flags).
+        # --include-package=app forces every app/ submodule into the native
+        # binary; the skill asset trees are copied verbatim afterwards (Nuitka
+        # refuses .py as data — they are runtime source synced to the workspace).
+        run: |
+          python -m nuitka \
+            --standalone \
+            --assume-yes-for-downloads \
+            --enable-plugin=pyside6 \
+            --include-package=app \
+            --include-module=PySide6.QtSvg \
+            --include-module=matplotlib.backends.backend_agg \
+            --include-module=matplotlib.backends.backend_qtagg \
+            --include-module=scipy.stats \
+            --include-module=scipy.signal \
+            --nofollow-import-to=optuna \
+            --nofollow-import-to=sqlalchemy \
+            --nofollow-import-to=greenlet \
+            --nofollow-import-to=alembic \
+            --nofollow-import-to=mako \
+            --nofollow-import-to=colorlog \
+            --include-package-data=matplotlib \
+            --include-data-dir=app/resources=app_resources \
+            --include-data-dir=transistor-models/assets/models/bulk_cmos=bulk_models \
+            --include-data-dir=transistor-models/assets/models/finfet=finfet_models \
+            --include-data-dir=analoggym=analoggym \
+            --include-data-dir=studio_circuits=studio_circuits \
+            --output-filename=AnalogStudio.bin \
+            --output-dir=build-nuitka \
+            app/main.py
+
+      - name: Save Nuitka compilation cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/Nuitka
+          key: nuitka-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-${{ github.run_id }}
+
+      - name: Bundle skill assets + wheel libs
+        # app/paths.py looks for <exe dir>/skill/{ngspice_assets,gmoverid_assets}
+        # and syncs them to a writable workspace on first launch. The auditwheel
+        # *.libs dirs (numpy.libs / scipy.libs / pillow.libs) hold the bundled
+        # OpenBLAS/… .so files; Nuitka's scan misses them, so copy them next to
+        # the packages AND flatten the .so into the app dir (which is on the
+        # runtime search path) — without them `import scipy` fails at startup.
+        run: |
+          dist=build-nuitka/main.dist
+          mkdir -p "$dist/skill"
+          cp -r ngspice/assets  "$dist/skill/ngspice_assets"
+          cp -r gmoverid/assets "$dist/skill/gmoverid_assets"
+          cp -r circuit-skills  "$dist/circuit_skills"
+          find "$dist/skill" "$dist/circuit_skills" -type d \
+               \( -name __pycache__ -o -name logs -o -name plots \) \
+               -prune -exec rm -rf {} + || true
+          site=$(python3 -c "import sysconfig; print(sysconfig.get_paths()['purelib'])")
+          for d in "$site"/*.libs; do
+            [ -d "$d" ] || continue
+            cp -r "$d" "$dist/$(basename "$d")"
+            cp "$d"/*.so* "$dist/" 2>/dev/null || true
+          done
+          # protection guarantee: fail the build if any app/ Python source
+          # (or bytecode) leaked into the dist — the whole point of Nuitka here
+          leaked=$(find "$dist" -path '*app*' \( -name '*.py' -o -name '*.pyc' \) | wc -l)
+          test "$leaked" -eq 0 || { echo "app/ source leaked into dist ($leaked files):";
+                                    find "$dist" -path '*app*' \( -name '*.py' -o -name '*.pyc' \); exit 1; }
+          mv "$dist" build-nuitka/AnalogStudio
+
+      - name: Smoke test (offscreen)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: timeout 180 ./build-nuitka/AnalogStudio/AnalogStudio.bin --smoke
+
+      - name: Package tarball
+        run: tar -C build-nuitka -czf AnalogStudio-linux-nuitka.tar.gz AnalogStudio
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AnalogStudio-linux-nuitka
+          path: AnalogStudio-linux-nuitka.tar.gz
+          if-no-files-found: error
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Tag builds publish a GitHub Release with all packages attached and
   # the matching CHANGELOG section as the release notes
   # ───────────────────────────────────────────────────────────────────────────
   release:
     if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
-    needs: [pyinstaller, nuitka, linux]
+    needs: [pyinstaller, nuitka, linux, linux-nuitka]
     env:
       RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/')
                        && github.ref_name || inputs.release_tag }}
@@ -303,4 +421,5 @@ jobs:
             artifacts/AnalogStudio-windows-pyinstaller.zip
             artifacts/AnalogStudio-windows-nuitka.zip
             artifacts/AnalogStudio-linux-pyinstaller.tar.gz
+            artifacts/AnalogStudio-linux-nuitka.tar.gz
           fail_on_unmatched_files: true

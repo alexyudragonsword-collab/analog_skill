@@ -9,6 +9,16 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 Design import + netlist viewer in the Sizing tab.
 
+- **Protected Linux build (Nuitka)**: a new `linux-nuitka` CI job compiles
+  the self-written `app/` to native machine code — the distributed package
+  contains no `app/` `.py`/`.pyc`, so the application source cannot be
+  recovered from the install directory (the PyInstaller packages ship
+  `app/` as decompilable bytecode).  Both Nuitka builds now force full
+  `app/` compilation (`--include-package=app`); the Linux job fails if any
+  `app/` source leaks into the dist.  Vendored skill trees remain
+  non-Python data that ngspice reads from disk — see `CODE_PROTECTION.md`
+  for exactly what this does and does not protect.
+
 - **Import ▾ → Sizing values (.PARAM)…**: load a previously exported (or
   hand-edited) `.PARAM` file back into the variables table's init column
   — the counterpart of *Export best .PARAM…*; unmatched names are

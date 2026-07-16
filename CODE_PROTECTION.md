@@ -78,11 +78,28 @@ skill 模块)都原生编译进二进制。** 非 Python 仿真资产则无法�
 
 ## 4. 真正做到"无可恢复 Python" 的改造清单
 
-### 4a. 自研 app/ → 已基本到位
-- 以 **Nuitka standalone** 为发布构建(仓库已有 `build-windows.yml` 的 Nuitka job)。
-- 弃用 PyInstaller 产物作为对外分发(它的 PYZ 是 `.pyc`,B 档可破),或至少
-  不把 PyInstaller 包当"受保护"版本对外。
-- 净效果:app/ 的 ~9,100 LOC 变原生码。✅
+### 4a. 自研 app/ → ✅ 已实现(2026-07-16)
+- 以 **Nuitka standalone** 为受保护发布构建。Windows Nuitka job 已有;新增
+  **Linux Nuitka job**(`build-windows.yml` 的 `linux-nuitka`),产出
+  `AnalogStudio-linux-nuitka.tar.gz` 并接进 release。
+- 两个 Nuitka 命令都加了 **`--include-package=app`**,强制 app/ **每个**子模块
+  编译进原生二进制(不只从 `main.py` 静态跟随到的)。
+- Linux Nuitka job 内置**源码泄漏门禁**:打包后 `find` dist 里任何 `app/**.py`
+  或 `.pyc`,发现即 `exit 1` fail 构建 —— 把"无 app 源码"变成 CI 可断言的约束。
+- **沙箱实测(2026-07-16,Nuitka 2.8.10 / Python 3.11 / Linux x86-64)**:
+  - `AnalogStudio.bin` 138 MB,dist 414 MB;
+  - **dist 内 app/ 的 `.py` 数量 = 0**(app/ 全部编成机器码);
+  - 补齐 skill 资产 + auditwheel `*.libs`(numpy/scipy/pillow)后
+    `--smoke`(offscreen 构造整窗 + 导入 scipy/matplotlib/numpy)**退出 0**。
+  - 注:Nuitka 的 traceback 仍会显示 `app/paths.py` 之类的**文件名/行号**
+    (编译时嵌入,用于可读回溯),但磁盘上并无对应 `.py`,不可反编译。
+- 弃用 PyInstaller 产物作为"受保护"对外分发(它的 PYZ 是 `.pyc`,B 档可破);
+  PyInstaller 包保留但仅作兼容变体,不宣称保护。
+- 净效果:app/ 的 ~9,100 LOC 变原生码,Windows + Linux 两平台均有受保护包。✅
+
+> **skill 的 124 个 Python 模块本步仍是明文**(§4b 未做)——本步只保护自研
+> `app/`;要连 vendored/skill 一起隐藏需推进 §4b(circuit-skills 92 文件的
+> 重名/相对导入梳理是主要工作量)。
 
 ### 4b. skill 的 124 个 Python 模块 → 核心改造(工作量主体)
 现状"复制到工作区 + sys.path 注入源码"必须改成"编译进二进制 + import 编译模块"。
