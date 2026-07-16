@@ -27,5 +27,7 @@ CLAUDE.md
 # Analog Studio app
 app_output/
 build/
+build-nuitka/
+build-nuitka-linux/
 dist/
 .pytest_cache/
