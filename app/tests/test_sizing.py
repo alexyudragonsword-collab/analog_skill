@@ -42,6 +42,12 @@ def test_registry_and_assets():
         assert (root / 'testbench' / spec.testbench).is_file(), key
         if spec.kind == 'amp':               # shared TB → subckt substituted
             assert spec.subckt == spec.netlist, key
+        # every built-in amp/ldo has a redrawn schemdraw schematic
+        # (tools/gen_sizing_schematics.py) — non-None and non-trivial
+        if spec.kind in ('amp', 'ldo') and spec.pkg == 'analoggym':
+            sp = sizing.schematic_path(key)
+            assert sp is not None and sp.is_file(), key
+            assert sp.stat().st_size > 10_000, key
     assert (paths.analoggym_dir() / 'pdk' / 'sky130_pdk.zip').is_file()
     assert (paths.analoggym_dir() / 'LICENSE').is_file()   # BSD-3
 
