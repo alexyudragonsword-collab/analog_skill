@@ -172,6 +172,7 @@ exe = EXE(
     strip=not IS_WINDOWS,   # ELF symbol strip on Linux; NEVER on Windows (GNU
     upx=False,              # strip corrupts PE DLLs → the exe hangs at startup)
     console=False,
+    icon='app/resources/icons/app_icon.ico',
 )
 
 coll = COLLECT(

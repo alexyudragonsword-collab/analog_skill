@@ -147,6 +147,7 @@ jobs:
             --include-data-dir=analoggym=analoggym `
             --include-data-dir=studio_circuits=studio_circuits `
             --windows-console-mode=disable `
+            --windows-icon-from-ico=app/resources/icons/app_icon.ico `
             --force-stderr-spec="{PROGRAM_BASE}.err.txt" `
             --force-stdout-spec="{PROGRAM_BASE}.out.txt" `
             --output-filename=AnalogStudio.exe `
@@ -315,6 +316,7 @@ jobs:
             --standalone \
             --assume-yes-for-downloads \
             --enable-plugin=pyside6 \
+            --linux-icon=app/resources/icons/app_icon.png \
             --include-package=app \
             --include-module=PySide6.QtSvg \
             --include-module=matplotlib.backends.backend_agg \

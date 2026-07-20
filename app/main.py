@@ -25,6 +25,11 @@ def main() -> int:
     from app import paths
     paths.init_runtime()
 
+    from PySide6.QtGui import QIcon
+    _icon = paths.resources_dir() / 'icons' / 'app_icon.png'
+    if _icon.is_file():
+        app.setWindowIcon(QIcon(str(_icon)))
+
     from app.core.model_registry import (
         register_extra_models, register_finfet_models)
     register_extra_models()
