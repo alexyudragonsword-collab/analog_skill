@@ -136,8 +136,13 @@ class MainWindow(QMainWindow):
 
     def _show_about(self):
         from PySide6.QtWidgets import QMessageBox
-        QMessageBox.about(
-            self, f'About {APP_NAME}',
+        from PySide6.QtGui import QPixmap
+        from PySide6.QtCore import Qt
+        from app import paths
+        box = QMessageBox(self)
+        box.setWindowTitle(f'About {APP_NAME}')
+        box.setTextFormat(Qt.TextFormat.RichText)
+        box.setText(
             f'<h2>{APP_NAME}</h2>'
             f'<p><b>Version</b>: v{__version__}<br>'
             f'<b>Author</b>: {__author__}</p>'
@@ -148,6 +153,12 @@ class MainWindow(QMainWindow):
             '教学案例与器件特性表征。</p>'
             '<p><small>PTM models © Arizona State University, '
             'free for academic research.</small></p>')
+        _icon = paths.resources_dir() / 'icons' / 'app_icon.png'
+        if _icon.is_file():
+            box.setIconPixmap(QPixmap(str(_icon)).scaled(
+                72, 72, Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation))
+        box.exec()
 
     # ── ngspice status ────────────────────────────────────────────────────
     def refresh_ngspice_status(self):
