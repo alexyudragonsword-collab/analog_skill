@@ -23,6 +23,9 @@ _initialized = False
 NGSPICE_ASSETS: Path = None
 GMOVERID_ASSETS: Path = None
 BROWSER_PLOTS: Path = None
+#: set by init_runtime() only for the --onefile build (skill trees are
+#: extracted into the workspace instead of sitting next to the executable)
+CIRCUIT_SKILLS: Path = None
 
 
 def repo_root() -> Path:
@@ -35,10 +38,22 @@ def is_frozen() -> bool:
     return bool(getattr(sys, 'frozen', False)) or '__compiled__' in globals()
 
 
+def _payload_dir() -> Path:
+    """Directory where ``--include-data-*`` files land in a frozen app.
+
+    Nuitka never sets ``sys._MEIPASS``; under BOTH ``--standalone`` and
+    ``--onefile`` ``sys.executable`` points into the (unpacked) app dir, so
+    its parent is the payload root.  The ``_MEIPASS`` check keeps PyInstaller
+    working too.  (Verified on Nuitka 2.8 onefile: ``sys.executable`` is the
+    ephemeral unpack dir and ``--include-data-files`` resolve next to it.)
+    """
+    mp = getattr(sys, '_MEIPASS', None)
+    return Path(mp) if mp else Path(sys.executable).parent
+
+
 def _bundle_skill_dir() -> Path:
     """Location of the bundled skill/ trees in a frozen app."""
-    base = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
-    cand = base / 'skill'
+    cand = _payload_dir() / 'skill'
     if cand.is_dir():
         return cand
     # onedir layout: data files live in _internal next to the executable
@@ -135,10 +150,13 @@ def circuit_skills_dir() -> Path:
 
     Dev: circuit-skills/ in the repo.  Frozen: bundled read-only copy —
     the skills only *read* templates/models from their tree; all outputs
-    go to the ANALOG_WORK_DIR set by init_runtime().
+    go to the ANALOG_WORK_DIR set by init_runtime().  In the --onefile
+    build the tree is extracted into the workspace (CIRCUIT_SKILLS).
     """
+    if CIRCUIT_SKILLS is not None:
+        return CIRCUIT_SKILLS
     if is_frozen():
-        base = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent))
+        base = _payload_dir()
         for cand in (base / 'circuit_skills',
                      Path(sys.executable).parent / '_internal' / 'circuit_skills'):
             if cand.is_dir():
@@ -207,6 +225,39 @@ def ensure_sky130() -> Path:
     return sky130_pdk_dir()
 
 
+def ensure_skill_assets() -> Path:
+    """Extract the bundled skill_assets.zip into the workspace (--onefile).
+
+    The single-file build cannot ship the skill .py trees next to the
+    executable — there is no such directory — so they ride inside the
+    onefile as a zip (via --include-data-files) and are unpacked once into
+    the writable workspace, mirroring ensure_sky130().  Returns the
+    workspace root now holding ngspice_assets/, gmoverid_assets/ and
+    circuit_skills/.
+    """
+    ws = _workspace_root()
+    names = ('ngspice_assets', 'gmoverid_assets', 'circuit_skills')
+    if all((ws / n).is_dir() for n in names):
+        return ws
+    import zipfile
+    zip_path = _payload_dir() / 'skill_assets.zip'
+    ws.mkdir(parents=True, exist_ok=True)
+    tmp = ws / '_skill.tmp'
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    tmp.mkdir()
+    print('Extracting bundled skill assets (first run) ...')
+    with zipfile.ZipFile(zip_path) as zf:
+        zf.extractall(tmp)
+    for name in names:                       # move each tree in atomically
+        src, dst = tmp / name, ws / name
+        if src.is_dir() and not dst.exists():
+            os.replace(src, dst)
+    shutil.rmtree(tmp, ignore_errors=True)
+    print('Skill assets ready.')
+    return ws
+
+
 def resources_dir() -> Path:
     """Location of app/resources (manual HTML + images).
 
@@ -237,6 +288,7 @@ def _trace(stage: str):
 def init_runtime():
     """Resolve asset roots, sync workspace if frozen, extend sys.path."""
     global _initialized, NGSPICE_ASSETS, GMOVERID_ASSETS, BROWSER_PLOTS
+    global CIRCUIT_SKILLS
     if _initialized:
         return
 
@@ -246,9 +298,16 @@ def init_runtime():
         ws = _workspace_root()
         _trace(f'workspace {ws}')
         _prune_old_workspaces(ws)
-        _trace('syncing skill trees')
-        _sync_tree(bundle / 'ngspice_assets', ws / 'ngspice_assets')
-        _sync_tree(bundle / 'gmoverid_assets', ws / 'gmoverid_assets')
+        if (bundle / 'ngspice_assets').is_dir():
+            # standalone: skill trees sit next to the executable
+            _trace('syncing skill trees (standalone)')
+            _sync_tree(bundle / 'ngspice_assets', ws / 'ngspice_assets')
+            _sync_tree(bundle / 'gmoverid_assets', ws / 'gmoverid_assets')
+        else:
+            # onefile: skill trees ride inside the single file as a zip
+            _trace('extracting skill_assets.zip (onefile)')
+            ensure_skill_assets()
+            CIRCUIT_SKILLS = ws / 'circuit_skills'
         NGSPICE_ASSETS = ws / 'ngspice_assets'
         GMOVERID_ASSETS = ws / 'gmoverid_assets'
         BROWSER_PLOTS = ws / 'browser_plots'
