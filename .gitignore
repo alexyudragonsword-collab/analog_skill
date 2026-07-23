@@ -29,5 +29,7 @@ app_output/
 build/
 build-nuitka/
 build-nuitka-linux/
+build-onefile/
+build-onefile-linux/
 dist/
 .pytest_cache/
