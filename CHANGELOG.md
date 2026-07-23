@@ -18,6 +18,14 @@ Design import + netlist viewer in the Sizing tab.
   `app/` source leaks into the dist.  Vendored skill trees remain
   non-Python data that ngspice reads from disk — see `CODE_PROTECTION.md`
   for exactly what this does and does not protect.
+- **Single-file Windows build (Nuitka `--onefile`)**: a new `nuitka-onefile`
+  CI job produces one self-extracting `AnalogStudio.exe`.  The skill `.py`
+  trees ride inside it as `skill_assets.zip` and are unpacked into the
+  workspace on first launch (`app/paths.py::ensure_skill_assets`, mirroring
+  the SKY130 PDK zip).  The standalone directory builds are kept alongside
+  it — the single file is more convenient to hand out, but self-extracts
+  its whole payload to a temp dir on every launch, so it cold-starts slower
+  than the standalone build.
 
 - **Import ▾ → Sizing values (.PARAM)…**: load a previously exported (or
   hand-edited) `.PARAM` file back into the variables table's init column

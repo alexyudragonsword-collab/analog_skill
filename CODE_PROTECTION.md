@@ -101,6 +101,20 @@ skill 模块)都原生编译进二进制。** 非 Python 仿真资产则无法�
 > `app/`;要连 vendored/skill 一起隐藏需推进 §4b(circuit-skills 92 文件的
 > 重名/相对导入梳理是主要工作量)。
 
+### 4a-1. Windows 单文件构建(Nuitka `--onefile`,2026-07-23)
+- 新增 `nuitka-onefile` job(build-windows.yml),产出单个自解压
+  `AnalogStudio.exe`;standalone 目录构建保留(秒开、且是受保护构建)。
+- onefile 无"exe 同级目录",故 3 个 skill `.py` 树(ngspice/gmoverid/circuit_skills)
+  打成 `skill_assets.zip` 塞进 payload,**首启解压到工作区**
+  (`app/paths.py::ensure_skill_assets`,复用 `ensure_sky130()` 范式);
+  OpenBLAS `*.libs` 既放 `<name>.libs/` 又平铺到 payload 根。
+- **保护性不变**:app/ 仍 `--include-package=app` 原生编译进单文件,exe 内无 app
+  源码;skill zip 内是 vendored `.py`(本就明文,不影响 app/ 保护)。onefile 运行时
+  会把整个 payload(含 skill zip)解压到临时目录 → skill 明文会短暂落临时盘,与
+  standalone 无本质差异(skill 本就明文)。
+- **取舍**:每次启动自解压 ~400MB 到临时目录→冷启动更慢;偶发 Windows AV 误报;
+  临时盘占用。故作为**便携分发变体**,不取代 standalone。
+
 ### 4b. skill 的 124 个 Python 模块 → 核心改造(工作量主体)
 现状"复制到工作区 + sys.path 注入源码"必须改成"编译进二进制 + import 编译模块"。
 需要动的点(按依赖顺序):

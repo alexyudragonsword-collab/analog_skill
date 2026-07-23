@@ -230,6 +230,136 @@ jobs:
           if-no-files-found: error
 
   # ───────────────────────────────────────────────────────────────────────────
+  # Variant 2b: Nuitka --onefile (single self-extracting AnalogStudio.exe).
+  # The onefile has no "next to the exe" dir, so the three skill .py trees ride
+  # inside it as skill_assets.zip and are unpacked into the workspace on first
+  # run (app/paths.py::ensure_skill_assets, mirroring the SKY130 PDK zip).  The
+  # OpenBLAS *.libs DLLs are placed both as <name>.libs/ and flattened to the
+  # payload root (Nuitka's loader ignores os.add_dll_directory).  Trade-off:
+  # every launch self-extracts the whole payload to a temp dir → slower cold
+  # start; standalone (job "nuitka") stays the fast, protected build.
+  # ───────────────────────────────────────────────────────────────────────────
+  nuitka-onefile:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Restore Nuitka compilation cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~\AppData\Local\Nuitka\Nuitka\Cache
+          key: nuitka-onefile-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-${{ github.run_id }}
+          # warm-start from the standalone job's cache (same compiled C)
+          restore-keys: |
+            nuitka-onefile-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-
+            nuitka-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-
+            nuitka-${{ runner.os }}-
+
+      - name: Compile FinFET OSDI (Windows)
+        continue-on-error: true
+        uses: ./.github/actions/finfet-osdi-windows
+
+      - name: Build with Nuitka (onefile)
+        shell: pwsh
+        run: |
+          # skill .py trees → a single data zip (Nuitka refuses .py as data)
+          New-Item -ItemType Directory -Force -Path skillstage | Out-Null
+          Copy-Item -Recurse ngspice\assets  skillstage\ngspice_assets
+          Copy-Item -Recurse gmoverid\assets skillstage\gmoverid_assets
+          Copy-Item -Recurse circuit-skills  skillstage\circuit_skills
+          Get-ChildItem -Recurse skillstage -Include __pycache__,logs,plots -Directory |
+            Remove-Item -Recurse -Force
+          Compress-Archive -Path skillstage\* -DestinationPath skill_assets.zip -Force
+
+          # OpenBLAS *.libs: ship the dir AND flatten the DLLs into the payload
+          # root (delvewheel's os.add_dll_directory is ignored by Nuitka's loader)
+          $site = python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
+          $extra = @()
+          Get-ChildItem -Path $site -Directory -Filter '*.libs' | ForEach-Object {
+            $extra += "--include-data-dir=$($_.FullName)=$($_.Name)"
+            Get-ChildItem "$($_.FullName)\*.dll" | ForEach-Object {
+              $extra += "--include-data-files=$($_.FullName)=$($_.Name)"
+            }
+          }
+
+          python -m nuitka `
+            --onefile `
+            --assume-yes-for-downloads `
+            --msvc=latest `
+            --enable-plugin=pyside6 `
+            --include-package=app `
+            --include-module=PySide6.QtSvg `
+            --include-module=matplotlib.backends.backend_agg `
+            --include-module=matplotlib.backends.backend_qtagg `
+            --include-module=scipy.stats `
+            --include-module=scipy.signal `
+            --nofollow-import-to=optuna `
+            --nofollow-import-to=sqlalchemy `
+            --nofollow-import-to=greenlet `
+            --nofollow-import-to=alembic `
+            --nofollow-import-to=mako `
+            --nofollow-import-to=colorlog `
+            --include-package-data=matplotlib `
+            --include-data-dir=app/resources=app_resources `
+            --include-data-dir=transistor-models/assets/models/bulk_cmos=bulk_models `
+            --include-data-dir=transistor-models/assets/models/finfet=finfet_models `
+            --include-data-dir=analoggym=analoggym `
+            --include-data-dir=studio_circuits=studio_circuits `
+            --include-data-files=skill_assets.zip=skill_assets.zip `
+            $extra `
+            --windows-console-mode=disable `
+            --windows-icon-from-ico=app/resources/icons/app_icon.ico `
+            --force-stderr-spec="{TEMP}/AnalogStudio.err.txt" `
+            --force-stdout-spec="{TEMP}/AnalogStudio.out.txt" `
+            --output-filename=AnalogStudio.exe `
+            --output-dir=build-onefile `
+            app/main.py
+
+      - name: Save Nuitka compilation cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~\AppData\Local\Nuitka\Nuitka\Cache
+          key: nuitka-onefile-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-${{ github.run_id }}
+
+      - name: Smoke test (offscreen)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          PYTHONFAULTHANDLER: 1
+          ANALOG_STUDIO_TRACE: 1
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath ".\build-onefile\AnalogStudio.exe" `
+                             -ArgumentList "--smoke" -Wait -PassThru
+          if ($p.ExitCode -ne 0) {
+            Write-Error "onefile smoke test failed with exit code $($p.ExitCode)"
+            exit 1
+          }
+
+      - name: Dump app output on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-ChildItem "$env:TEMP\AnalogStudio.*.txt" -ErrorAction SilentlyContinue |
+            ForEach-Object { Write-Host "===== $($_.Name) ====="; Get-Content $_ }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AnalogStudio-windows-onefile
+          path: build-onefile/AnalogStudio.exe
+          if-no-files-found: error
+
+  # ───────────────────────────────────────────────────────────────────────────
   # Variant 3: Linux (PyInstaller onedir, same app.spec — it is cross-platform:
   # the Qt trim matches both .so and .dll names and the linux64 bsimcmg.osdi
   # is already vendored in the finfet model tree)
@@ -395,7 +525,7 @@ jobs:
   # ───────────────────────────────────────────────────────────────────────────
   release:
     if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
-    needs: [pyinstaller, nuitka, linux, linux-nuitka]
+    needs: [pyinstaller, nuitka, nuitka-onefile, linux, linux-nuitka]
     env:
       RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/')
                        && github.ref_name || inputs.release_tag }}
@@ -422,6 +552,7 @@ jobs:
           files: |
             artifacts/AnalogStudio-windows-pyinstaller.zip
             artifacts/AnalogStudio-windows-nuitka.zip
+            artifacts/AnalogStudio-windows-onefile/AnalogStudio.exe
             artifacts/AnalogStudio-linux-pyinstaller.tar.gz
             artifacts/AnalogStudio-linux-nuitka.tar.gz
           fail_on_unmatched_files: true
