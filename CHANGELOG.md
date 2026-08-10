@@ -9,6 +9,21 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 Design import + netlist viewer in the Sizing tab.
 
+- **Fixed — user data survived neither an upgrade nor a hostile netlist**:
+  - Saved runs (`sizing_runs/`) and imported circuits (`user_circuits/`)
+    were stored inside the per-version workspace, which `paths.
+    _prune_old_workspaces()` deletes on the first launch of a new version
+    — every saved run and custom circuit was lost on upgrade, contrary to
+    the documented "persistent across sessions".  They now live in a
+    version-independent user-data store next to the SKY130 PDK
+    (`paths.user_data_dir()`, exported as `ANALOG_USER_DATA_DIR`), and
+    `paths._migrate_user_data()` moves data left in older workspaces into
+    it before pruning, so upgrading from ≤1.3 keeps everything.
+  - The `.subckt` name in an imported netlist was matched with `\S+` and
+    used directly as a filename, so a crafted netlist declaring
+    `.subckt ../../../evil …` could write outside the workspace.  The name
+    is now restricted to a SPICE identifier and re-checked before it is
+    joined to a path.
 - **Protected Linux build (Nuitka)**: a new `linux-nuitka` CI job compiles
   the self-written `app/` to native machine code — the distributed package
   contains no `app/` `.py`/`.pyc`, so the application source cannot be
@@ -36,7 +51,7 @@ Design import + netlist viewer in the Sizing tab.
   must follow the AnalogGym amplifier contract
   (`.subckt <name> gnda vdda vinn vinp vout`, self-biased) and come with
   its `.PARAM` design-variables file.  The design is copied into the
-  writable workspace (`user_circuits/`), registered in the circuit
+  writable user-data store (`user_circuits/`), registered in the circuit
   drop-down, validated with one real evaluation on import (a netlist
   that produces no metrics is rejected and removed), persists across
   sessions, and gets the full pipeline: the 9-metric report, parallel

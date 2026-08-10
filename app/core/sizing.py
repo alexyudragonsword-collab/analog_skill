@@ -283,10 +283,15 @@ SIZING: dict[str, SizingSpec] = _build_registry()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# User-imported circuits (workspace user_circuits/, AnalogGym amp contract)
+# User-imported circuits (user-data store user_circuits/, AnalogGym contract)
 # ─────────────────────────────────────────────────────────────────────────────
+#: The captured name becomes a *filename* (user_circuits/amp/netlist/<name>)
+#: and part of a registry key, so it is restricted to a SPICE-identifier
+#: charset — `\S+` would happily match "../../../evil" and let a crafted
+#: netlist write outside the workspace.
 _USER_SUBCKT = re.compile(
-    r'(?im)^\s*\.subckt\s+(\S+)\s+gnda\s+vdda\s+vinn\s+vinp\s+vout\b')
+    r'(?im)^\s*\.subckt\s+([A-Za-z_][A-Za-z0-9_]*)'
+    r'\s+gnda\s+vdda\s+vinn\s+vinp\s+vout\b')
 
 
 def parse_param_file(path: Path) -> dict[str, float]:
@@ -331,6 +336,10 @@ def import_user_circuit(netlist_path: Path, vars_path: Path) -> str:
             'declare ".subckt <name> gnda vdda vinn vinp vout" (SKY130, '
             'self-biased; see the AnalogGym amp netlists for examples)')
     subckt = m.group(1)
+    # belt-and-braces: the regex already constrains the charset, but this is
+    # the point where the name turns into a path — never let it escape.
+    if subckt != Path(subckt).name or subckt in ('.', '..'):
+        raise ValueError(f'invalid subcircuit name: {subckt!r}')
     key = f'user_{subckt.lower()}'
     if key in SIZING:
         raise ValueError(f'a circuit named {subckt} is already imported — '
@@ -440,12 +449,24 @@ def _default_bounds(name: str, default: float) -> tuple[float, float, bool]:
         default * 4 if default > 0 else default / 4, False
 
 
+def _user_data_root() -> Path:
+    """Root for data the *user* created (saved runs, imported circuits).
+
+    init_runtime() points ANALOG_USER_DATA_DIR at a location outside the
+    versioned workspace, so an app upgrade — which wipes old workspaces —
+    cannot delete it.  The ANALOG_WORK_DIR fallback keeps tests and any
+    caller that sets only the work dir self-contained.
+    """
+    d = os.environ.get('ANALOG_USER_DATA_DIR') \
+        or os.environ.get('ANALOG_WORK_DIR')
+    return Path(d) if d else Path.home() / '.analog_studio'
+
+
 def user_circuits_dir() -> Path:
-    """Writable workspace tree for user-imported circuits — same
+    """Writable tree for user-imported circuits — same
     <root>/amp/{netlist,variables,testbench} layout as analoggym/studio,
     persisted like runs_dir()."""
-    d = Path(os.environ.get('ANALOG_WORK_DIR',
-                            Path.home() / '.analog_studio')) / 'user_circuits'
+    d = _user_data_root() / 'user_circuits'
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -1542,8 +1563,7 @@ RUN_SCHEMA = 1
 
 
 def runs_dir() -> Path:
-    d = Path(os.environ.get('ANALOG_WORK_DIR',
-                            Path.home() / '.analog_studio')) / 'sizing_runs'
+    d = _user_data_root() / 'sizing_runs'
     d.mkdir(parents=True, exist_ok=True)
     return d
 

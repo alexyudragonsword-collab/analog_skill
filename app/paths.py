@@ -87,13 +87,65 @@ def _sync_tree(src: Path, dst: Path):
 
 
 def _prune_old_workspaces(ws_version_dir: Path):
-    """Delete workspace dirs left over from previous app versions."""
+    """Delete workspace dirs left over from previous app versions.
+
+    Only ever call this *after* _migrate_user_data() — the workspace is
+    disposable derived state, but older versions kept saved runs and
+    imported circuits inside it and those must be rescued first.
+    """
     parent = ws_version_dir.parent
     if not parent.is_dir():
         return
     for entry in parent.iterdir():
         if entry.is_dir() and entry != ws_version_dir:
             shutil.rmtree(entry, ignore_errors=True)
+
+
+#: subdirectories of the (pre-1.4) versioned circuit_work tree that hold
+#: user-created data rather than regenerable scratch output
+_USER_DATA_TREES = ('sizing_runs', 'user_circuits')
+
+
+def _migrate_user_data(ws_version_dir: Path, dst_root: Path):
+    """Move pre-1.4 saved runs / imported circuits out of the workspace.
+
+    Up to 1.3 these lived under ``workspace/<version>/circuit_work/`` and so
+    were destroyed by _prune_old_workspaces() on every upgrade.  Walk every
+    version dir (newest name last so it wins on collisions) and move each
+    tree's entries into the version-independent store; existing files there
+    are never overwritten.
+    """
+    parent = ws_version_dir.parent
+    if not parent.is_dir():
+        return
+    for ver in sorted(p for p in parent.iterdir() if p.is_dir()):
+        for name in _USER_DATA_TREES:
+            src = ver / 'circuit_work' / name
+            if not src.is_dir():
+                continue
+            dst = dst_root / name
+            dst.mkdir(parents=True, exist_ok=True)
+            for entry in src.iterdir():
+                target = dst / entry.name
+                if target.exists():
+                    continue
+                try:
+                    shutil.move(str(entry), str(target))
+                except OSError:
+                    pass                       # best effort; never fatal
+            shutil.rmtree(src, ignore_errors=True)
+
+
+def user_data_dir() -> Path:
+    """Root of the version-independent user-data store.
+
+    Saved sizing runs and imported circuits belong to the *user*, not to an
+    app version, so they live next to the SKY130 PDK rather than inside the
+    versioned workspace that _prune_old_workspaces() wipes on upgrade.
+    """
+    if is_frozen():
+        return _workspace_root().parent.parent / 'data'
+    return repo_root() / 'app_output' / 'user_data'
 
 
 def bulk_models_dir() -> Path:
@@ -297,6 +349,8 @@ def init_runtime():
         bundle = _bundle_skill_dir()
         ws = _workspace_root()
         _trace(f'workspace {ws}')
+        # rescue user data from older workspaces *before* pruning them
+        _migrate_user_data(ws, user_data_dir())
         _prune_old_workspaces(ws)
         if (bundle / 'ngspice_assets').is_dir():
             # standalone: skill trees sit next to the executable
@@ -325,6 +379,12 @@ def init_runtime():
     circuit_work = BROWSER_PLOTS.parent / 'circuit_work'
     circuit_work.mkdir(parents=True, exist_ok=True)
     os.environ['ANALOG_WORK_DIR'] = str(circuit_work)
+
+    # …but anything the *user* created must outlive this app version, so it
+    # is stored outside the workspace (see user_data_dir()).
+    user_data = user_data_dir()
+    user_data.mkdir(parents=True, exist_ok=True)
+    os.environ['ANALOG_USER_DATA_DIR'] = str(user_data)
 
     for p in (str(NGSPICE_ASSETS), str(GMOVERID_ASSETS)):
         if p not in sys.path:

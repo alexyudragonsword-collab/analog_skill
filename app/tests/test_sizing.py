@@ -468,6 +468,12 @@ def test_parse_param_file(tmp_path):
     assert 'W_B' not in v                     # expression ref skipped
 
 
+def _isolate_workspace(tmp_path, monkeypatch):
+    """Point both the scratch work dir and the user-data store at tmp."""
+    monkeypatch.setenv('ANALOG_WORK_DIR', str(tmp_path / 'work'))
+    monkeypatch.setenv('ANALOG_USER_DATA_DIR', str(tmp_path / 'work'))
+
+
 def _user_files(tmp_path, name='my_ota_t'):
     nl = (paths.studio_circuits_dir() / 'amp' / 'netlist' / 'CM_OTA_Pin_3'
           ).read_text().replace('cm_ota_pin_3', name)
@@ -482,7 +488,7 @@ def _user_files(tmp_path, name='my_ota_t'):
 def test_user_circuit_import_lifecycle(tmp_path, monkeypatch):
     """Import -> register -> netlist view -> rescan persistence -> remove;
     contract violations are rejected."""
-    monkeypatch.setenv('ANALOG_WORK_DIR', str(tmp_path / 'work'))
+    _isolate_workspace(tmp_path, monkeypatch)
     bad = tmp_path / 'bad.sp'
     bad.write_text('.subckt foo a b c\n.ends\n')
     nl, vars_f = _user_files(tmp_path)
@@ -512,10 +518,77 @@ def test_user_circuit_import_lifecycle(tmp_path, monkeypatch):
     assert sizing.load_user_circuits() == []          # files gone too
 
 
+@pytest.mark.parametrize('name', [
+    '../../../../tmp/EVIL',      # classic traversal
+    '/tmp/EVIL',                 # absolute path
+    '..',                        # parent dir
+    'a/b',                       # nested write
+])
+def test_user_import_rejects_path_escape(tmp_path, monkeypatch, name):
+    """A crafted .subckt name must never become a path outside the store."""
+    _isolate_workspace(tmp_path, monkeypatch)
+    nl, vars_f = _user_files(tmp_path, 'placeholder')
+    nl.write_text(nl.read_text().replace('placeholder', name))
+    with pytest.raises(ValueError, match='contract'):
+        sizing.import_user_circuit(nl, vars_f)
+    # nothing escaped: the only thing written is inside the workspace
+    assert not (tmp_path / 'EVIL').exists()
+    assert not list(tmp_path.glob('**/EVIL'))
+
+
+def test_user_data_lives_outside_the_versioned_workspace(tmp_path,
+                                                         monkeypatch):
+    """Saved runs and imports must not sit under ANALOG_WORK_DIR — that
+    tree is versioned and wiped by paths._prune_old_workspaces()."""
+    work = tmp_path / 'ws' / '1.4' / 'circuit_work'
+    data = tmp_path / 'data'
+    monkeypatch.setenv('ANALOG_WORK_DIR', str(work))
+    monkeypatch.setenv('ANALOG_USER_DATA_DIR', str(data))
+    for d in (sizing.runs_dir(), sizing.user_circuits_dir()):
+        assert d.is_relative_to(data)
+        assert not d.is_relative_to(work)
+
+
+def test_upgrade_preserves_user_data(tmp_path):
+    """Simulate a 1.3 -> 1.4 upgrade: migrate, then prune.  The old saved
+    run and imported circuit survive; the scratch tree does not."""
+    ws_parent = tmp_path / 'workspace'
+    old = ws_parent / '1.3' / 'circuit_work'
+    (old / 'sizing_runs').mkdir(parents=True)
+    (old / 'sizing_runs' / 'amp_x_20250101_000000.json').write_text('{}')
+    (old / 'user_circuits' / 'amp' / 'netlist').mkdir(parents=True)
+    (old / 'user_circuits' / 'amp' / 'netlist' / 'my_ota').write_text('*')
+    (old / 'sizing').mkdir()                 # regenerable scratch
+    (old / 'sizing' / 'junk.raw').write_text('x')
+
+    new_ws = ws_parent / '1.4'
+    data = tmp_path / 'data'
+    paths._migrate_user_data(new_ws, data)
+    paths._prune_old_workspaces(new_ws)
+
+    assert (data / 'sizing_runs' / 'amp_x_20250101_000000.json').is_file()
+    assert (data / 'user_circuits' / 'amp' / 'netlist' / 'my_ota').is_file()
+    assert not (ws_parent / '1.3').exists()  # old workspace really is gone
+
+
+def test_migrate_never_overwrites_existing_data(tmp_path):
+    """A name collision keeps the current store's copy."""
+    ws_parent = tmp_path / 'workspace'
+    old = ws_parent / '1.3' / 'circuit_work' / 'sizing_runs'
+    old.mkdir(parents=True)
+    (old / 'run.json').write_text('old')
+    data = tmp_path / 'data'
+    (data / 'sizing_runs').mkdir(parents=True)
+    (data / 'sizing_runs' / 'run.json').write_text('current')
+
+    paths._migrate_user_data(ws_parent / '1.4', data)
+    assert (data / 'sizing_runs' / 'run.json').read_text() == 'current'
+
+
 @needs_ngspice
 def test_user_circuit_evaluates(tmp_path, monkeypatch):
     """An imported design runs through the full evaluate pipeline."""
-    monkeypatch.setenv('ANALOG_WORK_DIR', str(tmp_path / 'work'))
+    _isolate_workspace(tmp_path, monkeypatch)
     nl, vars_f = _user_files(tmp_path, 'my_ota_e')
     key = sizing.import_user_circuit(nl, vars_f)
     try:

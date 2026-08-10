@@ -121,7 +121,7 @@ class SizingTab(QWidget, JobTabMixin):
             'Import a sizing back into the init column, or import your own '
             'amplifier design (.subckt <name> gnda vdda vinn vinp vout on '
             'SKY130, self-biased, plus its .PARAM design-variables file) as '
-            'a new optimizable circuit — it persists in the workspace and '
+            'a new optimizable circuit — it persists across app upgrades and '
             'gets the full pipeline (metrics, waves, change summary).')
         self.netlist_btn = QPushButton('Netlist…')
         self.netlist_btn.setToolTip(

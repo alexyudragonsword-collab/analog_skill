@@ -370,8 +370,9 @@ SKY130 amplifier design as a new optimizable circuit.  The netlist must
 follow the AnalogGym amplifier contract
 <code>.subckt &lt;name&gt; gnda vdda vinn vinp vout</code> (self-biased, no
 extra bias pins) and come with its .PARAM design-variables file; on
-import it is copied into the writable workspace
-(<code>user_circuits/</code>, persistent across sessions), registered in
+import it is copied into the writable user-data store
+(<code>user_circuits/</code>, kept outside the versioned workspace so it
+survives app upgrades), registered in
 the circuit drop-down, and validated with one real evaluation (a netlist
 that produces no metrics is rejected and removed).  Imported circuits
 get the full pipeline: 9-metric report, parallel evaluation, Waves…
@@ -384,7 +385,8 @@ circuits show their <code>.cir.tmpl</code> templates; imported circuits
 can be removed from this dialog.</p>
 
 <p><b>Run management</b>: every completed optimization is auto-saved as
-JSON (workspace <code>sizing_runs/</code>). <b>Runs…</b> opens the list of
+JSON (user-data store <code>sizing_runs/</code>, preserved across app
+upgrades). <b>Runs…</b> opens the list of
 saved runs — <b>Load</b> restores the report and convergence curve,
 <b>Compare</b> overlays the convergence curves of several selected runs,
 <b>Use best as init</b> writes a run's best sizing back into the
