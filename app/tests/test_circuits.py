@@ -113,6 +113,9 @@ def test_repoint_models_uses_workspace():
         with circuits.skill_context(scripts):
             common = importlib.import_module(common_mod)
             circuits._repoint_models(common, lib)
-            assert str(paths.NGSPICE_ASSETS) in str(common.MODEL_PATH)
+            # MODEL_PATH goes into a SPICE .include, so ngspice_common.spath
+            # writes it with forward slashes on every platform — compare in
+            # the same normalization, not against a native str(WindowsPath).
+            assert paths.NGSPICE_ASSETS.as_posix() in str(common.MODEL_PATH)
             assert common.MODEL_PATH.endswith(lib)
             assert (paths.NGSPICE_ASSETS / 'models' / lib).is_file()
