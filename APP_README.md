@@ -82,7 +82,18 @@ app/
 │   ├── validate_service.py  # 封装 validate_gmoverid 的 5 项物理自检
 │   ├── examples.py          # 9 案例注册表 + monkey-patch 运行器
 │   ├── render_lock.py       # 进程级 matplotlib 渲染锁(GUI/worker 互斥)
-│   └── browser_service.py   # 特性图/对比图编排(复刻 run_gmoverid/run_multinode 逻辑)
+│   ├── browser_service.py   # 特性图/对比图编排(复刻 run_gmoverid/run_multinode 逻辑)
+│   └── sizing/              # Sizing 标签页内核(按职责分层,层间单向依赖)
+│       ├── spec.py          #   纯数据:电路/指标/变量 dataclass + 数值解析
+│       ├── registry.py      #   内置电路注册表 SIZING + 各自的指标目标
+│       ├── assets.py        #   电路设计文件定位 + .PARAM → 变量表
+│       ├── evaluation.py    #   渲染测试台 → 跑 ngspice → 指标/波形
+│       ├── user_circuits.py #   导入用户自带网表并注册
+│       ├── scoring.py       #   指标 dict → 单一 cost
+│       ├── report.py        #   SizingRun 记录 + 报告/器件变更文本
+│       ├── optimizer.py     #   预算内的 evaluate→score→提议循环(4 种算法)
+│       ├── runs.py          #   运行记录的 JSON 存取(用户数据区)
+│       └── plots.py         #   收敛曲线 / 波形对比渲染(仅 GUI 线程)
 ├── ui/                      # main_window + 四个 tab + settings/manual 对话框
 │   └── widgets/             # png_viewer / mpl_canvas / log_panel / op_result_view
 └── tests/                   # pytest(worker 单测 + examples 集成测试)

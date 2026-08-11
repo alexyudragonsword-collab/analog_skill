@@ -371,10 +371,14 @@ def test_verify_hook(monkeypatch):
                     'fom1': 3.3, 'fom2': 0.18}
         return {'tau_ps': 8.0, 'total_w_um': 22.0}
 
-    monkeypatch.setattr(sizing, 'evaluate', fake)
+    # patch where optimize() *looks the name up* — its own module global.
+    # sizing.evaluate is only a re-export on the package facade; rebinding
+    # that would leave sizing.optimizer.evaluate pointing at the real thing
+    # and this test would silently run ngspice for minutes.
+    monkeypatch.setattr(sizing.optimizer, 'evaluate', fake)
     variables = sizing.parse_variables('skill_comparator_fast')
     run = sizing.optimize('skill_comparator_fast', variables, budget=3)
-    monkeypatch.setattr(sizing, 'evaluate', orig)
+    monkeypatch.setattr(sizing.optimizer, 'evaluate', orig)
     assert 'skill_comparator' in calls
     assert run.verified and run.verified['sigma_uv'] == 180.0
     assert 'verified (full evaluation, skill_comparator)' in run.report()

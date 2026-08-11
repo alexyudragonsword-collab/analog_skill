@@ -9,6 +9,19 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 Design import + netlist viewer in the Sizing tab.
 
+- **`app/core/sizing.py` split into a layered package**.  The module had
+  grown to 1638 lines carrying eight unrelated responsibilities; it is now
+  `app/core/sizing/` with one module per responsibility and a strictly
+  one-directional dependency graph (`spec → registry → assets → scoring →
+  evaluation → user_circuits → report → optimizer → runs → plots`).
+  `SizingRun` moved out of the plain-data layer, together with
+  `change_summary`, into a new `report` module — its `report()` reaches
+  into the registry, the scorer and the evaluator, so it is presentation
+  over those layers, not data.  Behaviour is unchanged: `__init__.py`
+  re-exports the same public names, so `from app.core import sizing` and
+  every `sizing.x` call site are untouched, and all 70 top-level
+  definitions were moved byte-for-byte (verified by comparing the AST of
+  every definition before and after).
 - **CI: lint gate + cross-platform test matrix**.  A new `lint` job runs
   `ruff check` over `app/` and `tools/` against a checked-in `ruff.toml`
   (defect rules — pyflakes/bugbear/pyupgrade/pycodestyle — with the
