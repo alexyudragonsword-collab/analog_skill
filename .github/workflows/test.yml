@@ -63,14 +63,12 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python -m pytest app/tests/ -v
 
-      - name: App smoke test (POSIX)
-        if: runner.os != 'Windows'
+      # `timeout` is GNU coreutils: absent on the macOS runner and on
+      # Windows, so the 90 s guard is applied from Python instead.
+      - name: App smoke test
         env:
           QT_QPA_PLATFORM: offscreen
-        run: timeout 90 python -m app.main --smoke
-
-      - name: App smoke test (Windows)
-        if: runner.os == 'Windows'
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: python -m app.main --smoke
+        run: >
+          python -c "import subprocess, sys;
+          sys.exit(subprocess.run([sys.executable, '-m', 'app.main',
+          '--smoke'], timeout=90).returncode)"
