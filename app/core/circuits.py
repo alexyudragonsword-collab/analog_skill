@@ -22,13 +22,12 @@ thread and receives (png_paths, report_text).
 """
 
 import io
-import os
 import sys
 import time
 from contextlib import contextmanager, redirect_stdout
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 from app import paths
 
@@ -308,7 +307,9 @@ def _run_ota(analysis, values):
     _apply_params(common, values)
     _repoint_models(common, 'ptm180.lib')
     from ngspice_common import PLOT_DIR
-    import simulate_ota_dc, simulate_ota_ac, simulate_ota_noise
+    import simulate_ota_ac
+    import simulate_ota_dc
+    import simulate_ota_noise
     import plot_ota
 
     res = {}
@@ -352,8 +353,10 @@ def _run_opamp(analysis, values):
     _apply_params(common, values)
     _repoint_models(common, 'ptm180.lib')
     from ngspice_common import PLOT_DIR
-    import simulate_opamp_dc, simulate_opamp_ac, simulate_opamp_pz, \
-        simulate_opamp_noise
+    import simulate_opamp_ac
+    import simulate_opamp_dc
+    import simulate_opamp_noise
+    import simulate_opamp_pz
     import plot_opamp
 
     res = {}
@@ -384,7 +387,8 @@ def _run_opamp(analysis, values):
         ugb = m_ac.get('ugb_hz', float('nan'))
         nd = m_pz.get('nondominant_pole_hz', float('nan'))
         rz = m_pz.get('first_rhp_zero_hz', float('nan'))
-        lines += [f"Dominant pole : {_fmt(m_pz.get('dominant_pole_hz', float('nan')) / 1e3, 3)} kHz",
+        dp = m_pz.get('dominant_pole_hz', float('nan'))
+        lines += [f'Dominant pole : {_fmt(dp / 1e3, 3)} kHz',
                   f"Non-dom pole  : {_fmt(nd / 1e6, 3)} MHz ({_fmt(nd / ugb)} x UGB)",
                   f"First RHP zero: {_fmt(rz / 1e6, 3)} MHz ({_fmt(rz / ugb)} x UGB)"]
     if 'noise' in res:
@@ -434,7 +438,10 @@ def _run_ldo(analysis, values):
     from simulate_ldo_ac import simulate_ac
     from simulate_ldo_noise import simulate_noise
     from simulate_ldo_tran import simulate_tran
-    import plot_ldo_dc, plot_ldo_ac, plot_ldo_noise, plot_ldo_tran
+    import plot_ldo_ac
+    import plot_ldo_dc
+    import plot_ldo_noise
+    import plot_ldo_tran
     import run_ldo
 
     res = {}

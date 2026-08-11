@@ -17,7 +17,8 @@ import traceback
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from PySide6.QtCore import QThread, Signal
 from contextlib import redirect_stdout, redirect_stderr

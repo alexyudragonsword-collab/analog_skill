@@ -1119,7 +1119,7 @@ def change_summary(circuit: str, best_values: dict) -> str:
             continue
         cell = '  '.join(f'{d} {fmt(*g[d])}' for d in 'WLM' if d in g)
         dev_rows.append((r, f'  {dev:<14}{g["role"]:<18}{cell}'))
-    for r, row in sorted(dev_rows, key=lambda t: -t[0]):
+    for _rank, row in sorted(dev_rows, key=lambda t: -t[0]):
         lines.append(row)
     for name, a, b in sorted(flat, key=lambda t: -ratio(t[1], t[2])):
         lines.append(f'  {name:<32}{fmt(a, b)}')
@@ -1197,7 +1197,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
     def to_values(xn):
         x = np.clip(xn, 0, 1) * span + lo
         x = np.where(is_int, np.round(x), x)
-        return dict(zip(names, x.tolist()))
+        return dict(zip(names, x.tolist(), strict=True))
 
     def _cancelled():
         return should_cancel is not None and should_cancel()
@@ -1307,14 +1307,15 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         study = optuna.create_study(
             direction='minimize',
             sampler=optuna.samplers.TPESampler(seed=0))
-        study.enqueue_trial({n: float(x) for n, x in zip(names, x0)})
+        study.enqueue_trial(
+            {n: float(x) for n, x in zip(names, x0, strict=True)})
         while not state['cancel'] and state['dispatched'] < budget:
             k = min(workers, budget - state['dispatched'])
             trials = [study.ask() for _ in range(k)]
             xs = [np.array([t.suggest_float(n, 0.0, 1.0) for n in names])
                   for t in trials]
             costs = run_batch(xs)
-            for t, c in zip(trials, costs):
+            for t, c in zip(trials, costs, strict=True):
                 study.tell(t, c if np.isfinite(c) else 1e12)
 
     def run_llm():

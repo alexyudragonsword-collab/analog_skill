@@ -1,6 +1,5 @@
 """Tab: cross-parameter comparison plots (channel-length / node / caps)."""
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QFormLayout, QGroupBox, QHBoxLayout,
     QLabel, QLineEdit, QListWidget, QPushButton, QSplitter, QStackedWidget,
@@ -120,8 +119,8 @@ class ComparisonTab(QWidget, JobTabMixin):
             try:
                 L_list = [float(t) for t in
                           self.len_list.text().replace(',', ' ').split()]
-            except ValueError:
-                raise ValueError('L list must be numbers')
+            except ValueError as exc:
+                raise ValueError('L list must be numbers') from exc
             if len(L_list) < 2:
                 raise ValueError('need at least 2 L values')
             key = ('length', model, tuple(L_list))

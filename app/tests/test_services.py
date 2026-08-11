@@ -6,7 +6,6 @@ zero coverage.
 
 import os
 import shutil
-import sys
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 

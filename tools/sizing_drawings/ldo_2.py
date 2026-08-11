@@ -119,7 +119,7 @@ def draw():
     wire(d, (X2B, 8.0 - 1.67), (X2B, Y_ND))         # net030 column
     sh.nfet('xnm6', X2B, Y_ND, 'NM6', bias='Ib', to_gnd=True)
     node_label(d, (X2B + 0.2, 4.6), 'net030')
-    m2 = sh.nfet('xnm2', X2C, Y_CT, 'NM2', left=True, bias='vref')
+    sh.nfet('xnm2', X2C, Y_CT, 'NM2', left=True, bias='vref')
     wire(d, (X2C, Y_ND), (X2B, Y_ND))
     dot(d, (X2B, Y_ND))
     sh.pfet('xpm1', X2C, 'PM1', left=True, bias='net14')

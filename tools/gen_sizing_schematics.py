@@ -28,12 +28,13 @@ import re
 import sys
 from pathlib import Path
 
-import schemdraw
 import schemdraw.elements as elm
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from gen_schematics import (          # noqa: E402  (shared style/primitives)
-    FET_H, NODE, TINTS, dot, drawing, nmos, node_label, pmos, port, rail,
+# TINTS/rail/tint/title are not used here — they are re-exported so the
+# per-circuit modules in sizing_drawings/ import everything from this hub.
+from gen_schematics import (   # noqa: E402, F401  (shared style/primitives)
+    FET_H, TINTS, dot, drawing, nmos, node_label, pmos, port, rail,
     tint, title, wire,
 )
 

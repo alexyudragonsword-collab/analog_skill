@@ -1,0 +1,55 @@
+# Lint configuration for the self-written code (app/, tools/).
+#
+# Scope: the vendored skill trees are archived upstream snapshots that this
+# repo never modifies, so they are excluded outright — linting them would
+# only produce findings nobody is allowed to fix.
+#
+# Rule choice: this gate exists to catch *defects* (dead names, silently
+# mismatched zips, lost exception chains, deprecated stdlib imports), not to
+# impose a formatter.  Style rules the codebase deliberately and
+# consistently violates are ignored below with the reason.
+
+target-version = "py311"
+
+# The code is written to ~79 columns; 100 is the hard ceiling CI enforces so
+# an occasional long literal (URLs, SPICE lines) does not fail the build.
+line-length = 100
+
+exclude = [
+    "analoggym",
+    "circuit-skills",
+    "gmoverid",
+    "ngspice",
+    "transistor-models",
+    "app_output",
+    "build",
+    "dist",
+]
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes — unused/undefined names
+    "UP",   # pyupgrade — deprecated stdlib/typing idioms
+    "B",    # flake8-bugbear — likely bugs
+]
+ignore = [
+    # `d += x; d += y` is the schemdraw drawing idiom used throughout
+    # tools/sizing_drawings/, and short `if cond: return` guards are used
+    # consistently in app/ — both are deliberate, not accidents.
+    "E702",
+    # `l` is channel length and `I` is current in every analog textbook and
+    # in the SPICE netlists these modules mirror; renaming them would make
+    # the code harder to check against the schematics, not easier.
+    "E741",
+    # small named lambdas are used as local formatters/keys; converting them
+    # to `def` would not make the surrounding code clearer.
+    "E731",
+]
+
+[lint.per-file-ignores]
+# The test modules must call paths.init_runtime() before importing anything
+# that resolves asset paths at import time, so their imports are
+# deliberately not all at the top.
+"app/tests/*" = ["E402"]

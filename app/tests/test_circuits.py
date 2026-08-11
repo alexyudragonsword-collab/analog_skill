@@ -51,6 +51,7 @@ def test_skill_context_isolation_and_restore():
     """Circuit imports must not leak into the app's module space."""
     from app.core import circuits
     import ngspice_common as before  # gmoverid/examples version
+    assert 'circuit-skills' not in before.__file__
 
     scripts = paths.circuit_skills_dir() / 'comparator' / 'scripts'
     with circuits.skill_context(scripts):
@@ -103,7 +104,7 @@ def test_repoint_models_uses_workspace():
     space breaks ngspice's unquoted .include (frozen Windows bug)."""
     import importlib
     from app.core import circuits
-    for skill, sub, common_mod, lib in (
+    for _skill, sub, common_mod, lib in (
             ('ota5t', 'five_transistor_ota/scripts', 'ota_common',
              'ptm180.lib'),
             ('comparator', 'comparator/scripts', 'comparator_common',

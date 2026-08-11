@@ -170,7 +170,7 @@ def draw():
     wire(d, ffr, (XFR, 5.4), (X2B, 5.4), (X2B, Y_ND + 1.0)); dot(d, (X2B, 5.4))
 
     # ── output: gmf2 xm11 + gm3 xm23 into VOUT ──────────────────────────
-    m11 = sh.pfet('xm11', X3, 'M11 (gmf2)', bias='net4', left=True)
+    sh.pfet('xm11', X3, 'M11 (gmf2)', bias='net4', left=True)
     m23 = sh.nfet('xm23', X3, Y_ND, 'M23 (gm3)', left=True, to_gnd=True)
     wire(d, (X3, Y_PD), (X3, Y_ND))
     dot(d, (X3, VOUTN_Y))

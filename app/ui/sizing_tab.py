@@ -243,8 +243,9 @@ class SizingTab(QWidget, JobTabMixin):
                 init = float(self._table.item(row, 1).text())
                 lo = float(self._table.item(row, 2).text())
                 hi = float(self._table.item(row, 3).text())
-            except (TypeError, ValueError):
-                raise ValueError(f'row {row + 1} ({name}): not a number')
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f'row {row + 1} ({name}): not a number') from exc
             if not (lo <= init <= hi):
                 raise ValueError(f'{name}: need lo <= init <= hi')
             variables.append(sizing.VarSpec(
@@ -258,8 +259,9 @@ class SizingTab(QWidget, JobTabMixin):
             key = self._targets.item(row, 0).data(Qt.ItemDataRole.UserRole)
             try:
                 target = float(self._targets.item(row, 1).text())
-            except (TypeError, ValueError):
-                raise ValueError(f'target row {row + 1}: not a number')
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f'target row {row + 1}: not a number') from exc
             hard = (self._targets.item(row, 2).checkState()
                     == Qt.CheckState.Checked)
             overrides[key] = (target, hard)

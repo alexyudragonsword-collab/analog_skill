@@ -6,7 +6,6 @@ worker runs the ngspice sweeps; the returned closure renders all plots on
 the GUI thread and yields (png_paths, report_text).
 """
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtWidgets import (
     QComboBox, QDoubleSpinBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel,

@@ -7,7 +7,7 @@ and the 180nm constants in run_gmoverid.py.
 """
 
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 # All functions here run their ngspice sweeps on the worker thread but return
 # a zero-argument RENDER CLOSURE instead of plotting directly: matplotlib

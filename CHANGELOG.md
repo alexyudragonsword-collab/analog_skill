@@ -9,6 +9,23 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 Design import + netlist viewer in the Sizing tab.
 
+- **CI: lint gate + cross-platform test matrix**.  A new `lint` job runs
+  `ruff check` over `app/` and `tools/` against a checked-in `ruff.toml`
+  (defect rules — pyflakes/bugbear/pyupgrade/pycodestyle — with the
+  vendored skill trees excluded and the codebase's deliberate style
+  choices ignored, each with its reason).  The 34 findings it surfaced are
+  fixed in this release: dead imports and locals, `Callable` imported from
+  `typing` instead of `collections.abc`, three `raise` sites inside
+  `except` that dropped the original exception (`from exc`), six `zip()`
+  calls now explicit about whether unequal lengths are a bug
+  (`strict=True`) or intended (`strict=False`).  The `pytest` job became a
+  3-OS matrix (Ubuntu / Windows / macOS) so path and Qt-construction bugs
+  are caught on the platforms the app is actually shipped for; ngspice is
+  installed where available and the simulation tests self-skip elsewhere.
+- **Dependencies now have upper bounds** (`numpy<3`, `matplotlib<4`,
+  `scipy<2`, `PySide6<7`, and the dev tools likewise) — an unbounded
+  requirement lets a breaking major release reach a frozen build without
+  ever failing CI.
 - **Fixed — user data survived neither an upgrade nor a hostile netlist**:
   - Saved runs (`sizing_runs/`) and imported circuits (`user_circuits/`)
     were stored inside the per-version workspace, which `paths.

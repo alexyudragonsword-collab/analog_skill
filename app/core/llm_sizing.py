@@ -81,7 +81,7 @@ _SYSTEM = ('You are an expert analog IC designer sizing a circuit. '
 
 
 def _ask_candidates(k: int, names: list[str]) -> str:
-    example = ', '.join('"%s": <number>' % n for n in names[:3])
+    example = ', '.join(f'"{n}": <number>' for n in names[:3])
     return (f'Propose {k} new candidate sizings as JSON: '
             f'{{"rationale": "<one sentence>", "candidates": '
             f'[{{{example}, ...}}, ...]}} — each candidate must contain '
@@ -136,8 +136,9 @@ def run_loop(circuit: str, variables: list[VarSpec], overrides,
 
     def fmt_point(xn):
         vals = np.clip(xn, 0, 1) * span + lo
-        return '{' + ', '.join(f'{n}: {v:.4g}'
-                               for n, v in zip(names, vals)) + '}'
+        inner = ', '.join(f'{n}: {v:.4g}'
+                          for n, v in zip(names, vals, strict=True))
+        return '{' + inner + '}'
 
     run_batch([x0n])                            # evaluation #1: defaults
     messages = [
@@ -169,7 +170,8 @@ def run_loop(circuit: str, variables: list[VarSpec], overrides,
         costs = run_batch(points)
         feedback = [f'cand {i + 1}: {fmt_point(p)} -> cost '
                     + (f'{c:.4f}' if np.isfinite(c) else 'FAILED')
-                    for i, (p, c) in enumerate(zip(points, costs))]
+                    for i, (p, c) in enumerate(zip(points, costs,
+                                                   strict=True))]
         if state['best'] is not None and state['best_x'] is not None:
             best_m = ', '.join(f'{key}={val:.4g}'
                                for key, val in state['best_m'].items())

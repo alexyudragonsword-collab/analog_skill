@@ -100,7 +100,7 @@ def pmos(d, source, name, size, left=False, label_at=None):
 
 
 def wire(d, *pts):
-    for a, b in zip(pts, pts[1:]):
+    for a, b in zip(pts, pts[1:], strict=False):   # consecutive pairs
         d += elm.Line().at(a).to(b)
 
 

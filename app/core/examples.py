@@ -15,7 +15,8 @@ import importlib
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 _PREFIXES = [
     (1e9, 'G'), (1e6, 'Meg'), (1e3, 'k'), (1.0, ''),

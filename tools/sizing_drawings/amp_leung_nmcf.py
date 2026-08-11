@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from gen_sizing_schematics import (   # noqa: E402
     AMP_NL, FET_H, Sheet, TINTS, Y_CM, Y_CT, Y_GND, Y_ND, Y_PD, Y_SRC,
-    Y_VDD, bias_column, diff_pair, dot, gate_feed, node_label, port, rail,
+    Y_VDD, bias_column, dot, gate_feed, node_label, port, rail,
     replica_column, tint, title, vb3_diode, vb_gen, wire,
 )
 
