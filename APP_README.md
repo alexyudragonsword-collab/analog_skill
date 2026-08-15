@@ -33,8 +33,16 @@ python -m app.main
 
 无显示环境下冒烟测试:`QT_QPA_PLATFORM=offscreen python -m app.main --smoke`
 
-测试:`python -m pytest app/tests/ -v`(仿真类测试需要 ngspice;push/PR 会触发
-`.github/workflows/test.yml` 在 ubuntu 上全量运行)
+测试与 lint:
+
+```bash
+python -m pytest app/tests/ -v     # 仿真类测试需要 ngspice,缺失时自动 skip
+python -m ruff check .             # 规则集见 ruff.toml
+```
+
+push/PR 会触发 `.github/workflows/test.yml`:一个 `lint` job + 在
+**Ubuntu / Windows / macOS** 三平台上跑的测试矩阵。详见
+[`CONTRIBUTING.md`](./CONTRIBUTING.md)。
 
 ## ngspice 检测
 
@@ -46,20 +54,44 @@ python -m app.main
 
 未找到时显示横幅提示并禁用运行按钮;已缓存的 gm/ID 表仍可加载。
 
-## 打包(PyInstaller)
+## 打包
+
+CI(`.github/workflows/build-windows.yml`)每次 push 产出 **5 个包**,
+两条技术路线各有取舍:
+
+| Job | 平台 | 工具 | 产物 | 说明 |
+|---|---|---|---|---|
+| `pyinstaller` | Windows | PyInstaller | `AnalogStudio-windows-pyinstaller.zip` | onedir;`app/` 以可反编译的字节码分发 |
+| `linux` | Linux | PyInstaller | `AnalogStudio-linux-pyinstaller.tar.gz` | 同上 |
+| `nuitka` | Windows | Nuitka standalone | `AnalogStudio-windows-nuitka.zip` | `app/` 编译为原生机器码 |
+| `linux-nuitka` | Linux | Nuitka standalone | `AnalogStudio-linux-nuitka.tar.gz` | 同上;CI 会**校验 dist 里没有任何 `app/` 的 `.py`/`.pyc` 泄漏**,有则构建失败 |
+| `nuitka-onefile` | Windows | Nuitka `--onefile` | `AnalogStudio.exe` | 单文件自解压;skill 资产以 `skill_assets.zip` 随包,首启解压到工作区 |
+
+三种构建的取舍见 [`CODE_PROTECTION.md`](./CODE_PROTECTION.md)
+(保护了什么、没保护什么);onefile 更好分发,但每次启动都要把整个载荷
+自解压到临时目录,冷启动明显慢于 standalone。
+
+本地手工打包(PyInstaller 与 Nuitka 均**不支持交叉编译**,要在目标平台上跑):
 
 ```bash
-pyinstaller app.spec        # 输出 dist/AnalogStudio/(onedir 模式)
+pyinstaller app.spec                      # -> dist/AnalogStudio/(onedir)
+
+python -m nuitka --standalone --enable-plugin=pyside6 \
+    --include-package=app --output-dir=build-nuitka app/main.py
 ```
 
-- 两个 skill 资产树(.py/.tmpl/.lib)打包在 `_internal/skill/` 下
-- 首次启动时同步到用户可写 workspace(Linux `~/.local/share/Analog Studio/`,
-  Windows `%APPDATA%/Analog Studio/`),logs/plots/cache 都写在那里,安装目录保持只读
+Nuitka 的完整命令行(资产打包、图标、DLL 收集等)以 workflow 里的为准 ——
+那是唯一经过验证的一份,不要凭记忆重写。
+
+不论哪种构建:
+
+- skill 资产树(.py/.tmpl/.lib)随包分发,首次启动同步到用户可写 workspace
+  (Linux `~/.local/share/AnalogStudio/`,Windows `%APPDATA%/AnalogStudio/`),
+  logs/plots/cache 都写在那里,安装目录保持只读
+- 用户自己的数据(保存的运行记录、导入的电路)写在 workspace **之外**的
+  用户数据区,升级不会被清掉(见 `paths.user_data_dir()`)
 - **ngspice 不打包**:Windows 用户从 [ngspice.sourceforge.io](https://ngspice.sourceforge.io)
   下载 zip,把 `Spice64/` 解压到 exe 同级目录(或在设置里指定路径)即可
-
-Windows 打包:在 Windows 机器上执行同样的 `pyinstaller app.spec`
-(PyInstaller 不支持交叉打包)。
 
 ### 路径含空格的兼容性说明
 
@@ -81,6 +113,11 @@ app/
 │   ├── model_registry.py    # 注入 PTM bulk 全节点到 MODEL_INFO(20 模型)
 │   ├── validate_service.py  # 封装 validate_gmoverid 的 5 项物理自检
 │   ├── examples.py          # 9 案例注册表 + monkey-patch 运行器
+│   ├── circuits.py          # circuit-skills 五电路的运行编排 + 导入隔离
+│   ├── finfet_sim.py        # FinFET(BSIM-CMG/OSDI)仿真
+│   ├── finfet_table.py      # FinFET 的 GmIdTable 等价物(以 NFIN 为尺寸变量)
+│   ├── llm_client.py        # LLM 双协议客户端(OpenAI 兼容 / Anthropic)
+│   ├── llm_sizing.py        # LLM 引导的闭环优化 + 结果解读 + 开跑前建议
 │   ├── render_lock.py       # 进程级 matplotlib 渲染锁(GUI/worker 互斥)
 │   ├── browser_service.py   # 特性图/对比图编排(复刻 run_gmoverid/run_multinode 逻辑)
 │   └── sizing/              # Sizing 标签页内核(按职责分层,层间单向依赖)
@@ -94,7 +131,12 @@ app/
 │       ├── optimizer.py     #   预算内的 evaluate→score→提议循环(4 种算法)
 │       ├── runs.py          #   运行记录的 JSON 存取(用户数据区)
 │       └── plots.py         #   收敛曲线 / 波形对比渲染(仅 GUI 线程)
-├── ui/                      # main_window + 四个 tab + settings/manual 对话框
+├── ui/                      # main_window + 六个 tab + settings/manual 对话框
+│   ├── job_mixin.py         #   六个 tab 共用的任务提交/取消/失败展示协议
 │   └── widgets/             # png_viewer / mpl_canvas / log_panel / op_result_view
-└── tests/                   # pytest(worker 单测 + examples 集成测试)
+└── tests/                   # pytest(见 CONTRIBUTING.md)
 ```
+
+> `render_lock.py` 之外的其余 `core/` 模块与 `resources/`(图标、手册、
+> 预渲染原理图)未逐一列出。开发流程(测试、lint、原理图重生成、CI、发版)
+> 见 [`CONTRIBUTING.md`](./CONTRIBUTING.md)。

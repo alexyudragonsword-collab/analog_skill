@@ -22,7 +22,8 @@ circuitikz/
 validation/
 
 
-CLAUDE.md
+# CLAUDE.md is tracked on purpose — it is project guidance, not local state.
+# Local Claude Code settings stay ignored.
 .claude/
 # Analog Studio app
 app_output/

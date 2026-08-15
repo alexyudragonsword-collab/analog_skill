@@ -1,195 +1,219 @@
 <p align="center">
-  <img src="openclaw.png" alt="gmoverid-skill" width="100%">
+  <img src="openclaw.png" alt="Analog Studio" width="100%">
 </p>
 
-<h1 align="center">gmoverid-skill</h1>
+<h1 align="center">Analog Studio</h1>
 
 <p align="center">
-  <a href="https://github.com/Arcadia-1/gmoverid-skill/stargazers"><img src="https://img.shields.io/github/stars/Arcadia-1/gmoverid-skill?style=flat-square&color=f5c542&logo=github" alt="GitHub stars"></a>
-  <a href="https://github.com/Arcadia-1/gmoverid-skill/network/members"><img src="https://img.shields.io/github/forks/Arcadia-1/gmoverid-skill?style=flat-square&color=f5c542" alt="GitHub forks"></a>
-  <a href="https://github.com/Arcadia-1/gmoverid-skill/issues"><img src="https://img.shields.io/github/issues/Arcadia-1/gmoverid-skill?style=flat-square&color=3fb950" alt="Open Issues"></a>
-  <a href="https://github.com/Arcadia-1/gmoverid-skill/commits/main"><img src="https://img.shields.io/github/last-commit/Arcadia-1/gmoverid-skill?style=flat-square&color=3fb950" alt="Last Commit"></a>
+  <a href="https://github.com/alexyudragonsword-collab/analog_skill/stargazers"><img src="https://img.shields.io/github/stars/alexyudragonsword-collab/analog_skill?style=flat-square&color=f5c542&logo=github" alt="GitHub stars"></a>
+  <a href="https://github.com/alexyudragonsword-collab/analog_skill/commits/main"><img src="https://img.shields.io/github/last-commit/alexyudragonsword-collab/analog_skill?style=flat-square&color=3fb950" alt="Last Commit"></a>
+  <a href="https://github.com/alexyudragonsword-collab/analog_skill/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/alexyudragonsword-collab/analog_skill/test.yml?style=flat-square&label=tests" alt="Tests"></a>
 </p>
 
 <p align="center">
-  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.x-blue.svg" alt="Python 3.x"></a>
-  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT">
-  <a href="https://github.com/Arcadia-1/gmoverid-skill/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome"></a>
-  <img src="https://img.shields.io/badge/ngspice-required-orange.svg" alt="ngspice required">
+  <img src="https://img.shields.io/badge/python-3.11-blue.svg?style=flat-square" alt="Python 3.11">
+  <img src="https://img.shields.io/badge/Qt-PySide6-41cd52.svg?style=flat-square" alt="PySide6">
+  <img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License: MIT">
+  <img src="https://img.shields.io/badge/ngspice-required-orange.svg?style=flat-square" alt="ngspice required">
 </p>
 
-三个让 Agent 具有设计模拟电路能力的技能包：**ngspice 入门** / **gm/ID 设计** / **PTM 模型库**。
+**跑在真实 SPICE 之上的模拟 IC 设计桌面工作台。** 从 gm/ID 目标反解器件尺寸、
+在 40 个 PTM 模型上浏览器件特性、运行块级电路，并让优化器在 27 个 SKY130
+拓扑的电路库上按你自己的指标目标自动搜索尺寸 —— 全部由本机的 ngspice 驱动，
+不上云、不需要 PDK 授权。
 
-> **如果你是人类**：下面有示例图片，可以直观了解每个技能的输出效果。
+<p align="center">
+  <img src="app/resources/manual/img/v100_sizing.png" alt="Analog Studio — Sizing 标签页" width="82%">
+</p>
 
-> **如果你是 AI Agent**：跳过图片，直接看 [安装](#安装) 说明。每个技能的完整指令在各自的 `SKILL.md`，可运行脚本和模型文件在 `assets/` 目录内。
-
-## 技能总览
-
-| 技能 | 定位 | 功能 |
-|------|------|------|
-| **ngspice** | 入门 | 9 类标准仿真示例（DC / AC / Tran / Noise），从零学 SPICE |
-| **gmoverid** | 进阶 | gm/ID 表征仿真 + 设计 API，自动反查 W、Id、Vgs、fT、gm·ro |
-| **transistor-models** | 模型库 | PTM 全系列模型文件（体硅 65–180nm、HP/LP 22–45nm、FinFET 7–20nm） |
+本仓库同时归档了这个应用赖以生长的三个 Claude **skill**（`ngspice`、
+`gmoverid`、`transistor-models`）—— 如果你是为它们而来，直接看下面的
+[Claude skills](#claude-skills)。
 
 ---
 
-## 技能1：ngspice
+## 能做什么
 
-9 个仿真示例，覆盖模拟电路入门核心知识点：
+| 标签页 | 功能 |
+|---|---|
+| **gm/ID Designer** | 40 个可选模型 —— 20 个 PTM 体硅（180/130/90/65nm 与 45/32/22nm 的 HP/LP，n+p）+ 20 个 PTM-MG **FinFET**（7/10/14/16/20nm 的 HP/LSTP，经 ngspice 的 OSDI 接口加载 BSIM-CMG，以 **NFIN** 为尺寸变量）。构建 `GmIdTable` 查找表（首次跑仿真并缓存，之后秒开），然后按 gm/ID、按 fT 目标或按 gm·ro 目标定尺寸。工程单位结果表 + 标出工作点的 2×2 设计图。 |
+| **ngspice Examples** | 9 个教学案例（DC / AC / Tran / Noise）一键运行，VDD、扫描范围、频率、时序、温度等归入可折叠的 *Advanced* 分组。 |
+| **Curve Browser** | 按模型 / L / W 生成并翻阅特性图：IV 特性、gm/ID 四象限、栅电容。会话内缓存。 |
+| **Comparison** | 同一模型多沟长对比（L = 180/360/1000nm）、跨节点对比、跨节点栅电容对比。 |
+| **Circuits** | 五个块级电路 —— StrongArm 比较器、LDO、自举开关、五管 OTA、两级 Miller 运放 —— 各自带按 DUT 网表绘制的原理图、可编辑参数与可复制的指标报告。 |
+| **Sizing** | 在 **27 个电路**上做自动尺寸优化：vendored [AnalogGym](https://github.com/CODA-Team/AnalogGym) 子集的 20 个 SKY130 设计（15 个文献级三级 Miller 运放 + Basic LDO + 4 个 LDO 变体）、1 个自建电流镜 OTA、6 个 PTM circuit-skills 条目。变量边界与指标目标均可编辑，支持**硬约束**；四种优化器（内置 Sobol+Powell、差分进化、Optuna TPE、**LLM 引导**闭环）；并行评估；收敛曲线、前后波形叠加对比、逐器件变更总结、运行历史，以及导入**你自己的 SKY130 运放**。 |
 
-| # | 类型 | 描述 | 输出 |
-|---|------|------|------|
-| 1 | Tran | RC 充电电压与电流 | `tran_rc_charging.png` |
-| 2 | DC | NMOS Id-Vds 族曲线 | `dc_nmos_iv.png` |
-| 3 | AC | RC 低通滤波器频率响应 | `ac_rc_bw.png` |
-| 4 | Noise | RC 滤波器输出噪声谱密度 | `ac_rc_bw.png` |
-| 5 | Tran | 采样保持开关对比 | `sample_hold_compare.png` |
-| 6 | Tran | kT/C 噪声时域统计 | `tran_ktc_noise_hist.png` |
-| 7 | DC | NMOS 电流镜输出特性 | `dc_current_mirror.png` |
-| 8 | AC | 共源放大器 Bode 图 | `ac_cs_amp_bode.png` |
-| 9 | DC | 传输门导通电阻 | `dc_tgate_ron.png` |
+所有仿真任务经单一后台线程串行执行，避免 ngspice scratch 文件冲突；skill 代码
+自身的 `print` 进度实时转发到底部日志面板。菜单 Help ▸ Manual（F1）打开中英
+双语图文手册。
 
-运行方式见 [`ngspice/SKILL.md`](./ngspice/SKILL.md)，Agent 会自动部署资产并执行。
+## 安装
 
-**NMOS Id-Vds 族曲线**
+### 预编译包（无需 Python）
+
+每次 push 都会由 [`build-windows.yml`](.github/workflows/build-windows.yml)
+构建 Windows 与 Linux 包 —— PyInstaller 与 Nuitka 两条路线，外加一个 Windows
+单文件 `.exe`。从绿色运行的 **Actions** 页下载，或在打了 tag 之后从
+**Releases** 下载。
+
+**ngspice 不随包分发。** Windows 用户从
+[ngspice.sourceforge.io](https://ngspice.sourceforge.io) 下载 zip，把
+`Spice64/` 解压到可执行文件同级目录（或在设置里指定路径）。Linux/macOS 用包
+管理器安装即可。
+
+### 从源码运行
+
+```bash
+git clone https://github.com/alexyudragonsword-collab/analog_skill
+cd analog_skill
+pip install -r requirements.txt
+sudo apt install ngspice        # 或：brew install ngspice
+python -m app.main
+```
+
+需要 Python 3.11 与 ngspice（建议 42 或更新；FinFET 模型需要 OSDI 支持，即
+ngspice ≥ 38）。架构、打包与 ngspice 检测顺序见
+[`APP_README.md`](./APP_README.md)；要参与开发见
+[`CONTRIBUTING.md`](./CONTRIBUTING.md)。
+
+## 仓库里有什么
+
+| 路径 | |
+|---|---|
+| `app/` | 应用本体。此处全部为本项目自研代码（MIT）。 |
+| `tools/` | 原理图生成器 —— 电路图由网表渲染而来，不是截图。 |
+| `studio_circuits/` | 为 Sizing 标签页自建的电路（MIT）。 |
+| `ngspice/`、`gmoverid/`、`transistor-models/` | 三个 Claude skill，**原样归档**。 |
+| `circuit-skills/` | vendored [analog-circuit-skills](https://github.com/Arcadia-1/analog-circuit-skills) —— 五个块级电路。 |
+| `analoggym/` | vendored [AnalogGym](https://github.com/CODA-Team/AnalogGym)（ICCAD'24，BSD-3）开源子集，Sizing 标签页的电路来源。 |
+
+vendored 各树是上游快照，**从不修改** —— 应用按原样从磁盘读取它们。
+
+### 文档索引
+
+| | |
+|---|---|
+| [`APP_README.md`](./APP_README.md) | 应用架构、源码运行、打包（5 种构建）、代码结构 |
+| [`CONTRIBUTING.md`](./CONTRIBUTING.md) | 测试、lint、重新生成原理图、CI、发版 |
+| [`CHANGELOG.md`](./CHANGELOG.md) | 每个版本改了什么、为什么 |
+| [`CODE_PROTECTION.md`](./CODE_PROTECTION.md) | Nuitka 构建保护了什么、没保护什么 |
+| 应用内手册（F1） | 面向使用者的中英双语指南 |
+| [`ANALOG_REPOS_ANALYSIS.md`](./ANALOG_REPOS_ANALYSIS.md)、[`CIRCUIT_SKILLS_ANALYSIS.md`](./CIRCUIT_SKILLS_ANALYSIS.md)、[`ANALYSIS_REPORT.md`](./ANALYSIS_REPORT.md) | 对上游项目的分析报告，标注了分析日期，作为历史记录保留 |
+
+---
+
+## Claude skills
+
+三个让 Agent 具备模拟电路设计与仿真能力的 skill 包。它们在此原样归档；应用建立
+在它们之上，但它们本身仍可独立使用。
+
+| Skill | 定位 | 内容 |
+|---|---|---|
+| **ngspice** | 入门 | 9 个标准仿真案例（DC / AC / Tran / Noise） |
+| **gmoverid** | 进阶设计 | gm/ID 表征 + 设计 API，自动查 W、Id、Vgs、fT、gm·ro |
+| **transistor-models** | 模型库 | 完整 PTM 模型集：体硅 180–65nm、HP/LP 45–22nm、FinFET 20–7nm |
+
+<details>
+<summary><b>把 skill 装进 Claude Code</b></summary>
+
+全局安装（所有项目可用）：
+
+```bash
+git clone --depth 1 https://github.com/alexyudragonsword-collab/analog_skill /tmp/analog_skill \
+  && cp -r /tmp/analog_skill/{ngspice,gmoverid,transistor-models} ~/.claude/skills/ \
+  && rm -rf /tmp/analog_skill
+```
+
+只装到当前项目，把 `~/.claude/skills/` 换成 `.claude/skills/` 即可。之后在
+Claude Code 里执行 `/skills`，应能看到这三个名字。每个 skill 的完整说明在它自己
+的 `SKILL.md`；可运行脚本与模型文件在各自的 `assets/` 下。
+
+</details>
+
+<details>
+<summary><b>Skill 1 — ngspice：九个教学案例</b></summary>
+
+| # | 类型 | 说明 |
+|---|---|---|
+| 1 | Tran | RC 充电电压与电流 |
+| 2 | DC | NMOS Id-Vds 族曲线 |
+| 3 | AC | RC 低通滤波器频响 |
+| 4 | Noise | RC 滤波器输出噪声谱密度 |
+| 5 | Tran | 采样保持开关对比 |
+| 6 | Tran | kT/C 噪声时域统计 |
+| 7 | DC | NMOS 电流镜输出特性 |
+| 8 | AC | 共源放大器 Bode 图 |
+| 9 | DC | 传输门导通电阻 |
 
 ![NMOS Id-Vds](dc_nmos_iv.png)
-
-**RC 低通滤波器频率响应**
-
 ![RC 低通滤波器](ac_rc_bw.png)
 
-**RC 充电电压与电流**
+</details>
 
-![RC 充电](tran_rc_charging.png)
+<details>
+<summary><b>Skill 2 — gmoverid：表征与设计 API</b></summary>
 
-**kT/C 噪声时域统计**
-
-![kT/C 噪声统计](tran_ktc_noise_hist.png)
-
----
-
-## 技能2：gmoverid
-
-每个工艺节点生成三套标准图：
-
-**IV 特性图**（2×2）
-- Id vs Vov 线性坐标：清晰显示阈值和饱和电流
-- Id vs Vov 对数坐标：亚阈值斜率与约 7 个数量级动态范围
-- Id vs Vgs（0 → VDD 全扫描）
-- 输出特性 Id vs Vds（固定 Vgs 多条曲线）
-
-![IV 特性图](gmoverid_iv_nmos45hp_L45nm.png)
-
-**gm/ID 四象限特性图**（2×2）
-- **gm/ID vs Vov**：完整的弱反型→强反型特性，含 BJT 极限 q/kT = 38.6 V⁻¹ 和 2/Vov 渐近线参考
-- **Id/W vs gm/ID**（对数 Y 轴）：电流密度随偏置变化，跨越约 3 个数量级
-- **fT vs gm/ID**：截止频率，PTM 180nm 峰值约 50 GHz，PTM 22nm HP 峰值超过 600 GHz
-- **gm·ro vs gm/ID**：本征增益随偏置点的分布；180nm 在弱反型区（gm/ID ≈ 20）约 40–42，22nm HP 仅 2–4（短沟道效应显著）
+每个工艺节点生成三组标准图：IV 特性 2×2、gm/ID 四象限 2×2、栅电容 vs Vgs。
 
 ![gm/ID 四象限特性图](gmoverid_nmos45hp_L45nm.png)
 
-**栅电容图**
-- Cgg / Cgs / Cgd / Cgb vs Vgs：展示截止区→阈值→强反型各工作区的电容分布与转换
-
-**对比图**
-- 沟道长度对比（L = 180 / 360 / 1000 nm）：长沟道显著提升 gm·ro（可达 ~140），但 fT 相应降低
-- 跨节点对比（180nm SVT vs 22nm HP）：直观呈现工艺代际的速度–增益权衡
-
-![栅电容图](gmid_nmos_caps_comp.png)
-
-**设计 API**：给定 gm/ID 目标，自动反查 W、Id、Vgs、gm、fT、gm·ro
+四个象限分别是：gm/ID vs Vov（画出 BJT 极限 q/kT = 38.6 V⁻¹ 与 2/Vov 渐近线
+参考）、Id/W vs gm/ID（跨约 3 个数量级）、fT vs gm/ID（PTM 180nm 峰值约
+50GHz，22nm HP 超过 600GHz）、gm·ro vs gm/ID（180nm 弱反型下约 40–42，22nm HP
+因短沟道效应仅 2–4）。
 
 ```python
 from design_gmoverid import GmIdTable, print_op
 
 tbl = GmIdTable('nmos180', W=10.0, L=0.18, vds=0.9)
-
-op = tbl.size(gmid=15.0, Id=100e-6)   # 固定 gm/ID 和漏电流，求 W
-op = tbl.size_from_ft(5e9, W=20.0)    # fT ≥ 5 GHz，取最省电的工作点
+op = tbl.size(gmid=15.0, Id=100e-6)   # 固定 gm/ID 与 Id，解 W
+op = tbl.size_from_ft(5e9, W=20.0)    # fT ≥ 5GHz，取功耗最低的工作点
 print_op(op)
 ```
 
-首次调用自动运行 ngspice 仿真并缓存，再次调用直接读缓存。
+首次调用自动跑 ngspice 并缓存，之后直接读缓存。skill 自带三个模型
+（180 / 45 / 22nm）；需要更多节点请安装 `transistor-models`。
 
-内置 **180 / 45 / 22 nm** 三个 PTM 模型，装好即可仿真。如果需要更多工艺节点，可以安装 `transistor-models` 技能。
+</details>
 
----
+<details>
+<summary><b>Skill 3 — transistor-models：PTM 模型库</b></summary>
 
-## 技能3：transistor-models
+PTM（Predictive Technology Model）是亚利桑那州立大学维护的公开 SPICE 模型集，
+用于无 PDK 场景下的工艺探索与教学研究。本 skill 打包了
+[mec.umn.edu/ptm](https://mec.umn.edu/ptm) 的全部模型：
 
-PTM（预测性晶体管模型，Predictive Technology Model）是亚利桑那州立大学（Arizona State University, ASU）维护的一套公开 SPICE 模型，用于在没有 PDK 的情况下做工艺探索和教学研究。这个技能把 [mec.umn.edu/ptm](https://mec.umn.edu/ptm) 上的全部模型打包进来：
+- 传统体硅：180 / 130 / 90 / 65nm
+- 体硅 HP/LP：45 / 32 / 22nm
+- PTM-MG FinFET：20 / 16 / 14 / 10 / 7nm，HP + LSTP
 
-- 体硅传统：180 / 130 / 90 / 65 nm
-- 体硅 HP/LP：45 / 32 / 22 nm
-- PTM-MG FinFET（多栅）：20 / 16 / 14 / 10 / 7 nm，HP + LSTP
-
-与 `gmoverid` 相互独立。`gmoverid` 已内置常用节点；需要 32nm LP、7nm FinFET 等时再装这个补全。
-
-按需从 `transistor-models/assets/models/` 复制 `.lib` 文件到项目 `models/` 目录：
+按需把 `.lib` 复制到你项目的 `models/`：
 
 ```bash
 cp transistor-models/assets/models/bulk_cmos/ptm32lp.lib <项目目录>/models/
 cp transistor-models/assets/models/finfet/nmos7mg_hp.lib <项目目录>/models/
 ```
 
-文件命名规则：
-- `bulk_cmos/ptm{节点}{hp|lp}.lib` — 体硅 HP/LP，含 NMOS+PMOS（model name: `nmos` / `pmos`）
-- `bulk_cmos/ptm{节点}.lib` — 体硅传统，含 NMOS+PMOS
-- `finfet/{n|p}mos{节点}mg_{hp|lstp}.lib` — FinFET（model name: `nfet` / `pfet`）
+命名规则：`bulk_cmos/ptm{node}{hp|lp}.lib` 与 `bulk_cmos/ptm{node}.lib` 含
+NMOS + PMOS（模型名 `nmos`/`pmos`）；`finfet/{n|p}mos{node}mg_{hp|lstp}.lib`
+模型名为 `nfet`/`pfet`。详细参数表见
+[`transistor-models/references/model_params.md`](./transistor-models/references/model_params.md)。
 
-详细参数表见 [`transistor-models/references/model_params.md`](./transistor-models/references/model_params.md)。
+</details>
 
+## 许可与引用
 
-## 版权声明
+应用本体、`tools/` 与 `studio_circuits/` 采用 MIT 许可（见
+[`LICENSE`](./LICENSE)）。vendored 各树保留各自的许可条款 —— AnalogGym 为
+BSD-3（[`analoggym/LICENSE`](./analoggym/LICENSE)）。
 
-模型文件版权归亚利桑那州立大学（Arizona State University）PTM 项目所有，免费用于学术研究。使用时请引用：
+PTM 模型文件版权归 ASU PTM 项目所有，可免费用于学术研究。使用时请引用：
 
-- 体硅节点（Bulk CMOS）：
-  > W. Zhao and Y. Cao, "New Generation of Predictive Technology Model for Sub-45 nm Early Design Exploration," *IEEE Transactions on Electron Devices*, vol. 53, no. 11, pp. 2816–2823, Nov. 2006. doi: [10.1109/TED.2006.884077](https://doi.org/10.1109/TED.2006.884077)
+- 体硅 CMOS 节点：
+  > W. Zhao and Y. Cao, "New Generation of Predictive Technology Model for Sub-45 nm Early Design Exploration," *IEEE Transactions on Electron Devices*, vol. 53, no. 11, pp. 2816-2823, Nov. 2006. doi: [10.1109/TED.2006.884077](https://doi.org/10.1109/TED.2006.884077)
 
-- PTM-MG FinFET 节点（仅限 `transistor-models` 中的 7–20nm 模型）：
-  > S. Sinha, G. Yeric, V. Chandra, B. Cline and Y. Cao, "Exploring sub-20nm FinFET design with Predictive Technology Models," *DAC 2012*, pp. 283–288. doi: [10.1145/2228360.2228414](https://doi.org/10.1145/2228360.2228414)
-
-
----
-
-## 安装
-
-### 全局安装（所有项目可用，推荐）
-
-```bash
-git clone --depth 1 https://github.com/Arcadia-1/gmoverid-skill /tmp/gmoverid-skill \
-  && cp -r /tmp/gmoverid-skill/{ngspice,gmoverid,transistor-models} ~/.claude/skills/ \
-  && rm -rf /tmp/gmoverid-skill
-```
-
-### 项目级安装（仅当前项目可用）
-
-```bash
-git clone --depth 1 https://github.com/Arcadia-1/gmoverid-skill /tmp/gmoverid-skill \
-  && mkdir -p .claude/skills \
-  && cp -r /tmp/gmoverid-skill/{ngspice,gmoverid,transistor-models} .claude/skills/ \
-  && rm -rf /tmp/gmoverid-skill
-```
-
-### 验证安装
-
-在 Claude Code 中运行：
-
-```
-/skills
-```
-
-输出列表中应出现 `ngspice`、`gmoverid`、`transistor-models` 三个技能，说明安装成功。
-
-> 如果你是 Agent，以上安装步骤由你代为执行，根据用户需求选择全局或项目级安装路径，无需用户手动操作。
-
-## 环境要求
-
-- [ngspice](http://ngspice.sourceforge.net/)（系统全局安装）
-- Python 3，依赖：`numpy`、`matplotlib`、`scipy`
+- PTM-MG FinFET 节点：
+  > S. Sinha, G. Yeric, V. Chandra, B. Cline and Y. Cao, "Exploring sub-20nm FinFET design with Predictive Technology Models," *DAC 2012*, pp. 283-288. doi: [10.1145/2228360.2228414](https://doi.org/10.1145/2228360.2228414)
 
 <p align="center">
   <a href="./README.md"><img alt="English README" src="https://img.shields.io/badge/README-English-blue?style=for-the-badge"></a>
