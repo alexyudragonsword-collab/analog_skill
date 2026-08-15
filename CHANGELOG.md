@@ -19,7 +19,10 @@ Design import + netlist viewer in the Sizing tab.
   `CONTRIBUTING.md` (the two checks CI runs, why test suites must not run
   concurrently, regenerating the netlist-derived schematics, what each CI
   job guards, how to release) and `CLAUDE.md` (project guidance for Claude
-  Code, previously git-ignored alongside local settings).  The Sizing
+  Code, previously git-ignored alongside local settings).  New
+  `ROADMAP.md` — until now open work existed only in commit history and
+  conversation, so nothing recorded what was pending or, just as usefully,
+  what had already been decided against.  The Sizing
   screenshot was re-captured on v1.4 after a real 80-evaluation run: the
   old one predated `Runs…`, `Waves…`, `Import ▾`, `Netlist…` and the AI
   buttons, and showed no run at all.  Public docstring coverage went from

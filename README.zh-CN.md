@@ -95,6 +95,7 @@ vendored 各树是上游快照，**从不修改** —— 应用按原样从磁�
 |---|---|
 | [`APP_README.md`](./APP_README.md) | 应用架构、源码运行、打包（5 种构建）、代码结构 |
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | 测试、lint、重新生成原理图、CI、发版 |
+| [`ROADMAP.md`](./ROADMAP.md) | 有哪些待办、卡在谁那里、哪些是已决定不做的 |
 | [`CHANGELOG.md`](./CHANGELOG.md) | 每个版本改了什么、为什么 |
 | [`CODE_PROTECTION.md`](./CODE_PROTECTION.md) | Nuitka 构建保护了什么、没保护什么 |
 | 应用内手册（F1） | 面向使用者的中英双语指南 |

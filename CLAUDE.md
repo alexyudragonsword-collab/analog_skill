@@ -1,8 +1,10 @@
 # CLAUDE.md
 
 Guidance for Claude Code working in this repository.
-Read [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the full developer workflow;
-this file is the short version plus the things that are easy to get wrong here.
+Read [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the full developer workflow
+and [`ROADMAP.md`](./ROADMAP.md) for what is open (and what was deliberately
+decided against — check there before "fixing" something); this file is the
+short version plus the things that are easy to get wrong here.
 
 ## What this is
 

@@ -97,6 +97,7 @@ reads them from disk exactly as shipped.
 |---|---|
 | [`APP_README.md`](./APP_README.md) | App architecture, running from source, packaging (5 build variants), code layout |
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Tests, lint, regenerating schematics, CI, release |
+| [`ROADMAP.md`](./ROADMAP.md) | What is open, what is blocked, and what was decided against |
 | [`CHANGELOG.md`](./CHANGELOG.md) | Every release, what changed and why |
 | [`CODE_PROTECTION.md`](./CODE_PROTECTION.md) | What the Nuitka builds do and do not protect |
 | In-app manual (F1) | The user-facing guide, English + Chinese |

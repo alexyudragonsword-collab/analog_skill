@@ -4,6 +4,14 @@ Everything below assumes you are working on `app/`, `tools/` or
 `studio_circuits/`. The vendored trees are off limits — see
 [What you must not change](#what-you-must-not-change).
 
+## Where the work is tracked
+
+Open work lives in [`ROADMAP.md`](./ROADMAP.md) — including a *Decided
+against* section, so a settled question is not reopened from scratch. There
+are no `TODO` comments in the code and none should be added: a todo buried
+in a source file is a todo nobody reads. Finished work is described in
+[`CHANGELOG.md`](./CHANGELOG.md).
+
 ## Setup
 
 ```bash
