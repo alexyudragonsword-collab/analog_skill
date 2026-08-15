@@ -24,7 +24,7 @@ library of SKY130 topologies against your own spec targets — all driven by
 ngspice on your machine, no cloud, no PDK licence.
 
 <p align="center">
-  <img src="app/resources/manual/img/v100_sizing.png" alt="Analog Studio — Sizing tab" width="82%">
+  <img src="app/resources/manual/img/v14_sizing.png" alt="Analog Studio — Sizing tab" width="82%">
 </p>
 
 The repository also archives the three Claude **skills** the app grew out of

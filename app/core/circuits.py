@@ -80,6 +80,14 @@ def skill_context(scripts_dir: Path):
 # ─────────────────────────────────────────────────────────────────────────────
 @dataclass
 class Param:
+    """One editable knob of a circuit, and how to push it into the skill.
+
+    `attr` names a module-level global in the circuit's common module, or
+    uses the 'W.key' form to address one entry of its width dict.  Params
+    marked `advanced` are hidden behind the collapsible group so the common
+    case stays a two-field form.
+    """
+
     attr: str                    # global in the common module; 'W.key' → dict entry
     label: str
     default: float
@@ -93,6 +101,8 @@ class Param:
 
 @dataclass
 class Analysis:
+    """One runnable analysis of a circuit (an entry in the Analysis menu)."""
+
     label: str
     params: list | None = None   # None → use the circuit's param list
     note: str = ''               # shown in the status line before running
@@ -100,6 +110,12 @@ class Analysis:
 
 @dataclass
 class CircuitSpec:
+    """A circuit-skills circuit: where its scripts live and what it exposes.
+
+    The scripts are imported under `skill_context()` so their module names
+    (`ngspice_common`, `simulate_*`) cannot collide with another skill's.
+    """
+
     title: str
     subdir: str                  # scripts dir, relative to circuit_skills_dir()
     common_mod: str
@@ -109,6 +125,12 @@ class CircuitSpec:
 
 @dataclass
 class CircuitResult:
+    """What a circuit job returns: a closure the GUI thread calls to draw.
+
+    The simulation itself already ran on the worker thread; `render` does
+    the matplotlib work and yields (png_paths, report_text).
+    """
+
     render: Callable[[], tuple[list[Path], str]]
 
 

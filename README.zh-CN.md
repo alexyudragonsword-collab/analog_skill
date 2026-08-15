@@ -23,7 +23,7 @@
 不上云、不需要 PDK 授权。
 
 <p align="center">
-  <img src="app/resources/manual/img/v100_sizing.png" alt="Analog Studio — Sizing 标签页" width="82%">
+  <img src="app/resources/manual/img/v14_sizing.png" alt="Analog Studio — Sizing 标签页" width="82%">
 </p>
 
 本仓库同时归档了这个应用赖以生长的三个 Claude **skill**（`ngspice`、

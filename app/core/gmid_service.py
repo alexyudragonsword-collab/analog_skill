@@ -11,6 +11,11 @@ import numpy as np
 
 
 def model_infos() -> dict:
+    """The skill's MODEL_INFO table, with the extra PTM nodes injected.
+
+    Imported lazily: the skill modules are only importable after
+    paths.init_runtime() has put them on sys.path.
+    """
     from simulate_gmoverid import MODEL_INFO
     return MODEL_INFO
 
@@ -28,11 +33,13 @@ def default_L(model: str) -> float:
 
 
 def is_finfet(model: str) -> bool:
+    """Does this model need the BSIM-CMG/OSDI path (and NFIN, not W)?"""
     from app.core.model_registry import is_finfet as _isff
     return _isff(model)
 
 
 def finfet_available() -> bool:
+    """Can this ngspice load the bundled .osdi?  False greys out FinFET."""
     from app.core.model_registry import finfet_available as _avail
     return _avail()
 
@@ -53,6 +60,7 @@ def build_table(model: str, W: float, L: float, vds: float | None,
 
 
 def gmid_log_dir() -> Path:
+    """Where the skill writes its ngspice logs — attached to job failures."""
     from simulate_gmoverid import LOG_DIR
     return Path(LOG_DIR)
 

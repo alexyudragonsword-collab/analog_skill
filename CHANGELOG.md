@@ -5,10 +5,28 @@ development milestones on the `claude/gmoverid-skill-analysis-7ron1c` branch;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
-## v1.4 — 2026-07-15
+## v1.4 — unreleased  (version bumped 2026-07-15)
 
 Design import + netlist viewer in the Sizing tab.
 
+- **Documentation overhaul**.  `README.md` / `README.zh-CN.md` now lead with
+  Analog Studio instead of introducing the repository as three Claude
+  skills (the app had one block quote); their badges pointed at the
+  *upstream* repository, so a visitor saw someone else's stars and issues.
+  The skills are kept in full as collapsible sections.  `APP_README.md`
+  documented one build path when CI produces five — it now has the whole
+  table, local build commands and the workspace-vs-user-data split.  New
+  `CONTRIBUTING.md` (the two checks CI runs, why test suites must not run
+  concurrently, regenerating the netlist-derived schematics, what each CI
+  job guards, how to release) and `CLAUDE.md` (project guidance for Claude
+  Code, previously git-ignored alongside local settings).  The Sizing
+  screenshot was re-captured on v1.4 after a real 80-evaluation run: the
+  old one predated `Runs…`, `Waves…`, `Import ▾`, `Netlist…` and the AI
+  buttons, and showed no run at all.  Public docstring coverage went from
+  45% to 56%, concentrated where it pays: `SimWorker` and `JobTabMixin` now
+  state the concurrency contract (one thread because the skills' scratch
+  paths are fixed; render closures run on the GUI thread) that the six
+  tabs' handler overrides implement.
 - **`app/core/sizing.py` split into a layered package**.  The module had
   grown to 1638 lines carrying eight unrelated responsibilities; it is now
   `app/core/sizing/` with one module per responsibility and a strictly

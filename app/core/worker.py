@@ -26,6 +26,14 @@ from contextlib import redirect_stdout, redirect_stderr
 
 @dataclass
 class Job:
+    """One unit of work for the SimWorker.
+
+    `fn` runs on the worker thread and must do no Qt or matplotlib work —
+    for anything that draws, return a render closure and let the tab call it
+    on the GUI thread.  `log_dir` is only consulted on failure, to attach
+    the tail of the newest ngspice log to the error text.
+    """
+
     kind: str                       # 'gmid_table' | 'example' | 'browser_plot'
     fn: Callable[[], Any]
     label: str
@@ -71,6 +79,18 @@ def _tail_newest_log(log_dir: Path, n_lines: int = 20) -> str:
 
 
 class SimWorker(QThread):
+    """The single background thread every simulation runs on.
+
+    One thread, not a pool: the skills' scripts write scratch files to
+    fixed paths, so two concurrent gm/ID sweeps would overwrite each
+    other's intermediates.  Jobs therefore queue and run in submission
+    order.  (The Sizing optimizer parallelizes *inside* its own job, where
+    it controls the scratch layout.)
+
+    Everything a job prints — including the skills' own progress output —
+    is captured and re-emitted as `log_line` on the GUI thread.
+    """
+
     job_started = Signal(str, str)      # job_id, label
     log_line = Signal(str)
     job_finished = Signal(str, object)  # job_id, result
@@ -82,6 +102,7 @@ class SimWorker(QThread):
         self._queue: queue.Queue[Job | None] = queue.Queue()
 
     def submit(self, job: Job) -> str:
+        """Queue a job and return its id.  Safe from the GUI thread."""
         self._queue.put(job)
         self.queue_size.emit(self._queue.qsize())
         return job.job_id
@@ -101,6 +122,12 @@ class SimWorker(QThread):
         self._queue.put(None)
 
     def run(self):
+        """The worker loop.  Do not call — QThread.start() does.
+
+        Each job runs with stdout/stderr redirected into the log signal and
+        every exception caught, so one failing job can never take the loop
+        down and strand a tab with its buttons disabled.
+        """
         while True:
             job = self._queue.get()
             if job is None:
