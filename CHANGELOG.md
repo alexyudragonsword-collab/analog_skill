@@ -9,6 +9,20 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 Design import + netlist viewer in the Sizing tab.
 
+- **Project Cairn initialized**.  `AGENTS.md` becomes the always-read rules
+  and navigation entry point (Codex reads it directly; `CLAUDE.md` is now the
+  one-line `@AGENTS.md` stub Cairn expects), with `.cairn/config.yaml` holding
+  the machine-readable config and `cairn/` the knowledge layer.  The previous
+  96-line `CLAUDE.md` was not discarded: its rules and commands moved into
+  `AGENTS.md`, and its six failure modes — the sizing package's monkeypatch
+  seam, workspace vs user data, ngspice's unquoted `.include`, GUI-thread
+  matplotlib, schemdraw version sensitivity, concurrent test suites — became
+  `cairn/pitfalls.md`, where each now carries what it actually cost.
+  `git_policy: track` (the knowledge layer is committed; the repository is
+  public, so nothing private may be written there), graduation provider
+  deferred, and `migration_mode: inventory_only` — the pre-Cairn documents are
+  inventoried in `cairn/existing-knowledge.md`, not rewritten.  `ROADMAP.md`
+  deliberately stays at the repository root instead of moving under `cairn/`.
 - **Documentation overhaul**.  `README.md` / `README.zh-CN.md` now lead with
   Analog Studio instead of introducing the repository as three Claude
   skills (the app had one block quote); their badges pointed at the
@@ -19,7 +33,8 @@ Design import + netlist viewer in the Sizing tab.
   `CONTRIBUTING.md` (the two checks CI runs, why test suites must not run
   concurrently, regenerating the netlist-derived schematics, what each CI
   job guards, how to release) and `CLAUDE.md` (project guidance for Claude
-  Code, previously git-ignored alongside local settings).  New
+  Code, previously git-ignored alongside local settings — since folded into
+  `AGENTS.md`, see above).  New
   `ROADMAP.md` — until now open work existed only in commit history and
   conversation, so nothing recorded what was pending or, just as usefully,
   what had already been decided against.  The Sizing

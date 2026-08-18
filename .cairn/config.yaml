@@ -1,0 +1,29 @@
+version: 0.1
+project:
+  name: "Analog Studio"
+  summary: "A PySide6 desktop workbench for analog IC design, driving ngspice locally — gm/ID sizing, device characterization across 40 PTM models, block-level circuits, and automatic device sizing over 27 SKY130 / PTM topologies."
+cairn:
+  knowledge_dir: "cairn"
+  # Date of the skill spec this instance was initialized against, or last
+  # upgraded to. Stamped automatically by init from references/upgrade.md's
+  # "Current spec date" (not a user decision); re-stamped after each instance
+  # upgrade. Audit/upgrade drift checks compare it against the upgrade.md
+  # changelog. Missing field = instance predates this mechanism: run the full
+  # changelog (see references/upgrade.md).
+  skill_spec_date: "2026-08-07"
+  # git_policy: track | ignore | private_sync
+  git_policy: "track"
+  # reference_git_policy (optional): same enum as git_policy, scoped only to
+  # cairn/Reference/ (external raw input the project owns but didn't author).
+  # Omitted here — Reference/ inherits git_policy. Revisit if this project ever
+  # takes in externally-owned or sensitive raw material: the repository is
+  # public, so anything landing in Reference/ would be published with it.
+  # language: en | zh | ... — language used when writing AGENTS.md/LOG.md/ROADMAP.md/topic notes for this project
+  language: "en"
+graduation:
+  # Deferred — no knowledge base connected yet. The provider decisions are
+  # collected at the first graduation instead (see references/graduation.md).
+  provider: none
+history:
+  # migration_mode: start_fresh | inventory_only | selective_migrate
+  migration_mode: "inventory_only"

@@ -58,6 +58,11 @@ Ordered by value, not by effort.
   three freezing toolchains — a real cost for a key the user pasted in
   themselves. Worth doing only if this app is expected to run on shared
   machines; write down the answer either way.
+- **Connect a knowledge base to Project Cairn.** Cairn was initialized with
+  the graduation provider deferred (`provider: none` in `.cairn/config.yaml`),
+  which is fine — LOG, topic notes and audit all work without one. Graduation
+  is the cross-project half, and it stays unavailable until an Obsidian /
+  Notion / Lark target is configured at the first graduation.
 - **Issue and PR templates.** The repository is public with no templates.
   Bug reports for this project are unusable without three specific facts —
   ngspice version, platform, and whether the user is running from source or
