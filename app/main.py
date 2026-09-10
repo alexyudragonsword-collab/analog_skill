@@ -61,6 +61,12 @@ def _report_fatal(exc_text: str):
     is one, otherwise Windows gets a native message box (which needs no Qt
     at all) and everyone else gets stderr, which the frozen builds already
     redirect to a file via --force-stderr-spec.
+
+    *Both* dialogs sit behind _interactive(): each blocks until someone
+    presses OK, and MessageBoxW blocks just as hard as QMessageBox.exec().
+    Guarding only the Qt one left the Windows path open, and the Windows CI
+    job then sat on this function for six hours until the runner's own
+    limit killed it.
     """
     print(exc_text, file=sys.stderr, flush=True)
     crash = _write_crash_file(exc_text)
@@ -71,16 +77,17 @@ def _report_fatal(exc_text: str):
                   'Please include that file if you report this.'
                   if crash else
                   'The details could not be written to a file.'))
-    if _interactive():
-        try:
-            from PySide6.QtWidgets import QApplication, QMessageBox
-            if QApplication.instance() is not None:
-                box = QMessageBox(QMessageBox.Icon.Critical,
-                                  'Analog Studio', message)
-                box.exec()
-                return
-        except Exception:
-            pass
+    if not _interactive():
+        return
+    try:
+        from PySide6.QtWidgets import QApplication, QMessageBox
+        if QApplication.instance() is not None:
+            box = QMessageBox(QMessageBox.Icon.Critical,
+                              'Analog Studio', message)
+            box.exec()
+            return
+    except Exception:
+        pass
     if sys.platform == 'win32':
         try:
             import ctypes

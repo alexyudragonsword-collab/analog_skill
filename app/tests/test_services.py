@@ -164,6 +164,40 @@ def test_report_fatal_never_raises(tmp_path, monkeypatch):
     app_main._report_fatal('Traceback ...\nBoomError: exploded\n')
 
 
+def test_report_fatal_raises_no_dialog_when_nobody_can_click(tmp_path,
+                                                             monkeypatch):
+    """*Neither* dialog may be raised when there is no one to dismiss it.
+
+    QMessageBox.exec() and MessageBoxW both block until OK is pressed.
+    Guarding only the Qt one left the Windows path wide open: this function
+    held the Windows CI job for six hours until the runner's own limit
+    killed it.  Forcing sys.platform makes the check run on every platform,
+    so the next regression fails here in a second instead of there in six
+    hours.
+    """
+    import ctypes
+    import sys
+    from PySide6.QtWidgets import QApplication
+    from app import main as app_main
+    raised = []
+    box = type('U', (), {'MessageBoxW': staticmethod(
+        lambda *a: raised.append(a))})()
+    monkeypatch.setattr(ctypes, 'windll', type('W', (), {'user32': box})(),
+                        raising=False)
+    monkeypatch.setattr(sys, 'platform', 'win32')
+    monkeypatch.setenv('TMPDIR', str(tmp_path))
+    # keep the Qt branch out of it — QMessageBox.exec() would block too
+    monkeypatch.setattr(QApplication, 'instance', staticmethod(lambda: None))
+
+    monkeypatch.setattr(app_main, '_interactive', lambda: False)
+    app_main._report_fatal('Traceback ...\nBoomError: exploded\n')
+    assert raised == []
+
+    monkeypatch.setattr(app_main, '_interactive', lambda: True)
+    app_main._report_fatal('Traceback ...\nBoomError: exploded\n')
+    assert len(raised) == 1        # ...and the path still works when it can
+
+
 def test_fatal_dialog_is_skipped_when_nobody_can_click_it(monkeypatch):
     """QMessageBox.exec() blocks until someone presses OK. Raising one under
     --smoke or an offscreen platform would hang CI until the job timed out

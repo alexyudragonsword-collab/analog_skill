@@ -29,6 +29,16 @@ out", which is strictly worse than the silent failure it was meant to fix.
 offscreen/minimal platforms. The crash file is written first either way, so
 nothing depends on the dialog appearing.
 
+**And it bit twice.** The first fix guarded the Qt dialog and left the Win32
+`MessageBoxW` fallback in the same function outside the guard — it blocks
+identically. The Windows CI job then sat inside `_report_fatal()` for six
+hours until GitHub's own limit killed it. Two lessons worth more than the
+first one: when a hazard has two branches, guard the *function*, not the
+branch you were looking at; and a blocking bug does not fail, it waits, so
+the job needs a `timeout-minutes` that is shorter than the runner's. Both
+are now in place, and the regression test forces `sys.platform` so it runs
+on every platform rather than only where the bug lives.
+
 Related, same file: the fatal handler must **not** construct a QApplication
 of its own. Qt is a plausible cause of the very failure being reported — a
 missing libEGL on Linux, a missing VC runtime or a bad bundled DLL on

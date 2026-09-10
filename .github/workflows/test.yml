@@ -7,6 +7,7 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -31,6 +32,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    # The suite takes ~3 min. The cap exists because a test that blocks on a
+    # modal dialog does not fail — it waits, and GitHub's own limit is six
+    # hours. That happened once; twenty minutes is the cost of the next one.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 

@@ -2,6 +2,18 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-10 · Windows CI hung 6 h on my own startup-dialog guard
+
+- The v1.4 guard covered `QMessageBox.exec()` but not the Win32
+  `MessageBoxW` fallback beside it; both block. The Windows job sat in
+  `_report_fatal()` 16:06 → 22:04 and died on GitHub's six-hour limit.
+- Fixed by guarding the whole function. Regression test forces
+  `sys.platform` so it runs on every platform — against the broken code it
+  fails in 1.6 s (verified by reverting the fix), rather than hanging.
+- `pytest` job now has `timeout-minutes: 20`. A blocking test never fails on
+  its own; the cap is what makes the next one cheap.
+- Details: `cairn/pitfalls.md` → "A modal dialog needs someone to click it".
+
 ## 2026-09-10 · Default branch renamed to `main`
 
 - The session-generated branch name was the repository's public face; it is

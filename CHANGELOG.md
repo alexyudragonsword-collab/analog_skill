@@ -5,6 +5,22 @@ development milestones and were never tagged — v1.4 is the first release;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
+## Unreleased
+
+- **Fixed — the startup error dialog could hang forever on Windows.**  The
+  v1.4 safety net put `QMessageBox.exec()` behind an `_interactive()` check
+  but left the Win32 `MessageBoxW` fallback outside it, and that call blocks
+  until someone presses OK just as hard.  On the Windows CI runner nobody
+  can: the job sat inside `_report_fatal()` from 16:06 to 22:04 and was
+  killed by GitHub's own six-hour limit — the exact failure mode the guard
+  was added to prevent, reintroduced in the branch next to it.  Both dialogs
+  now sit behind the one check.  The regression test forces `sys.platform`
+  so it runs everywhere rather than only on Windows; against the broken code
+  it fails in 1.6 s instead of hanging.  The `pytest` job also gained
+  `timeout-minutes: 20` (the suite takes ~3): a test that blocks on a modal
+  dialog never fails on its own, so the cap is what turns the next one into
+  a red job in minutes rather than a wasted afternoon.
+
 ## v1.4 — 2026-09-10
 
 Design import + netlist viewer in the Sizing tab.
