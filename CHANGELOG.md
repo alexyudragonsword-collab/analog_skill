@@ -5,7 +5,7 @@ development milestones on the `claude/gmoverid-skill-analysis-7ron1c` branch;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
-## v1.4 — unreleased  (version bumped 2026-07-15)
+## v1.4 — 2026-09-10
 
 Design import + netlist viewer in the Sizing tab.
 
