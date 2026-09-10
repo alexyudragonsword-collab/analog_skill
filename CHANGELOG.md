@@ -9,6 +9,22 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 Design import + netlist viewer in the Sizing tab.
 
+- **Fixed — an imported netlist could run arbitrary commands.**  ngspice
+  executes `.control ... .endc` blocks in batch mode, and such a block may
+  call `shell`.  Both the imported netlist and its .PARAM file are
+  `.include`d verbatim into the rendered testbench, and a directive inside
+  an included file executes exactly as if it were inline — so a design
+  taken from a paper's supplement or a forum could run commands on the
+  first evaluation while every metric still came back looking normal
+  (reproduced end to end through `import_user_circuit` → `evaluate`: the
+  payload ran, the report showed `tc`/`ivdd25`/`power` as usual).  Import
+  now refuses any netlist or design-variables file containing a control
+  block, and `load_user_circuits()` re-checks files already in the store
+  rather than trusting them, so a design imported before this check
+  existed does not become runnable just by being on disk.  The amplifier
+  contract is a plain `.subckt` and none of the 27 shipped circuits
+  contains a control block, so nothing legitimate is refused.  The manual
+  states the trust boundary in both languages.
 - **Project Cairn initialized**.  `AGENTS.md` becomes the always-read rules
   and navigation entry point (Codex reads it directly; `CLAUDE.md` is now the
   one-line `@AGENTS.md` stub Cairn expects), with `.cairn/config.yaml` holding

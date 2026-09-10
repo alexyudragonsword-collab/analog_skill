@@ -540,6 +540,68 @@ def test_user_import_rejects_path_escape(tmp_path, monkeypatch, name):
     assert not list(tmp_path.glob('**/EVIL'))
 
 
+@pytest.mark.parametrize('block', [
+    '.control\nshell touch PROOF\n.endc\n',          # plain
+    '.CoNtRoL\nshell touch PROOF\n.endc\n',          # directives fold case
+    '   .control\nshell touch PROOF\n.endc\n',       # and may be indented
+])
+def test_user_import_rejects_control_block(tmp_path, monkeypatch, block):
+    """ngspice executes .control blocks, so an imported design carrying one
+    would run arbitrary commands on the first evaluation."""
+    _isolate_workspace(tmp_path, monkeypatch)
+    nl, vars_f = _user_files(tmp_path, 'ctl_ota')
+    nl.write_text(nl.read_text() + block)
+    with pytest.raises(ValueError, match=r'\.control'):
+        sizing.import_user_circuit(nl, vars_f)
+    assert 'user_ctl_ota' not in sizing.SIZING
+    assert not list((tmp_path / 'work').glob('**/ctl_ota'))   # nothing copied
+
+
+def test_user_import_rejects_control_block_in_variables(tmp_path, monkeypatch):
+    """The .PARAM file is .include'd too — a directive inside an included
+    file executes exactly as if it were inline."""
+    _isolate_workspace(tmp_path, monkeypatch)
+    nl, vars_f = _user_files(tmp_path, 'ctl_vars_ota')
+    vars_f.write_text(vars_f.read_text()
+                      + '.control\nshell touch PROOF\n.endc\n')
+    with pytest.raises(ValueError, match=r'design-variables.*\.control'):
+        sizing.import_user_circuit(nl, vars_f)
+    assert 'user_ctl_vars_ota' not in sizing.SIZING
+
+
+def test_load_user_circuits_skips_unvetted_control_block(tmp_path,
+                                                         monkeypatch, capsys):
+    """A file already in the store — imported before the check existed, or
+    dropped in by hand — must not become runnable just by being on disk."""
+    _isolate_workspace(tmp_path, monkeypatch)
+    root = sizing.user_circuits_dir() / 'amp'
+    (root / 'netlist').mkdir(parents=True, exist_ok=True)
+    (root / 'variables').mkdir(parents=True, exist_ok=True)
+    good_nl, good_vars = _user_files(tmp_path, 'planted_ota')
+    (root / 'netlist' / 'planted_ota').write_text(
+        good_nl.read_text() + '.control\nshell touch PROOF\n.endc\n')
+    (root / 'variables' / 'planted_ota').write_text(good_vars.read_text())
+    assert sizing.load_user_circuits() == []
+    assert 'user_planted_ota' not in sizing.SIZING
+    assert 'planted_ota' in capsys.readouterr().out    # says why it skipped
+
+
+@needs_ngspice
+def test_control_block_would_have_executed(tmp_path, monkeypatch):
+    """The guard is worth having: prove the payload really does run when
+    ngspice is handed it, so this stays a demonstrated risk and not a
+    theoretical one."""
+    import subprocess
+    proof = tmp_path / 'PROOF'
+    deck = tmp_path / 'payload.cir'
+    deck.write_text('V1 a 0 1\nR1 a 0 1k\n.control\n'
+                    f'shell touch "{proof}"\nquit\n.endc\n.end\n')
+    subprocess.run(['ngspice', '-b', str(deck)], cwd=tmp_path,
+                   capture_output=True, timeout=60)
+    assert proof.exists(), 'ngspice no longer executes .control — re-check ' \
+                           'whether the import guard is still needed'
+
+
 def test_user_data_lives_outside_the_versioned_workspace(tmp_path,
                                                          monkeypatch):
     """Saved runs and imports must not sit under ANALOG_WORK_DIR — that

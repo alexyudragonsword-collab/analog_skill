@@ -9,9 +9,9 @@ Completed work belongs in [`CHANGELOG.md`](./CHANGELOG.md), not here. Items
 leave this file when they land, except in *Decided against*, which exists so
 a settled question is not reopened from scratch.
 
-**Status as of 2026-08-15** — v1.4, unreleased, no tag has ever been cut.
+**Status as of 2026-09-10** — v1.4, unreleased, no tag has ever been cut.
 CI is green on all six build jobs and on the three-platform test matrix.
-`ruff check .` is clean and gated. 86 tests, ~2.5 min, running real ngspice.
+`ruff check .` is clean and gated. 93 tests, ~2.5 min, running real ngspice.
 
 ---
 
@@ -25,7 +25,10 @@ action only the repository owner can take.
   Everything it needs is in place: five build artifacts, green CI, a
   changelog. Bump the date in `CHANGELOG.md` from *unreleased*, then
   `git tag v1.4 && git push origin v1.4`. See
-  [`CONTRIBUTING.md`](./CONTRIBUTING.md#releasing).
+  [`CONTRIBUTING.md`](./CONTRIBUTING.md#releasing). **This now has a deadline**: the
+  only distributable builds are Actions artifacts from the run of
+  2026-08-15, and they expire 2026-11-13. After that there is nothing to
+  download and no release to fall back on.
 - **Confirm the single-file Windows build actually launches.** The
   `nuitka-onefile` job builds the exe and runs it with `--smoke` on a clean
   runner, exit 0 — but a report of "double-click does nothing" on a real
@@ -63,6 +66,22 @@ Ordered by value, not by effort.
   which is fine — LOG, topic notes and audit all work without one. Graduation
   is the cross-project half, and it stays unavailable until an Obsidian /
   Notion / Lark target is configured at the first graduation.
+- **`.include` in an imported netlist can read any file on disk.** The
+  control-block guard closed the code-execution path, but ngspice still
+  resolves `.include "/some/path"` from an imported design and folds the
+  contents into the simulation, where they can surface in the log. It is
+  noisy and far weaker than shell execution — the deck usually fails to
+  parse — but the amplifier contract needs no includes at all, so
+  restricting them is cheap. Left open rather than bundled into the
+  control-block fix so the two are judged separately.
+- **Default branch is `claude/gmoverid-skill-analysis-7ron1c`, not `main`.**
+  A public repository fronted by a session-generated branch name, with two
+  concrete consequences: `build-windows.yml` hard-codes that name in its
+  `branches:` filter, so creating `main` and moving to it would silently
+  stop the builds; and both READMEs' last-commit badge links to
+  `/commits/main`, which 404s today. Renaming is a repository setting
+  (maintainer), after which the workflow filter and the two badges need
+  updating in the same change.
 - **Issue and PR templates.** The repository is public with no templates.
   Bug reports for this project are unusable without three specific facts —
   ngspice version, platform, and whether the user is running from source or

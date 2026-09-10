@@ -2,10 +2,10 @@
 type: project_topic
 status: active
 summary: "Failure modes in this codebase that are silent, expensive, or look like something else — each one cost real debugging time before it was written down."
-tags: [analog-studio, ngspice, pyside6, packaging, testing]
+tags: [analog-studio, ngspice, pyside6, packaging, testing, security]
 contains: [lesson, experience]
 created: "2026-08-18"
-updated: "2026-08-18"
+updated: "2026-09-10"
 related: [existing-knowledge]
 authoring_mode: ai_generated
 ---
@@ -15,6 +15,36 @@ These are not style preferences. Each one below produced a wrong result, a
 silent no-op, or a failure that pointed at the wrong culprit.
 
 ## Lessons
+
+### A netlist is code — ngspice executes `.control` blocks
+
+In batch mode (`-b`) ngspice runs any `.control ... .endc` block it sees,
+and such a block may call `shell`. That makes every user-supplied netlist an
+executable, not data.
+
+Two properties made this worse than it first looks:
+
+- **Included files count.** Both the imported netlist and its `.PARAM`
+  design-variables file are `.include`d verbatim into the rendered testbench
+  (`evaluation._render_testbench`, `_write_params`), and a directive inside
+  an included file executes exactly as if it were inline — verified. So the
+  variables file is an injection point too, not just the netlist.
+- **It is silent.** Reproduced end to end through `import_user_circuit` →
+  `evaluate` with a real studio netlist plus a four-line control block: the
+  payload ran, import reported success, and the metric report came back with
+  `tc`/`ivdd25`/`power` looking entirely normal. Nothing in the UI hinted
+  that anything had happened.
+
+Measured against ngspice-42 while designing the guard: the directive folds
+case and may be indented (`   .CoNtRoL` executes), but splitting it across a
+`+` continuation does **not** work — so matching `^\s*\.control` catches
+every form that actually runs. None of the 27 shipped circuits contains a
+control block, so refusing them costs nothing legitimate; the vendored
+*testbenches* do contain them, but those are ours, not user input.
+
+Residual, deliberately not folded into the same fix: `.include` from an
+imported netlist still reads arbitrary files into the simulation. Far weaker
+(the deck usually fails to parse) and tracked separately in `ROADMAP.md`.
 
 ### Monkeypatching the sizing package patches nothing
 

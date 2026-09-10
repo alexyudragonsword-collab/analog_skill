@@ -2,6 +2,20 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-10 · Imported netlists could execute shell commands — fixed
+
+- ngspice runs `.control` blocks in batch mode; imported netlists **and**
+  their `.PARAM` files are `.include`d verbatim, and directives inside an
+  included file execute the same. Reproduced end to end: payload ran, the
+  metric report looked normal.
+- Guard added at both registration paths — `import_user_circuit()` refuses a
+  control block in either file, `load_user_circuits()` re-checks files
+  already on disk instead of trusting them.
+- 6 regression tests, including one that asserts ngspice really does execute
+  the payload, so the guard cannot quietly become pointless.
+- Details: `cairn/pitfalls.md` → "A netlist is code"; residual `.include`
+  file-read issue tracked in `ROADMAP.md`.
+
 ## 2026-08-18 · Project Cairn initialized
 
 - Initialized Project Cairn structure: `AGENTS.md`, one-line `CLAUDE.md`, `.cairn/config.yaml`, this log.

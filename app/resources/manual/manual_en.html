@@ -374,7 +374,13 @@ import it is copied into the writable user-data store
 (<code>user_circuits/</code>, kept outside the versioned workspace so it
 survives app upgrades), registered in
 the circuit drop-down, and validated with one real evaluation (a netlist
-that produces no metrics is rejected and removed).  Imported circuits
+that produces no metrics is rejected and removed).  <b>A netlist is code,
+not just data</b>: ngspice executes <code>.control</code> blocks, so an
+imported design carrying one could run arbitrary commands on your machine.
+Import therefore refuses any netlist or .PARAM file containing a
+<code>.control</code> block — the amplifier contract is a plain
+<code>.subckt</code> and never needs one.  Treat designs from strangers
+with the same care as any downloaded script.  Imported circuits
 get the full pipeline: 9-metric report, parallel evaluation, Waves…
 comparison, device-change summary and the AI features.  Only the
 amplifier contract is supported in this version.  <b>Netlist…</b> opens a

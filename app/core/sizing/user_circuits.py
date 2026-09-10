@@ -22,6 +22,35 @@ _USER_SUBCKT = re.compile(
     r'(?im)^\s*\.subckt\s+([A-Za-z_][A-Za-z0-9_]*)'
     r'\s+gnda\s+vdda\s+vinn\s+vinp\s+vout\b')
 
+#: ngspice runs `.control ... .endc` blocks in batch mode, and a control
+#: block may call `shell`.  Both the netlist and the design-variables file
+#: are `.include`d verbatim into the rendered testbench (see
+#: evaluation._render_testbench and _write_params), and a directive inside
+#: an included file executes exactly as if it were inline — so an imported
+#: design carrying a control block would run arbitrary commands on the very
+#: first evaluation while every metric still came back looking normal.
+#:
+#: The amplifier contract is a plain `.subckt`: a control block has no
+#: legitimate use in it, and none of the 27 shipped circuits contains one
+#: (the vendored *testbenches* do, but those are ours, not user input).
+#: Measured against ngspice-42: the directive is case-insensitive and may be
+#: indented, but splitting it across a `+` continuation does not work, so
+#: matching at line start catches every form that actually executes.
+_CONTROL_BLOCK = re.compile(r'(?im)^[ \t]*\.control\b')
+
+
+def _reject_control_block(text: str, path: Path, role: str):
+    """Raise ValueError if `text` carries an ngspice control block."""
+    m = _CONTROL_BLOCK.search(text)
+    if m is None:
+        return
+    line = text.count('\n', 0, m.start()) + 1
+    raise ValueError(
+        f'{role} "{Path(path).name}" contains a ".control" block '
+        f'(line {line}). ngspice executes those, so importing this design '
+        f'could run arbitrary commands on your machine. The amplifier '
+        f'contract is a plain .subckt — remove the control block first.')
+
 
 def _register_user_circuit(subckt: str) -> str:
     key = f'user_{subckt.lower()}'
@@ -45,6 +74,7 @@ def import_user_circuit(netlist_path: Path, vars_path: Path) -> str:
     """
     import shutil
     text = Path(netlist_path).read_text(errors='replace')
+    _reject_control_block(text, netlist_path, 'netlist')
     m = _USER_SUBCKT.search(text)
     if not m:
         raise ValueError(
@@ -60,6 +90,8 @@ def import_user_circuit(netlist_path: Path, vars_path: Path) -> str:
     if key in SIZING:
         raise ValueError(f'a circuit named {subckt} is already imported — '
                          'remove it first (Netlist… dialog)')
+    _reject_control_block(Path(vars_path).read_text(errors='replace'),
+                          vars_path, 'design-variables file')
     if not parse_param_file(vars_path):
         raise ValueError('the design-variables file contains no '
                          'name=value parameters')
@@ -77,13 +109,33 @@ def import_user_circuit(netlist_path: Path, vars_path: Path) -> str:
 
 def load_user_circuits() -> list[str]:
     """(Re-)register every circuit found in the workspace user_circuits
-    tree — called at GUI start so imports persist across sessions."""
-    nl = user_circuits_dir() / 'amp' / 'netlist'
+    tree — called at GUI start so imports persist across sessions.
+
+    Files on disk are re-checked for control blocks rather than trusted:
+    a design imported before that check existed, or dropped into the store
+    by hand, must not become runnable just because it is already there.
+    An unsafe file is skipped with a message and left in place for the
+    user to inspect — deleting someone's netlist behind their back would
+    be worse than leaving it unregistered.
+    """
+    root = user_circuits_dir() / 'amp'
+    nl = root / 'netlist'
     keys = []
     if nl.is_dir():
         for p in sorted(nl.iterdir()):
-            if p.is_file() and f'user_{p.name.lower()}' not in SIZING:
-                keys.append(_register_user_circuit(p.name))
+            if not p.is_file() or f'user_{p.name.lower()}' in SIZING:
+                continue
+            try:
+                for path, role in ((p, 'netlist'),
+                                   (root / 'variables' / p.name,
+                                    'design-variables file')):
+                    if path.is_file():
+                        _reject_control_block(
+                            path.read_text(errors='replace'), path, role)
+            except ValueError as exc:
+                print(f'skipping user circuit {p.name}: {exc}')
+                continue
+            keys.append(_register_user_circuit(p.name))
     return keys
 
 
