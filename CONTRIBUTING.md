@@ -103,10 +103,19 @@ route, so do not weaken it to make a build pass.
 
 Version lives in `app/__init__.py`. To release:
 
-1. Bump `__version__`, and give the `CHANGELOG.md` section its **real** date.
-2. Push a tag: `git tag v1.4 && git push origin v1.4`.
-3. The `release` job collects all five build artifacts and publishes them.
-   Without a tag it skips, which is why it shows as skipped on ordinary runs.
+1. Bump `__version__` if needed, and give the top `CHANGELOG.md` section its
+   **real** date — that section becomes the release notes verbatim, and the
+   job refuses to publish while it still says *unreleased*.
+2. Trigger the build, either way:
+   - `git tag v1.4 && git push origin v1.4`, or
+   - Actions → **Build executables** → *Run workflow*, with `release_tag`
+     set to `v1.4`. Same result, no push permission needed — the workflow
+     creates the tag along with the release.
+3. All five packages must be present or the job fails rather than publishing
+   a partial set; the `Collect the five packages` step lists what it found.
+
+Without a tag or that input the `release` job skips, which is why it shows as
+skipped on ordinary runs.
 
 ## What you must not change
 

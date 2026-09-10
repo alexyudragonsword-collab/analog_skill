@@ -9,6 +9,15 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 Design import + netlist viewer in the Sizing tab.
 
+- **The release job would have failed on its first run.**  Nothing had ever
+  exercised it — the repository has no tags — and one of its five hard-coded
+  artifact paths assumed a different `download-artifact` layout than the
+  other four, which with `fail_on_unmatched_files` would have failed the
+  publish at the last step.  It now flattens whatever was downloaded, lists
+  it, and refuses to publish unless all five packages are there (verified
+  against both possible layouts).  It also refuses while the top CHANGELOG
+  section still says *unreleased*, since that text becomes the release notes
+  verbatim.
 - **A failing startup is no longer silent, and a slow one says so.**  The
   frozen builds run windowed (`--windows-console-mode=disable`), so any
   exception before the window appeared reached nobody — the symptom is the

@@ -540,19 +540,39 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Collect the five packages
+        # Where download-artifact puts things depends on merge-multiple, and
+        # this job had never run once (the repository had no tags), so the
+        # hard-coded paths that used to be in `files:` below were guesses —
+        # one of them assumed the un-merged layout and would have failed the
+        # release at the last step.  Flatten explicitly instead, print what
+        # was found, and refuse to publish a partial set: a release missing a
+        # platform is worse than no release.
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name 'AnalogStudio-*.zip' \
+               -o -name 'AnalogStudio-*.tar.gz' \
+               -o -name 'AnalogStudio.exe' \) -exec mv -t release/ {} +
+          ls -l release
+          n=$(ls release | wc -l)
+          if [ "$n" -ne 5 ]; then
+            echo "::error::expected 5 packages, found $n"
+            find artifacts -type f
+            exit 1
+          fi
+
       - name: Extract release notes from CHANGELOG
         # first "## " section = the release being tagged (newest on top)
-        run: awk '/^## /{n++} n==1' CHANGELOG.md > release-notes.md
+        run: |
+          awk '/^## /{n++} n==1' CHANGELOG.md > release-notes.md
+          head -1 release-notes.md | grep -qi 'unreleased' && {
+            echo "::error::CHANGELOG's top section still says 'unreleased' —"\
+                 "give it the real date before tagging"; exit 1; } || true
 
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: Analog Studio ${{ env.RELEASE_TAG }}
           body_path: release-notes.md
-          files: |
-            artifacts/AnalogStudio-windows-pyinstaller.zip
-            artifacts/AnalogStudio-windows-nuitka.zip
-            artifacts/AnalogStudio-windows-onefile/AnalogStudio.exe
-            artifacts/AnalogStudio-linux-pyinstaller.tar.gz
-            artifacts/AnalogStudio-linux-nuitka.tar.gz
+          files: release/*
           fail_on_unmatched_files: true
