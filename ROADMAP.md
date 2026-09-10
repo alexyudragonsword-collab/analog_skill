@@ -9,9 +9,10 @@ Completed work belongs in [`CHANGELOG.md`](./CHANGELOG.md), not here. Items
 leave this file when they land, except in *Decided against*, which exists so
 a settled question is not reopened from scratch.
 
-**Status as of 2026-09-10** — v1.4, unreleased, no tag has ever been cut.
-CI is green on all six build jobs and on the three-platform test matrix.
-`ruff check .` is clean and gated. 98 tests, ~2.5 min, running real ngspice.
+**Status as of 2026-09-10** — **v1.4 released**, the repository's first
+(tag `v1.4`, five packages). CI is green on all six build jobs and on the
+three-platform test matrix. `ruff check .` is clean and gated. 98 tests,
+~2.5 min, running real ngspice.
 
 ---
 
@@ -20,15 +21,6 @@ CI is green on all six build jobs and on the three-platform test matrix.
 Nothing here can be moved by a contributor; each needs a decision or an
 action only the repository owner can take.
 
-- **Cut the v1.4 release.** The repository has no tags at all, so the
-  `release` CI job has never run and no version has ever been published.
-  Everything it needs is in place: five build artifacts, green CI, a
-  changelog. Bump the date in `CHANGELOG.md` from *unreleased*, then
-  `git tag v1.4 && git push origin v1.4`. See
-  [`CONTRIBUTING.md`](./CONTRIBUTING.md#releasing). **This now has a deadline**: the
-  only distributable builds are Actions artifacts from the run of
-  2026-08-15, and they expire 2026-11-13. After that there is nothing to
-  download and no release to fall back on.
 - **Confirm the single-file Windows build actually launches.** The
   `nuitka-onefile` job builds the exe and runs it with `--smoke` on a clean
   runner, exit 0 — but a report of "double-click does nothing" on a real
@@ -37,7 +29,9 @@ action only the repository owner can take.
   first launch shows a splash saying the assets are being unpacked. So the
   three candidate causes are now distinguishable rather than guesswork — a
   crash leaves the file, a slow unpack shows the splash, and SmartScreen
-  blocking shows neither. Still needs one run on the reporting machine.
+  blocking shows neither. The exe no longer expires either — it is a
+  [v1.4 release asset](https://github.com/alexyudragonsword-collab/analog_skill/releases/tag/v1.4)
+  now, not a 90-day artifact. Still needs one run on the reporting machine.
 - **English one-page overview (16:9).** Outline agreed; blocked on the
   output format (PDF / PNG / HTML) and on the repository URL and contact to
   put in the footer.

@@ -2,6 +2,19 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-10 · v1.4 released — the repository's first
+
+- Tag `v1.4` at `6e020a0`, five packages published. Build run 34462082771,
+  all six jobs green including `release`, which had never executed before.
+- The pre-emptive fix to that job was load-bearing, and the run proved it:
+  `download-artifact` with `merge-multiple` put every file flat in
+  `artifacts/`, including `AnalogStudio.exe` — so the old hard-coded
+  `artifacts/AnalogStudio-windows-onefile/AnalogStudio.exe` would have
+  matched nothing and failed the publish after ~36 min of building.
+- The onefile exe is now a release asset rather than a 90-day artifact, so
+  the outstanding "double-click does nothing" report can be retested any
+  time.
+
 ## 2026-09-10 · Startup safety net + first-run splash
 
 - Frozen builds are windowed, so a startup exception reached nobody. `main()`

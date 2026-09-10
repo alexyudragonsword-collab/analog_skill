@@ -117,6 +117,11 @@ Version lives in `app/__init__.py`. To release:
 Without a tag or that input the `release` job skips, which is why it shows as
 skipped on ordinary runs.
 
+After a release, the first change that follows opens a new
+`## vNext — unreleased` section at the top of `CHANGELOG.md`. The published
+section below it is now a historical record — appending to it would silently
+edit what a release page already says.
+
 ## What you must not change
 
 `analoggym/`, `circuit-skills/`, `gmoverid/`, `ngspice/` and
