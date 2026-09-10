@@ -9,6 +9,29 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 Design import + netlist viewer in the Sizing tab.
 
+- **A failing startup is no longer silent, and a slow one says so.**  The
+  frozen builds run windowed (`--windows-console-mode=disable`), so any
+  exception before the window appeared reached nobody — the symptom is the
+  reported "double-click does nothing".  `main()` now writes the traceback
+  to `%TEMP%/AnalogStudio-crash.txt` and names that file in an error
+  dialog.  The dialog deliberately does not create a `QApplication` of its
+  own: when Qt itself is what broke (a missing libEGL or VC runtime, a bad
+  DLL in the bundle) constructing one would just fail again, so an existing
+  instance is reused, Windows falls back to a native message box that needs
+  no Qt, and everyone else gets stderr — which the frozen builds already
+  redirect to a file.  It is also skipped under `--smoke` and the
+  offscreen/minimal Qt platforms: a modal box blocks until someone clicks
+  OK, and raising one where nobody can would hang CI until the job timed
+  out instead of failing fast (measured while building this — the first
+  version did exactly that).
+  A splash screen now covers the work between `QApplication` and the main
+  window, worded from `paths.first_run_expected()` so a first launch says
+  "unpacking bundled assets, one time only" rather than showing a frozen
+  cursor.  The scipy import before it stays uncovered by design: it must
+  precede any Qt import (Nuitka Windows access violation), so there is no
+  `QApplication` yet to draw on.
+  Both READMEs now warn that the unsigned builds trip SmartScreen, and
+  point at the crash file.
 - **Fixed — an imported netlist could run arbitrary commands.**  ngspice
   executes `.control ... .endc` blocks in batch mode, and such a block may
   call `shell`.  Both the imported netlist and its .PARAM file are

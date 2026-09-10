@@ -2,6 +2,21 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-10 · Startup safety net + first-run splash
+
+- Frozen builds are windowed, so a startup exception reached nobody. `main()`
+  now writes `%TEMP%/AnalogStudio-crash.txt` and reports it; the dialog reuses
+  an existing QApplication and falls back to the Win32 box, because Qt itself
+  is a plausible cause of the failure.
+- Building it produced a defect worth remembering: the first version's modal
+  dialog **hung** under `--smoke`/offscreen (nobody to click OK) — CI would
+  have timed out instead of failing fast. Guarded by `_interactive()`.
+- Splash covers QApplication → main window, worded from
+  `paths.first_run_expected()`. The scipy import before it cannot be covered:
+  it must precede Qt (Nuitka Windows), so no QApplication exists yet.
+- 5 tests. Details: `cairn/pitfalls.md` → "A modal dialog needs someone to
+  click it".
+
 ## 2026-09-10 · Imported netlists could execute shell commands — fixed
 
 - ngspice runs `.control` blocks in batch mode; imported netlists **and**

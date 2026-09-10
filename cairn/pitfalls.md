@@ -16,6 +16,26 @@ silent no-op, or a failure that pointed at the wrong culprit.
 
 ## Lessons
 
+### A modal dialog needs someone to click it
+
+`QMessageBox.exec()` blocks until OK is pressed. A startup error dialog is
+right on a desktop and actively harmful anywhere else: under `--smoke` or an
+offscreen/minimal Qt platform there is nobody to click, so the process hangs
+until something kills it. Measured while adding the startup safety net — the
+first version turned "CI fails fast with a traceback" into "CI job times
+out", which is strictly worse than the silent failure it was meant to fix.
+
+`app/main._interactive()` gates it: no dialog under `--smoke`, none on the
+offscreen/minimal platforms. The crash file is written first either way, so
+nothing depends on the dialog appearing.
+
+Related, same file: the fatal handler must **not** construct a QApplication
+of its own. Qt is a plausible cause of the very failure being reported — a
+missing libEGL on Linux, a missing VC runtime or a bad bundled DLL on
+Windows — so it reuses an existing instance, falls back to the Win32 message
+box (which needs no Qt at all), and otherwise leaves the traceback on stderr,
+which the frozen builds already redirect to a file.
+
 ### A netlist is code — ngspice executes `.control` blocks
 
 In batch mode (`-b`) ngspice runs any `.control ... .endc` block it sees,

@@ -62,6 +62,14 @@ of a green run, or from **Releases** once a version is tagged.
 next to the executable (or point at it in Settings). On Linux/macOS install it
 from your package manager.
 
+**On Windows, the first launch is slow and SmartScreen will warn.** The builds
+are unsigned, so SmartScreen shows "Windows protected your PC" — choose *More
+info* → *Run anyway*. The first run then unpacks the bundled assets (~100 MB
+for the single-file build) before the window appears, which takes a while on a
+cold disk; a splash screen says so. If nothing at all happens, look for
+`AnalogStudio-crash.txt` in your `%TEMP%` folder — the app writes the reason
+there rather than failing silently.
+
 ### From source
 
 ```bash

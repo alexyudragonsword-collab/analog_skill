@@ -136,3 +136,67 @@ def test_extract_curves_contract():
     for key in ('gmid', 'ft', 'id_w', 'gmro', 'vgs', 'vov'):
         assert key in curves and len(curves[key]) > 100
     assert np.all(np.diff(curves['gmid']) >= 0), 'gmid must be ascending'
+
+
+# ── startup safety net (app/main.py) ─────────────────────────────────────────
+def test_crash_file_records_the_traceback(tmp_path, monkeypatch):
+    """A startup failure must leave something the user can send.
+
+    The frozen builds run windowed, so an exception here otherwise reaches
+    nobody: the symptom is a double-click that does nothing.
+    """
+    import sys
+    from app import main as app_main
+    monkeypatch.setenv('TMPDIR', str(tmp_path))
+    path = app_main._write_crash_file('Traceback ...\nBoomError: exploded\n')
+    assert path is not None and path.is_file()
+    body = path.read_text()
+    assert 'BoomError: exploded' in body
+    assert sys.executable in body          # which interpreter/exe ran
+
+
+def test_report_fatal_never_raises(tmp_path, monkeypatch):
+    """It runs when everything else already failed — it may not add a
+    second failure on top, even if the crash file cannot be written."""
+    from app import main as app_main
+    monkeypatch.setenv('TMPDIR', str(tmp_path / 'nonexistent' / 'deeper'))
+    monkeypatch.setattr(app_main, '_interactive', lambda: False)
+    app_main._report_fatal('Traceback ...\nBoomError: exploded\n')
+
+
+def test_fatal_dialog_is_skipped_when_nobody_can_click_it(monkeypatch):
+    """QMessageBox.exec() blocks until someone presses OK. Raising one under
+    --smoke or an offscreen platform would hang CI until the job timed out
+    instead of failing fast — measured, not hypothetical."""
+    import sys
+    from app import main as app_main
+    monkeypatch.setattr(sys, 'argv', ['app', '--smoke'])
+    assert app_main._interactive() is False
+    monkeypatch.setattr(sys, 'argv', ['app'])
+    monkeypatch.setenv('QT_QPA_PLATFORM', 'offscreen')
+    assert app_main._interactive() is False
+    monkeypatch.setenv('QT_QPA_PLATFORM', 'xcb')
+    assert app_main._interactive() is True
+
+
+def test_main_returns_1_instead_of_dying_silently(monkeypatch):
+    """The whole point: a failing startup exits with a code and a report,
+    rather than vanishing."""
+    from app import main as app_main
+    monkeypatch.setattr(app_main, '_start',
+                        lambda: (_ for _ in ()).throw(RuntimeError('nope')))
+    seen = []
+    monkeypatch.setattr(app_main, '_report_fatal', seen.append)
+    assert app_main.main() == 1
+    assert 'RuntimeError: nope' in seen[0]
+
+
+def test_first_run_expected_only_when_frozen(monkeypatch):
+    """Drives the splash wording; a source checkout unpacks nothing."""
+    from app import paths as p
+    monkeypatch.setattr(p, 'is_frozen', lambda: False)
+    assert p.first_run_expected() is False
+    monkeypatch.setattr(p, 'is_frozen', lambda: True)
+    monkeypatch.setattr(p, '_workspace_root',
+                        lambda: (_ for _ in ()).throw(OSError('no Qt')))
+    assert p.first_run_expected() is False      # never breaks startup

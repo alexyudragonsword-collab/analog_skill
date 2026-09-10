@@ -11,7 +11,7 @@ a settled question is not reopened from scratch.
 
 **Status as of 2026-09-10** — v1.4, unreleased, no tag has ever been cut.
 CI is green on all six build jobs and on the three-platform test matrix.
-`ruff check .` is clean and gated. 93 tests, ~2.5 min, running real ngspice.
+`ruff check .` is clean and gated. 98 tests, ~2.5 min, running real ngspice.
 
 ---
 
@@ -32,10 +32,12 @@ action only the repository owner can take.
 - **Confirm the single-file Windows build actually launches.** The
   `nuitka-onefile` job builds the exe and runs it with `--smoke` on a clean
   runner, exit 0 — but a report of "double-click does nothing" on a real
-  machine is unresolved. Likely causes, in order: the exe predates the
-  `skill_assets.zip` step; the ~100 MB self-extraction to `%TEMP%` on a cold
-  first launch reads as a hang; antivirus blocking it. `--force-stderr-spec`
-  is set, so a crash leaves `%TEMP%\AnalogStudio.err.txt`.
+  machine is unresolved. Diagnosing it is now much easier: a startup failure
+  writes `%TEMP%\AnalogStudio-crash.txt` and says so in a dialog, and a slow
+  first launch shows a splash saying the assets are being unpacked. So the
+  three candidate causes are now distinguishable rather than guesswork — a
+  crash leaves the file, a slow unpack shows the splash, and SmartScreen
+  blocking shows neither. Still needs one run on the reporting machine.
 - **English one-page overview (16:9).** Outline agreed; blocked on the
   output format (PDF / PNG / HTML) and on the repository URL and contact to
   put in the footer.

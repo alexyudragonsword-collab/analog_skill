@@ -67,6 +67,22 @@ def _workspace_root() -> Path:
     return Path(loc) / 'workspace' / __version__
 
 
+def first_run_expected() -> bool:
+    """True when the next init_runtime() will do the one-time unpack.
+
+    Only meaningful for a frozen build — a source checkout reads its assets
+    in place and has nothing to unpack.  The entry point uses this to tell
+    the user that a slow first launch is a one-time cost rather than a hang,
+    which is exactly how the ~100 MB onefile self-extraction reads.
+    """
+    if not is_frozen():
+        return False
+    try:
+        return not (_workspace_root() / 'ngspice_assets').is_dir()
+    except Exception:
+        return False        # never let a cosmetic hint break startup
+
+
 def _sync_tree(src: Path, dst: Path):
     """Copy src → dst once, atomically.
 
