@@ -70,14 +70,6 @@ Ordered by value, not by effort.
   parse — but the amplifier contract needs no includes at all, so
   restricting them is cheap. Left open rather than bundled into the
   control-block fix so the two are judged separately.
-- **Default branch is `claude/gmoverid-skill-analysis-7ron1c`, not `main`.**
-  A public repository fronted by a session-generated branch name, with two
-  concrete consequences: `build-windows.yml` hard-codes that name in its
-  `branches:` filter, so creating `main` and moving to it would silently
-  stop the builds; and both READMEs' last-commit badge links to
-  `/commits/main`, which 404s today. Renaming is a repository setting
-  (maintainer), after which the workflow filter and the two badges need
-  updating in the same change.
 - **Issue and PR templates.** The repository is public with no templates.
   Bug reports for this project are unusable without three specific facts —
   ngspice version, platform, and whether the user is running from source or

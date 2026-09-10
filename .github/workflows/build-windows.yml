@@ -12,7 +12,7 @@ on:
         type: string
   push:
     tags: ['v*']
-    branches: ['claude/gmoverid-skill-analysis-7ron1c']
+    branches: ['main']
     paths:
       - 'app/**'
       - 'gmoverid/**'

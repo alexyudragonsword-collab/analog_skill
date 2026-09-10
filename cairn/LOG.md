@@ -2,6 +2,18 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-10 · Default branch renamed to `main`
+
+- The session-generated branch name was the repository's public face; it is
+  now `main`. The rename and a push of mine crossed, which re-created the old
+  name as a stray branch — deleted, its one commit moved onto `main`.
+- `build-windows.yml` hard-coded the old name in its `branches:` filter, so
+  until this change a push to `main` touching `app/` would have produced no
+  builds, silently. That coupling was the reason to do the rename and the
+  workflow edit together.
+- Both READMEs' last-commit badge linked to `/commits/main` and 404'd; the
+  rename fixed them without an edit.
+
 ## 2026-09-10 · v1.4 released — the repository's first
 
 - Tag `v1.4` at `6e020a0`, five packages published. Build run 34462082771,

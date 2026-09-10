@@ -1,7 +1,7 @@
 # Changelog — Analog Studio
 
 All notable changes to the desktop app (`app/`). Versions before 1.0 were
-development milestones on the `claude/gmoverid-skill-analysis-7ron1c` branch;
+development milestones and were never tagged — v1.4 is the first release;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
