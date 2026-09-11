@@ -7,6 +7,30 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## Unreleased
 
+- **An imported netlist could read any file on your disk.**  The v1.4 guard
+  closed the code-execution path (`.control`, which ngspice runs and which
+  may call `shell`) but deliberately left `.include` open so the two could be
+  judged separately.  Measured against ngspice-42, the answer is that it
+  should have been closed as well: `.include`, its `.inc` abbreviation and
+  `.lib` all pull a file into the simulation — case-folded, space- or
+  tab-indented, path bare or in either quote style — and the contents come
+  back in the run log the user is looking at (`.include /etc/hostname`
+  surfaces as `Error in line   <the file>`).  The read is not merely
+  attempted, it is reported.  The amplifier contract needs no includes at
+  all and no shipped netlist or variables file uses one, so all four
+  directives are now refused at both registration paths, in the netlist and
+  in the `.PARAM` file.  9 regression tests, one of which proves ngspice
+  really does echo an included file so the guard cannot quietly become
+  pointless.
+- **Added — the LLM API key can be kept off disk.**  `QSettings` stores it in
+  plain text (the registry on Windows, an ini file elsewhere), which is fine
+  for a key you pasted in on your own machine and not fine on a shared one.
+  `ANALOG_LLM_API_KEY` in the environment now overrides the stored key; the
+  Settings dialog shows it read-only and — this is the part that matters —
+  does not write it back when you press OK, which would have put it on disk
+  after all.  The dialog now also says plainly where the key is kept.  A
+  `keyring` dependency would solve the general case but has to survive three
+  freezing toolchains; that stays open in `ROADMAP.md`.
 - **Fixed — the startup error dialog could hang forever on Windows.**  The
   v1.4 safety net put `QMessageBox.exec()` behind an `_interactive()` check
   but left the Win32 `MessageBoxW` fallback outside it, and that call blocks
@@ -20,6 +44,27 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   `timeout-minutes: 20` (the suite takes ~3): a test that blocks on a modal
   dialog never fails on its own, so the cap is what turns the next one into
   a red job in minutes rather than a wasted afternoon.
+- **The GUI layer has tests.**  Six UI modules were at 0% — everything the
+  user actually clicks.  `app/tests/test_ui.py` covers the parts that are
+  shared and fail the same way in every tab: the `JobTabMixin` protocol
+  (which reply belongs to which slot, and that a tab drops another tab's
+  replies), that a missing ngspice disables all six tabs rather than five,
+  that a failed job reaches the log panel in full, the Settings round trip,
+  and that both manual languages are really shipped.  Layout and geometry
+  are deliberately not tested.  Coverage of `app/` went from 50% to 69%.
+- **Fixed — a test was writing into the developer's real saved-runs store.**
+  `test_runs_dialog_and_warm_start` patched `sizing.runs_dir`, which is the
+  package re-export; `save_run()` and `list_runs()` resolve that name in
+  `runs.py`'s own globals, so the patch did nothing and both worked on the
+  real user-data directory.  It passed on a machine that had never run it and
+  then counted the previous run's files on the second go — which is how it
+  finally surfaced, as `assert 4 == 2`.  This is the monkeypatch pitfall
+  `CONTRIBUTING.md` warns about, in the suite that documents it.
+- **Issue and PR templates.**  A bug report here is unusable without the
+  build, the platform and the ngspice version, and nothing asked for them;
+  the bug form now requires all three and blank issues are off.  The PR
+  template carries the checks that CI runs anyway, plus the two rules that
+  CI cannot see — CHANGELOG in the same commit, and no vendored tree touched.
 
 ## v1.4 — 2026-09-10
 

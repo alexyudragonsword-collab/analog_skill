@@ -207,3 +207,39 @@ def test_sizing_tab_llm_controls(monkeypatch):
         assert 'not configured' in tab._status.text()
     finally:
         worker.stop()
+
+
+# ── where the API key lives ───────────────────────────
+def test_env_api_key_overrides_the_stored_one(isolated_settings, monkeypatch):
+    """A key in the environment is what gets used, so a user on a shared
+    machine can run the AI features without the key reaching disk."""
+    monkeypatch.delenv(llm_client.ENV_API_KEY, raising=False)
+    llm_client.set_config('openai', '', 'sk-on-disk', 'm')
+    cfg = llm_client.get_config()
+    assert cfg['api_key'] == 'sk-on-disk' and not cfg['api_key_from_env']
+
+    monkeypatch.setenv(llm_client.ENV_API_KEY, 'sk-from-env')
+    cfg = llm_client.get_config()
+    assert cfg['api_key'] == 'sk-from-env' and cfg['api_key_from_env']
+
+
+def test_env_api_key_is_never_written_to_disk(isolated_settings, monkeypatch):
+    """Settings saves every field on OK.  Saving the environment-supplied key
+    would put it in plain text after all — the case the variable exists to
+    avoid — so that one field is left alone."""
+    from PySide6.QtCore import QSettings
+    monkeypatch.delenv(llm_client.ENV_API_KEY, raising=False)
+    llm_client.set_config('openai', '', 'sk-on-disk', 'm')
+    monkeypatch.setenv(llm_client.ENV_API_KEY, 'sk-from-env')
+
+    # what the dialog does on OK when the key came from the environment
+    cfg = llm_client.get_config()
+    llm_client.set_config(cfg['provider'], cfg['base_url'], cfg['api_key'],
+                          cfg['model'], store_api_key=False)
+    stored = str(QSettings().value(llm_client.KEY_API_KEY, ''))
+    assert stored == 'sk-on-disk'      # untouched, and not 'sk-from-env'
+
+    # the ordinary path still saves it
+    monkeypatch.delenv(llm_client.ENV_API_KEY)
+    llm_client.set_config('openai', '', 'sk-typed-in', 'm')
+    assert str(QSettings().value(llm_client.KEY_API_KEY, '')) == 'sk-typed-in'

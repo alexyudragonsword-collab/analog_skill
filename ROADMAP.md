@@ -9,10 +9,10 @@ Completed work belongs in [`CHANGELOG.md`](./CHANGELOG.md), not here. Items
 leave this file when they land, except in *Decided against*, which exists so
 a settled question is not reopened from scratch.
 
-**Status as of 2026-09-10** — **v1.4 released**, the repository's first
+**Status as of 2026-09-11** — **v1.4 released**, the repository's first
 (tag `v1.4`, five packages). CI is green on all six build jobs and on the
-three-platform test matrix. `ruff check .` is clean and gated. 98 tests,
-~2.5 min, running real ngspice.
+three-platform test matrix. `ruff check .` is clean and gated. 119 tests,
+~3 min, running real ngspice; coverage of `app/` is 69%.
 
 ---
 
@@ -40,43 +40,33 @@ action only the repository owner can take.
 
 Ordered by value, not by effort.
 
-- **Test the GUI layer.** Coverage of `app/` excluding the test files is
-  **50%**, and the split is lopsided rather than uniform: `app/core/` is at
-  **70%** (the sizing package is 83–100% per module), while six UI modules
-  are at **0%** — `gmid_tab` (381 statements), `main_window` (136),
-  `examples_tab` (140), `circuits_tab` (130), `comparison_tab` (125),
-  `browser_tab` (118), plus `settings_dialog` and the small widgets.
-  `sizing_tab` is the exception at 51%, reached through `test_sizing.py`.
-  The engine is well covered; what users click is not. Worth deciding a
-  target before writing tests — offscreen Qt works well (the v1.4 Sizing
-  screenshot was captured that way, driving a real optimization), so this is
-  tractable, but a GUI test suite is easy to over-build.
-- **API keys are stored in plain text.** `llm_client` keeps the LLM key in
-  `QSettings` (registry on Windows, an ini file elsewhere). Fixing it means
-  a `keyring` dependency, which is platform-specific and has to survive
-  three freezing toolchains — a real cost for a key the user pasted in
-  themselves. Worth doing only if this app is expected to run on shared
-  machines; write down the answer either way.
+- **Finish testing the GUI layer.** The floor is no longer zero:
+  `app/tests/test_ui.py` covers the `JobTabMixin` protocol, the main window's
+  ngspice wiring, the Settings round trip and the manual viewer, and simply
+  constructing each tab carries most of its `__init__`. Coverage of `app/`
+  went from **50% to 69%**, and no UI module sits below 59% (`main_window`
+  82%, `manual_dialog` 97%, `circuits_tab` 77%). The target chosen, and
+  worth keeping: **test what every tab shares and gets wrong the same way,
+  not what each tab draws.** Layout and geometry are excluded on purpose —
+  they change constantly and break tests without finding bugs. What is still
+  thin is `sizing_tab` (the largest UI module by far) and the per-tab run
+  paths, which need a real simulator and are the expensive half.
+- **Decide whether the API key needs a keyring.** The cheap half has
+  landed: `ANALOG_LLM_API_KEY` in the environment overrides the stored key,
+  the Settings dialog shows it read-only and does not write it back, and both
+  the dialog and the manual now say plainly that the saved key is plain text
+  (registry on Windows, an ini file elsewhere). That gives the shared-machine
+  case an answer without a dependency. What is still open is the general one:
+  a `keyring` dependency would protect the key for users who do not know to
+  set an environment variable, at the cost of a platform-specific package
+  that has to survive three freezing toolchains on two platforms. Worth doing
+  only if this app is expected to run where its users do not control the
+  machine; write down the answer either way.
 - **Connect a knowledge base to Project Cairn.** Cairn was initialized with
   the graduation provider deferred (`provider: none` in `.cairn/config.yaml`),
   which is fine — LOG, topic notes and audit all work without one. Graduation
   is the cross-project half, and it stays unavailable until an Obsidian /
   Notion / Lark target is configured at the first graduation.
-- **`.include` in an imported netlist can read any file on disk.** The
-  control-block guard closed the code-execution path, but ngspice still
-  resolves `.include "/some/path"` from an imported design and folds the
-  contents into the simulation, where they can surface in the log. It is
-  noisy and far weaker than shell execution — the deck usually fails to
-  parse — but the amplifier contract needs no includes at all, so
-  restricting them is cheap. Left open rather than bundled into the
-  control-block fix so the two are judged separately.
-- **Issue and PR templates.** The repository is public with no templates.
-  Bug reports for this project are unusable without three specific facts —
-  ngspice version, platform, and whether the user is running from source or
-  from one of the five builds — and nothing currently asks for them.
-- **`analoggym/README.md` points at `app/core/sizing.py`**, which became a
-  package. One word, but that file is inside a vendored tree this project
-  does not modify, so it needs an explicit exception rather than a quiet fix.
 
 ## Ideas, not commitments
 
@@ -104,6 +94,12 @@ Reopening these is fine, but start from the reasoning, not from zero.
   concurrency contract (`SimWorker`, `JobTabMixin`) plus the registry
   dataclasses. The six tabs' `on_job_finished` / `on_job_failed` overrides are
   intentionally left bare — the protocol is stated once, in the mixin.
+- **Fixing `analoggym/README.md`'s stale path.** It points the Sizing tab at
+  `app/core/sizing.py`, which became a package in v1.4. Correcting one word
+  costs less than this entry — but a snapshot edited for local convenience
+  stops being a snapshot, and dated analyses in this repository cite these
+  files as fetched. The discrepancy is noted in both READMEs instead, where
+  a reader of *this* project will actually meet it.
 - **Editing the vendored trees.** `analoggym/`, `circuit-skills/`, `gmoverid/`,
   `ngspice/` and `transistor-models/` are upstream snapshots that the app reads
   as shipped and that dated analyses in this repository cite. Behaviour changes

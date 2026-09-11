@@ -93,7 +93,11 @@ ngspice ≥ 38）。架构、打包与 ngspice 检测顺序见
 | `circuit-skills/` | vendored [analog-circuit-skills](https://github.com/Arcadia-1/analog-circuit-skills) —— 五个块级电路。 |
 | `analoggym/` | vendored [AnalogGym](https://github.com/CODA-Team/AnalogGym)（ICCAD'24，BSD-3）开源子集，Sizing 标签页的电路来源。 |
 
-vendored 各树是上游快照，**从不修改** —— 应用按原样从磁盘读取它们。
+vendored 各树是上游快照，**从不修改** —— 应用按原样从磁盘读取它们。即使其中
+某一处已经跟不上本项目也一样：`analoggym/README.md` 仍把 Sizing 标签页指向
+`app/core/sizing.py`，而它在 v1.4 已经变成一个包（`app/core/sizing/`）。改这
+一个词比写这段话还便宜，但一份为了本地方便而被改过的快照就不再是快照，而本仓
+库里带日期的分析引用的正是它们被取回时的样子。
 
 ### 文档索引
 

@@ -1,0 +1,88 @@
+name: Bug report
+description: Something in Analog Studio does not work
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Three facts decide almost every bug in this project: **which build you
+        are running**, **which ngspice** it found, and **which platform**. The
+        same symptom has different causes in a frozen build and in a source
+        checkout, so the fields below are required — an issue without them
+        usually costs a round trip before anyone can start.
+
+        Please check [ROADMAP.md](../blob/main/ROADMAP.md) first: some known
+        gaps are already tracked there, including the *Decided against*
+        section, which explains the ones that will not be changed.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+      placeholder: |
+        1. Sizing tab -> Circuit "CM_OTA_Pin_3"
+        2. Pressed Start
+        3. Expected a run; the progress bar stayed at 0% and nothing happened
+    validations:
+      required: true
+
+  - type: dropdown
+    id: how-running
+    attributes:
+      label: How are you running it
+      description: >
+        The five published packages are built by different toolchains and fail
+        in different ways; a source checkout fails in ways none of them do.
+      options:
+        - From source (python -m app.main)
+        - AnalogStudio-windows-onefile (single .exe)
+        - AnalogStudio-windows-pyinstaller (.zip)
+        - AnalogStudio-windows-nuitka (.zip)
+        - AnalogStudio-linux-pyinstaller (.tar.gz)
+        - AnalogStudio-linux-nuitka (.tar.gz)
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: Analog Studio version
+      description: >
+        Shown in the window title. From source, `python -c "import app;
+        print(app.__version__)"`. If you built it yourself, give the commit.
+      placeholder: "1.4"
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system
+      description: Name and version — Windows 11 23H2, Ubuntu 24.04, macOS 14.5.
+      placeholder: "Windows 11 23H2"
+    validations:
+      required: true
+
+  - type: input
+    id: ngspice
+    attributes:
+      label: ngspice version
+      description: >
+        Run `ngspice --version` and paste the first line. If the app cannot
+        find ngspice at all, say so — that is itself the bug, and the path it
+        is using is in Settings -> ngspice.
+      placeholder: "ngspice-42"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log, traceback, or crash file
+      description: >
+        A startup failure writes `%TEMP%\AnalogStudio-crash.txt` on Windows
+        (`$TMPDIR` elsewhere) — attach it if the app never opened. For a
+        failed simulation, the run log in the tab is what matters.
+      render: text

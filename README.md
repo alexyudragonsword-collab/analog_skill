@@ -97,7 +97,13 @@ architecture, packaging and the ngspice detection order, and
 | `analoggym/` | Vendored open subset of [AnalogGym](https://github.com/CODA-Team/AnalogGym) (ICCAD'24, BSD-3) backing the Sizing tab. |
 
 The vendored trees are upstream snapshots and are never modified — the app
-reads them from disk exactly as shipped.
+reads them from disk exactly as shipped. That holds even when one of them
+is out of date about *this* project: `analoggym/README.md` still points the
+Sizing tab at `app/core/sizing.py`, which became a package
+(`app/core/sizing/`) in v1.4. Correcting it would cost less than this
+paragraph, but a snapshot edited for local convenience stops being a
+snapshot, and the dated analyses in this repository cite these files as
+they were fetched.
 
 ### Documentation
 

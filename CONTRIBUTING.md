@@ -35,12 +35,22 @@ python -m pytest app/tests/ -v
 python -m ruff check .
 ```
 
-**Tests.** ~86 of them, about 2.5 minutes, because most of them run real
+**Tests.** ~120 of them, about 3 minutes, because most of them run real
 ngspice rather than mocking it. Tests that need the simulator skip themselves
 when it is absent (`needs_ngspice`), so a run without ngspice is still worth
 something but proves much less.
 
-Two things to know before you debug a failure:
+GUI tests live in `test_ui.py` and run under offscreen Qt. **No test may open
+a modal dialog.** `exec()` — Qt's or Win32's — waits for someone to press
+OK, and on a CI runner nobody can: a test that does this never fails, it
+hangs, and GitHub's own limit is six hours. That has happened here. Drive the
+dialog's methods directly instead (`dlg._accept()` is what OK does), and if
+you touch a code path that raises one, guard it the way `app/main.py` does.
+
+Tests that write settings take the `isolated_settings` fixture from
+`conftest.py` — without it `QSettings()` writes to your real user store.
+
+Two more things to know before you debug a failure:
 
 - **Never run two suites at once.** They share the scratch directory and the
   user-data store, so a second concurrent run produces failures that look real
@@ -57,6 +67,18 @@ Two things to know before you debug a failure:
 three style rules this codebase deliberately violates. It is pinned to one
 minor version so a ruff release cannot turn CI red on its own. The vendored
 trees are excluded.
+
+**Coverage**, when you want to know what a new test actually reached:
+
+```bash
+QT_QPA_PLATFORM=offscreen \
+  python -m coverage run --source=app -m pytest app/tests/
+python -m coverage report --omit='app/tests/*'
+```
+
+It is not gated in CI — a coverage number is a poor gate and an excellent
+diagnostic. The figures quoted in [`ROADMAP.md`](./ROADMAP.md) come from
+exactly these two commands.
 
 **Smoke test.** `python -m app.main --smoke` builds every tab, renders nothing,
 and exits 0. It is the only check that runs against the frozen builds, so keep

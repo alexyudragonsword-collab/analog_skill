@@ -8,6 +8,7 @@ feature in the GUI.  All HTTP goes through the single module-level
 """
 
 import json
+import os
 import urllib.error
 import urllib.request
 
@@ -18,6 +19,15 @@ KEY_PROVIDER = 'llm/provider'
 KEY_BASE_URL = 'llm/base_url'
 KEY_API_KEY = 'llm/api_key'
 KEY_MODEL = 'llm/model'
+
+#: An API key put here wins over the stored one, so the key never has to
+#: reach disk.  QSettings is plain text — the registry on Windows, an ini
+#: file elsewhere — which is defensible for a key the user pasted in
+#: themselves on their own machine, and not defensible on a shared one.
+#: A `keyring` dependency would fix that properly but has to survive three
+#: freezing toolchains on two platforms; this costs nothing and gives the
+#: shared-machine case an answer today.  See ROADMAP.md for the open half.
+ENV_API_KEY = 'ANALOG_LLM_API_KEY'
 
 #: default endpoint per provider (base_url left empty in Settings)
 DEFAULT_BASE = {
@@ -33,24 +43,36 @@ class LLMError(RuntimeError):
 
 
 def get_config() -> dict:
+    """Current LLM settings, with $ANALOG_LLM_API_KEY overriding the stored
+    key.  `api_key_from_env` tells the Settings dialog not to write that key
+    back to disk — saving it there would undo the point of setting it.
+    """
     from PySide6.QtCore import QSettings
     s = QSettings()
     provider = str(s.value(KEY_PROVIDER, 'openai') or 'openai')
+    env_key = os.environ.get(ENV_API_KEY, '').strip()
     return {
         'provider': provider if provider in PROVIDERS else 'openai',
         'base_url': str(s.value(KEY_BASE_URL, '') or '').strip(),
-        'api_key': str(s.value(KEY_API_KEY, '') or '').strip(),
+        'api_key': env_key or str(s.value(KEY_API_KEY, '') or '').strip(),
+        'api_key_from_env': bool(env_key),
         'model': str(s.value(KEY_MODEL, '') or '').strip(),
     }
 
 
-def set_config(provider: str, base_url: str, api_key: str, model: str):
+def set_config(provider: str, base_url: str, api_key: str, model: str,
+               store_api_key: bool = True):
+    """Persist the settings.  With store_api_key False the key is left
+    untouched on disk — used when it came from the environment, where
+    writing it back would put it in plain text after all.
+    """
     from PySide6.QtCore import QSettings
     s = QSettings()
     s.setValue(KEY_PROVIDER, provider)
-    for key, val in ((KEY_BASE_URL, base_url.strip()),
-                     (KEY_API_KEY, api_key.strip()),
-                     (KEY_MODEL, model.strip())):
+    pairs = [(KEY_BASE_URL, base_url.strip()), (KEY_MODEL, model.strip())]
+    if store_api_key:
+        pairs.append((KEY_API_KEY, api_key.strip()))
+    for key, val in pairs:
         if val:
             s.setValue(key, val)
         else:

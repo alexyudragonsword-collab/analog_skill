@@ -377,9 +377,12 @@ the circuit drop-down, and validated with one real evaluation (a netlist
 that produces no metrics is rejected and removed).  <b>A netlist is code,
 not just data</b>: ngspice executes <code>.control</code> blocks, so an
 imported design carrying one could run arbitrary commands on your machine.
+It also reads whatever
+<code>.include</code> points at, and puts what it read into the run log.
 Import therefore refuses any netlist or .PARAM file containing a
-<code>.control</code> block — the amplifier contract is a plain
-<code>.subckt</code> and never needs one.  Treat designs from strangers
+<code>.control</code>, <code>.include</code>, <code>.inc</code> or
+<code>.lib</code> directive — the amplifier contract is a plain
+<code>.subckt</code> and needs none of them.  Treat designs from strangers
 with the same care as any downloaded script.  Imported circuits
 get the full pipeline: 9-metric report, parallel evaluation, Waves…
 comparison, device-change summary and the AI features.  Only the
@@ -441,7 +444,11 @@ local endpoints) and model name, then hit Test.  Examples: DeepSeek =
 <p><small><b>Privacy</b>: AI features send netlist excerpts, the
 variable/metric tables and result reports to the endpoint you configured
 (a local Ollama endpoint never leaves your machine).  The API key is
-stored in local QSettings only.  Leaving the model empty disables all AI
+stored in local QSettings only, <b>in plain text</b> (the registry on
+Windows, an ini file elsewhere).  On a machine you share with others, set
+the key in the <code>ANALOG_LLM_API_KEY</code> environment variable
+instead: it overrides the saved one, the Settings dialog shows it
+read-only, and it is never written to disk.  Leaving the model empty disables all AI
 features; everything else is unaffected.  Each LLM round adds seconds of
 latency that the budget time estimate does not include.</small></p>
 

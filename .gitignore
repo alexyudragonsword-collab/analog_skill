@@ -34,3 +34,8 @@ build-onefile/
 build-onefile-linux/
 dist/
 .pytest_cache/
+
+# coverage runs (CONTRIBUTING documents the command; the data is local)
+.coverage
+.coverage.*
+htmlcov/

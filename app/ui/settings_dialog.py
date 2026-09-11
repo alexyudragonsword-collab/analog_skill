@@ -56,6 +56,14 @@ class SettingsDialog(QDialog):
         self._llm_key.setEchoMode(QLineEdit.EchoMode.Password)
         self._llm_key.setPlaceholderText('optional for local endpoints '
                                          '(Ollama)')
+        # A key from the environment is shown but not editable: the field is
+        # saved on OK, and saving this one would write to disk the very key
+        # the user set in the environment to keep off it.
+        self._key_from_env = bool(cfg.get('api_key_from_env'))
+        if self._key_from_env:
+            self._llm_key.setReadOnly(True)
+            self._llm_key.setToolTip(
+                f'Supplied by ${llm_client.ENV_API_KEY}; not saved to disk.')
         self._llm_model = QLineEdit(cfg['model'])
         self._llm_model.setPlaceholderText(
             'e.g. deepseek-chat / gpt-4o-mini / claude-sonnet-4-5')
@@ -73,10 +81,16 @@ class SettingsDialog(QDialog):
         lf.addRow('', llm_test)
         lf.addRow(self._llm_status)
 
-        llm_hint = QLabel('Used by the Sizing tab (LLM-guided algorithm, '
-                          'AI advise/explain).  Netlist excerpts and result '
-                          'reports are sent to this endpoint.  Leave the '
-                          'model empty to disable all AI features.')
+        llm_hint = QLabel(
+            'Used by the Sizing tab (LLM-guided algorithm, AI '
+            'advise/explain).  Netlist excerpts and result reports are sent '
+            'to this endpoint.  Leave the model empty to disable all AI '
+            'features.<br><b>The API key is saved in plain text</b> (registry '
+            'on Windows, an ini file elsewhere).  On a machine you share, set '
+            f'<code>{llm_client.ENV_API_KEY}</code> in the environment '
+            'instead — it overrides this field and is never written to disk.'
+            + (f'<br><i>Currently supplied by ${llm_client.ENV_API_KEY}.</i>'
+               if cfg.get('api_key_from_env') else ''))
         llm_hint.setWordWrap(True)
 
         buttons = QDialogButtonBox(
@@ -141,5 +155,6 @@ class SettingsDialog(QDialog):
             QSettings().remove(ngspice_locator.SETTINGS_KEY)
         cfg = self._llm_cfg()
         llm_client.set_config(cfg['provider'], cfg['base_url'],
-                              cfg['api_key'], cfg['model'])
+                              cfg['api_key'], cfg['model'],
+                              store_api_key=not self._key_from_env)
         self.accept()

@@ -22,34 +22,57 @@ _USER_SUBCKT = re.compile(
     r'(?im)^\s*\.subckt\s+([A-Za-z_][A-Za-z0-9_]*)'
     r'\s+gnda\s+vdda\s+vinn\s+vinp\s+vout\b')
 
-#: ngspice runs `.control ... .endc` blocks in batch mode, and a control
-#: block may call `shell`.  Both the netlist and the design-variables file
-#: are `.include`d verbatim into the rendered testbench (see
-#: evaluation._render_testbench and _write_params), and a directive inside
-#: an included file executes exactly as if it were inline — so an imported
-#: design carrying a control block would run arbitrary commands on the very
-#: first evaluation while every metric still came back looking normal.
+#: Directives an imported file must not carry.  Two distinct problems:
 #:
-#: The amplifier contract is a plain `.subckt`: a control block has no
-#: legitimate use in it, and none of the 27 shipped circuits contains one
-#: (the vendored *testbenches* do, but those are ours, not user input).
-#: Measured against ngspice-42: the directive is case-insensitive and may be
-#: indented, but splitting it across a `+` continuation does not work, so
-#: matching at line start catches every form that actually executes.
-_CONTROL_BLOCK = re.compile(r'(?im)^[ \t]*\.control\b')
+#: * ngspice runs `.control ... .endc` blocks in batch mode, and a control
+#:   block may call `shell` — so an imported design carrying one would run
+#:   arbitrary commands on the very first evaluation while every metric
+#:   still came back looking normal.
+#: * `.include` / `.inc` / `.lib` make ngspice read another file into the
+#:   simulation.  That is far weaker than shell execution (the deck usually
+#:   fails to parse), but the contents reach the run log the user sees —
+#:   `.include /etc/hostname` comes back as `Error in line   <contents>` —
+#:   so an imported design can read any file its reader can.
+#:
+#: Both matter because the netlist *and* the design-variables file are
+#: `.include`d verbatim into the rendered testbench (see
+#: evaluation._render_testbench and _write_params), and a directive inside
+#: an included file behaves exactly as if it were inline.
+#:
+#: The amplifier contract is a plain `.subckt` needing no includes at all,
+#: and none of the 27 shipped circuits uses either kind (the vendored
+#: *testbenches* do include the netlist, the variables and the SKY130
+#: corner — but those are ours, not user input).  Measured against
+#: ngspice-42: every form folds case and tolerates leading space or tab,
+#: and `.include` takes its path bare or in either quote style, but
+#: splitting a directive across a `+` continuation does not work — so
+#: matching at line start catches every form that actually acts.
+_UNSAFE_DIRECTIVE = re.compile(
+    r'(?im)^[ \t]*(\.(?:control|include|inc|lib))\b')
+
+_WHY_INCLUDE = ('ngspice would read that file into the simulation, and its '
+                'contents can surface in the run log — an imported design '
+                'can use that to read any file you can read')
+_WHY = {
+    '.control': ('ngspice executes those, so importing this design could '
+                 'run arbitrary commands on your machine'),
+    '.include': _WHY_INCLUDE,
+    '.inc': _WHY_INCLUDE,
+    '.lib': _WHY_INCLUDE,
+}
 
 
-def _reject_control_block(text: str, path: Path, role: str):
-    """Raise ValueError if `text` carries an ngspice control block."""
-    m = _CONTROL_BLOCK.search(text)
+def _reject_unsafe_directives(text: str, path: Path, role: str):
+    """Raise ValueError if `text` carries a directive ngspice would act on."""
+    m = _UNSAFE_DIRECTIVE.search(text)
     if m is None:
         return
+    directive = m.group(1).lower()
     line = text.count('\n', 0, m.start()) + 1
     raise ValueError(
-        f'{role} "{Path(path).name}" contains a ".control" block '
-        f'(line {line}). ngspice executes those, so importing this design '
-        f'could run arbitrary commands on your machine. The amplifier '
-        f'contract is a plain .subckt — remove the control block first.')
+        f'{role} "{Path(path).name}" contains a "{directive}" directive '
+        f'(line {line}). {_WHY[directive]}. The amplifier contract is a '
+        f'plain .subckt — remove it first.')
 
 
 def _register_user_circuit(subckt: str) -> str:
@@ -74,7 +97,7 @@ def import_user_circuit(netlist_path: Path, vars_path: Path) -> str:
     """
     import shutil
     text = Path(netlist_path).read_text(errors='replace')
-    _reject_control_block(text, netlist_path, 'netlist')
+    _reject_unsafe_directives(text, netlist_path, 'netlist')
     m = _USER_SUBCKT.search(text)
     if not m:
         raise ValueError(
@@ -90,7 +113,7 @@ def import_user_circuit(netlist_path: Path, vars_path: Path) -> str:
     if key in SIZING:
         raise ValueError(f'a circuit named {subckt} is already imported — '
                          'remove it first (Netlist… dialog)')
-    _reject_control_block(Path(vars_path).read_text(errors='replace'),
+    _reject_unsafe_directives(Path(vars_path).read_text(errors='replace'),
                           vars_path, 'design-variables file')
     if not parse_param_file(vars_path):
         raise ValueError('the design-variables file contains no '
@@ -111,9 +134,10 @@ def load_user_circuits() -> list[str]:
     """(Re-)register every circuit found in the workspace user_circuits
     tree — called at GUI start so imports persist across sessions.
 
-    Files on disk are re-checked for control blocks rather than trusted:
-    a design imported before that check existed, or dropped into the store
-    by hand, must not become runnable just because it is already there.
+    Files on disk are re-checked for unsafe directives rather than
+    trusted: a design imported before that check existed, or dropped into
+    the store by hand, must not become runnable just because it is
+    already there.
     An unsafe file is skipped with a message and left in place for the
     user to inspect — deleting someone's netlist behind their back would
     be worse than leaving it unregistered.
@@ -130,7 +154,7 @@ def load_user_circuits() -> list[str]:
                                    (root / 'variables' / p.name,
                                     'design-variables file')):
                     if path.is_file():
-                        _reject_control_block(
+                        _reject_unsafe_directives(
                             path.read_text(errors='replace'), path, role)
             except ValueError as exc:
                 print(f'skipping user circuit {p.name}: {exc}')

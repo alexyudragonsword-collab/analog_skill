@@ -5,7 +5,7 @@ summary: "Failure modes in this codebase that are silent, expensive, or look lik
 tags: [analog-studio, ngspice, pyside6, packaging, testing, security]
 contains: [lesson, experience]
 created: "2026-08-18"
-updated: "2026-09-10"
+updated: "2026-09-11"
 related: [existing-knowledge]
 authoring_mode: ai_generated
 ---
@@ -72,9 +72,18 @@ every form that actually runs. None of the 27 shipped circuits contains a
 control block, so refusing them costs nothing legitimate; the vendored
 *testbenches* do contain them, but those are ours, not user input.
 
-Residual, deliberately not folded into the same fix: `.include` from an
-imported netlist still reads arbitrary files into the simulation. Far weaker
-(the deck usually fails to parse) and tracked separately in `ROADMAP.md`.
+**The residual is closed too** (2026-09-11). `.include` from an imported
+netlist was left out of the first fix so the two would be judged separately;
+measuring it settled the question. `.include`, its `.inc` abbreviation and
+`.lib` all pull a file in — case-folded, space- or tab-indented, path bare
+or in either quote style, relative or absolute — and only the `+`
+continuation form fails, the same shape as `.control`. What made it worth
+closing rather than tolerating is where the contents go: `.include
+/etc/hostname` comes back as `Error in line   <contents of the file>`, in
+the run log the user is looking at. So the read is not merely attempted, it
+is reported. No shipped netlist or variables file uses any of the three —
+only our own testbenches do — so the guard now covers all four directives
+under one regex.
 
 ### Monkeypatching the sizing package patches nothing
 
@@ -90,6 +99,14 @@ a package, `test_verify_hook` kept patching the facade; the fake was ignored,
 the test ran ngspice for real for **168 seconds**, and then failed on an
 assertion that made it look like a product regression. Patched correctly it
 takes 7.5 s.
+
+It bit again on 2026-09-11, in the test suite rather than in a test's subject:
+`test_runs_dialog_and_warm_start` patched `sizing.runs_dir`, so both
+`save_run()` and `list_runs()` kept using the real user-data store. The test
+still passed — it saved two runs and read two back — on any machine where
+that directory happened to be empty, and failed only on the *second* run,
+as `assert 4 == 2`. A patch that does nothing does not announce itself; it
+just moves the test's blast radius outside the sandbox.
 
 ### Two test suites at once produce believable lies
 

@@ -424,7 +424,12 @@ def test_render_comparison(tmp_path):
 def test_runs_dialog_and_warm_start(tmp_path, monkeypatch):
     from PySide6.QtWidgets import QApplication
     QApplication.instance() or QApplication([])
-    monkeypatch.setattr(sizing, 'runs_dir', lambda: tmp_path)
+    # `sizing.runs_dir` is the package re-export; save_run() and list_runs()
+    # resolve the name in runs.py's own globals, so patching it here patched
+    # nothing and both wrote to the developer's real saved-runs store.  The
+    # test still passed on a machine that had never run it, then counted the
+    # previous run's files on the second go.  Patch the submodule.
+    monkeypatch.setattr(sizing.runs, 'runs_dir', lambda: tmp_path)
     sizing.save_run(_fake_run())
     sizing.save_run(_fake_run('skill_ota5t', cost=0.5))
 
@@ -600,6 +605,69 @@ def test_control_block_would_have_executed(tmp_path, monkeypatch):
                    capture_output=True, timeout=60)
     assert proof.exists(), 'ngspice no longer executes .control — re-check ' \
                            'whether the import guard is still needed'
+
+
+@pytest.mark.parametrize('directive', [
+    '.include /etc/hostname\n',           # plain, absolute
+    '.INCLUDE /etc/hostname\n',           # directives fold case
+    '\t.include "/etc/hostname"\n',       # tab-indented, quoted
+    ".inc '/etc/hostname'\n",             # abbreviation, other quote style
+    '.lib /etc/hostname tt\n',            # the library form reads files too
+])
+def test_user_import_rejects_file_includes(tmp_path, monkeypatch, directive):
+    """`.include` is how an imported design reaches files it has no business
+    reading; the amplifier contract needs none, so none are allowed."""
+    _isolate_workspace(tmp_path, monkeypatch)
+    nl, vars_f = _user_files(tmp_path, 'inc_ota')
+    nl.write_text(nl.read_text() + directive)
+    with pytest.raises(ValueError, match=r'\.(?:include|inc|lib)'):
+        sizing.import_user_circuit(nl, vars_f)
+    assert 'user_inc_ota' not in sizing.SIZING
+    assert not list((tmp_path / 'work').glob('**/inc_ota'))   # nothing copied
+
+
+def test_user_import_rejects_file_includes_in_variables(tmp_path, monkeypatch):
+    """Same for the .PARAM file — it is .include'd into the deck as well."""
+    _isolate_workspace(tmp_path, monkeypatch)
+    nl, vars_f = _user_files(tmp_path, 'inc_vars_ota')
+    vars_f.write_text(vars_f.read_text() + '.include /etc/hostname\n')
+    with pytest.raises(ValueError, match=r'design-variables.*\.include'):
+        sizing.import_user_circuit(nl, vars_f)
+    assert 'user_inc_vars_ota' not in sizing.SIZING
+
+
+def test_load_user_circuits_skips_unvetted_include(tmp_path, monkeypatch,
+                                                   capsys):
+    """A design imported before this check existed must not start working
+    just because its files are already in the store."""
+    _isolate_workspace(tmp_path, monkeypatch)
+    root = sizing.user_circuits_dir() / 'amp'
+    (root / 'netlist').mkdir(parents=True, exist_ok=True)
+    (root / 'variables').mkdir(parents=True, exist_ok=True)
+    good_nl, good_vars = _user_files(tmp_path, 'planted_inc')
+    (root / 'netlist' / 'planted_inc').write_text(
+        good_nl.read_text() + '.include /etc/hostname\n')
+    (root / 'variables' / 'planted_inc').write_text(good_vars.read_text())
+    assert sizing.load_user_circuits() == []
+    assert 'user_planted_inc' not in sizing.SIZING
+    assert 'planted_inc' in capsys.readouterr().out    # says why it skipped
+
+
+@needs_ngspice
+def test_include_would_have_leaked_the_file(tmp_path):
+    """The guard is worth having: ngspice really does open the path and put
+    what it read into the log the user sees.  Kept alongside the
+    control-block proof so neither guard can quietly become pointless."""
+    import subprocess
+    secret = tmp_path / 'secret.txt'
+    secret.write_text('correct-horse-battery-staple\n')
+    deck = tmp_path / 'leak.cir'
+    deck.write_text(f'V1 a 0 1\nR1 a 0 1k\n.include "{secret}"\n.op\n.end\n')
+    r = subprocess.run(['ngspice', '-b', str(deck)], cwd=tmp_path,
+                       capture_output=True, text=True, timeout=60)
+    assert 'correct-horse-battery-staple' in (r.stdout + r.stderr), \
+        'ngspice no longer echoes included files — re-check whether the ' \
+        'import guard is still needed'
 
 
 def test_user_data_lives_outside_the_versioned_workspace(tmp_path,

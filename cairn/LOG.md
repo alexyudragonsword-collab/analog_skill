@@ -2,6 +2,29 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-11 · Cleared five ROADMAP items in one pass
+
+- `.include` residual closed. Measuring it is what settled it: `.include` /
+  `.inc` / `.lib` all pull a file in, and `.include /etc/hostname` comes back
+  as `Error in line   <contents>` — in the log the user is reading. One regex
+  now covers all four directives at both registration paths. 9 tests; all 7
+  behavioural ones verified failing against the unfixed guard.
+- API key: `ANALOG_LLM_API_KEY` overrides the stored one and the Settings
+  dialog will not write it back. The keyring question stays open — this was
+  the half that needed no dependency.
+- GUI layer went from six modules at 0%. `test_ui.py` tests what every tab
+  shares (job protocol, ngspice enable/disable, log, settings), not what each
+  tab draws.
+- Issue + PR templates; blank issues off, since the three facts a bug report
+  here needs were exactly what nobody was being asked for.
+- `analoggym/README.md`'s stale path moved to *Decided against*: the vendored
+  tree stays untouched, both READMEs carry the note instead.
+- Along the way the coverage run exposed a test writing into the real
+  saved-runs store: `sizing.runs_dir` was patched on the package, not on
+  `runs.py`. It passed on any empty machine and failed on the second run.
+- Details: `cairn/pitfalls.md` → "A netlist is code", "Monkeypatching the
+  sizing package patches nothing".
+
 ## 2026-09-10 · Windows CI hung 6 h on my own startup-dialog guard
 
 - The v1.4 guard covered `QMessageBox.exec()` but not the Win32

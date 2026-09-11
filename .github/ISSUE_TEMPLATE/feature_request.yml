@@ -1,0 +1,36 @@
+name: Idea or feature request
+description: Something Analog Studio should do and does not
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please read [ROADMAP.md](../blob/main/ROADMAP.md) first. It has an
+        *Ideas, not commitments* section (which may already hold yours) and a
+        *Decided against* section — if your idea is there, say why the
+        reasoning should be revisited rather than opening from zero.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: >
+        The design task, not the feature. "I need to compare gm/ID across two
+        corners" is actionable; "add a compare button" leaves the interesting
+        half out.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: How do you do it today
+      description: Outside the app, in another tool, or not at all.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you have in mind
+      description: Optional — a sketch of the feature, if you have one.
