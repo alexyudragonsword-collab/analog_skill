@@ -7,6 +7,25 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## Unreleased
 
+- **The GUI tests now cover what a tab does with a reply.**  The previous
+  round got every tab off 0% by constructing it; this one drives the half
+  that actually breaks.  Three rules are now locked down across all six
+  tabs: a failed job always re-enables the control the user pressed (a tab
+  that forgets is dead until restart — the job is gone and nothing else will
+  re-enable it); a render closure that raises is reported as red text rather
+  than thrown inside a Qt slot; and the gm/ID tab both discards a table built
+  for parameters the user has since changed and clears the previous table on
+  a failed rebuild, so the lookup tools cannot keep answering from it.  Plus
+  the Sizing tab's full round trip — press Run, hand back a finished run,
+  check the buttons, the report and that it was saved — driven with a
+  fabricated result instead of a real optimization, which keeps the suite at
+  ~2.5 min.  Verified by mutation: breaking either guard fails the test.
+  133 tests, `app/` coverage 69% → 71%.
+- **Decided — no `keyring` dependency, and Cairn stays unconnected.**  Both
+  questions were open pending a judgement rather than work; both are now
+  answered in `ROADMAP.md`'s *Decided against*, with the reasoning and the
+  condition that would reopen them.
+
 - **An imported netlist could read any file on your disk.**  The v1.4 guard
   closed the code-execution path (`.control`, which ngspice runs and which
   may call `shell`) but deliberately left `.include` open so the two could be

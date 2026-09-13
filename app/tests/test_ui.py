@@ -218,3 +218,135 @@ def test_manual_viewer_shows_both_languages(qapp, isolated_settings):
         assert len(text) > 500
     from PySide6.QtCore import QSettings
     assert str(QSettings().value('manual_lang', '')) == LANGS[-1][0]
+
+
+# ── what every tab must do with a reply ──────────────────────────────────────
+#: (tab attribute, its primary button, job slot, the label a failure lands in)
+#: gm/ID reports build failures in the range label rather than a status line.
+TABS = [
+    ('examples_tab',   'run_btn',   'run',   '_status'),
+    ('browser_tab',    'gen_btn',   'gen',   '_status'),
+    ('comparison_tab', 'gen_btn',   'gen',   '_status'),
+    ('circuits_tab',   'run_btn',   'run',   '_status'),
+    ('sizing_tab',     'run_btn',   'opt',   '_status'),
+    ('gmid_tab',       'build_btn', 'build', '_range_lbl'),
+]
+
+
+@pytest.mark.parametrize('tab_name, btn, slot, status', TABS,
+                         ids=[t[0] for t in TABS])
+def test_a_failure_never_leaves_the_button_stuck(window, tab_name, btn, slot,
+                                                 status):
+    """The failure path re-enables the control the user pressed and says why.
+    A tab that forgets is dead until restart — the job is gone, and nothing
+    else will ever re-enable the button."""
+    tab = getattr(window, tab_name)
+    getattr(tab, btn).setEnabled(False)          # as _run() leaves it
+    tab.on_job_failed(slot, 'Traceback ...\nRuntimeError: ngspice died')
+    assert getattr(tab, btn).isEnabled()
+    text = getattr(tab, status).text()
+    assert 'RuntimeError: ngspice died' in text
+    assert 'Traceback' not in text               # the blob stays in the log
+
+
+#: Tabs whose result is a render closure run on the GUI thread, and the
+#: shape they hand it back in: matplotlib is single-threaded, so the job
+#: returns a closure and the tab draws.  A closure that raises must not take
+#: the GUI thread with it.
+RENDER_TABS = [
+    ('examples_tab',   'run_btn', 'run', 'callable'),
+    ('browser_tab',    'gen_btn', 'gen', 'callable'),
+    ('comparison_tab', 'gen_btn', 'gen', 'callable'),
+    ('circuits_tab',   'run_btn', 'run', 'method'),
+]
+
+
+@pytest.mark.parametrize('tab_name, btn, slot, shape', RENDER_TABS,
+                         ids=[t[0] for t in RENDER_TABS])
+def test_a_render_that_raises_is_reported_not_propagated(window, tab_name,
+                                                         btn, slot, shape):
+    """on_job_finished draws on the GUI thread, so an exception here is an
+    exception inside a Qt slot — reported as red text, never raised."""
+    tab = getattr(window, tab_name)
+
+    def boom():
+        raise ValueError('no data to plot')
+
+    result = boom if shape == 'callable' else type(
+        'R', (), {'render': staticmethod(boom)})()
+    getattr(tab, btn).setEnabled(False)
+    tab.on_job_finished(slot, result)            # must not raise
+    assert getattr(tab, btn).isEnabled()
+    assert 'no data to plot' in tab._status.text()
+
+
+# ── the Sizing tab's round trip ──────────────────────────────────────────────
+@pytest.fixture
+def fake_run():
+    from app.tests.test_sizing import _fake_run
+    return _fake_run
+
+
+def test_sizing_run_round_trip(window, tmp_path, monkeypatch, fake_run):
+    """Press Run, then hand the tab the reply it would have got: buttons and
+    report have to come back consistent, and the run has to be saved."""
+    from app.core import sizing
+    monkeypatch.setattr(sizing.runs, 'runs_dir', lambda: tmp_path)
+    tab = window.sizing_tab
+    tab.circuit_combo.setCurrentIndex(
+        tab.circuit_combo.findData('amp_hoilee_affc'))
+
+    submitted = []
+    monkeypatch.setattr(tab, 'submit_job',
+                        lambda slot, job: submitted.append((slot, job.label)))
+    tab._run()
+    assert submitted and submitted[0][0] == 'opt'
+    assert not tab.run_btn.isEnabled() and tab.cancel_btn.isEnabled()
+
+    run = fake_run()
+    tab.on_job_finished('opt', run)
+    assert tab.run_btn.isEnabled() and not tab.cancel_btn.isEnabled()
+    assert '3.400' in tab._status.text() and '1.200' in tab._status.text()
+    assert tab.export_btn.isEnabled() and tab.waves_btn.isEnabled()
+    assert 'HoiLee' in tab._report.toPlainText()
+    assert list(tmp_path.glob('*.json')), 'the run was not saved'
+
+
+def test_sizing_will_not_start_a_second_run(window, monkeypatch):
+    """has_job('opt') is the re-entrancy guard; without it a second click
+    queues a duplicate optimization behind the first."""
+    tab = window.sizing_tab
+    monkeypatch.setattr(tab, 'has_job', lambda slot: slot == 'opt')
+    submitted = []
+    monkeypatch.setattr(tab, 'submit_job',
+                        lambda *a: submitted.append(a))
+    tab._run()
+    assert submitted == []
+
+
+# ── the gm/ID tab's two guards ───────────────────────────────────────────────
+def test_gmid_discards_a_table_built_for_other_parameters(window):
+    """The build runs on the worker while the spin boxes stay live. A table
+    for the old W/L must not be installed as if it described the current
+    ones — the numbers would be wrong and nothing would say so."""
+    tab = window.gmid_tab
+    stale = type('T', (), {'model': 'nonesuch', 'W': 1e-6, 'L': 1e-6,
+                           'vds': 0.9})()
+    tab._tbl = None
+    tab.on_job_finished('build', stale)
+    assert tab._tbl is None
+    assert 'Parameters changed' in tab._range_lbl.text()
+    assert not tab.size_btn.isEnabled()
+
+
+def test_gmid_failed_rebuild_stops_the_old_table_answering(window):
+    """A failed rebuild leaves the previous table in memory unless it is
+    cleared — and the lookup tools would keep answering from it."""
+    tab = window.gmid_tab
+    tab._tbl = object()
+    tab.size_btn.setEnabled(True)
+    tab.lk_btn.setEnabled(True)
+    tab.on_job_failed('build', 'Traceback ...\nOSError: no such model')
+    assert tab._tbl is None and tab._curves is None
+    assert not tab.size_btn.isEnabled() and not tab.lk_btn.isEnabled()
+    assert 'OSError: no such model' in tab._range_lbl.text()

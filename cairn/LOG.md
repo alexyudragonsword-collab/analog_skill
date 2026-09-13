@@ -2,6 +2,22 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-13 · ROADMAP's Open section is empty
+
+- GUI tests extended from "does it build" to "what does it do with a reply".
+  Three cross-tab rules now pinned: a failure re-enables the button, a
+  raising render closure is reported not thrown, and gm/ID discards both a
+  stale table and a dead one. Mutation-verified. 133 tests, coverage 71%.
+- Two standing questions answered by the maintainer and recorded in
+  *Decided against* rather than left open: no `keyring` (the env var covers
+  the case that motivated it; the dependency must survive three freezing
+  toolchains), and Cairn stays at `provider: none` (graduation earns its
+  cost only when there is a second project to graduate into).
+- English one-page overview delivered as an HTML artifact — the format
+  decision that had blocked it.
+- Open is now empty. Blocked-on-maintainer still holds one item that needs
+  the reporting machine: does the single-file Windows exe launch there.
+
 ## 2026-09-11 · Cleared five ROADMAP items in one pass
 
 - `.include` residual closed. Measuring it is what settled it: `.include` /

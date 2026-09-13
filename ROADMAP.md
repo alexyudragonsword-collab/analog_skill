@@ -9,10 +9,10 @@ Completed work belongs in [`CHANGELOG.md`](./CHANGELOG.md), not here. Items
 leave this file when they land, except in *Decided against*, which exists so
 a settled question is not reopened from scratch.
 
-**Status as of 2026-09-11** — **v1.4 released**, the repository's first
+**Status as of 2026-09-13** — **v1.4 released**, the repository's first
 (tag `v1.4`, five packages). CI is green on all six build jobs and on the
-three-platform test matrix. `ruff check .` is clean and gated. 119 tests,
-~3 min, running real ngspice; coverage of `app/` is 69%.
+three-platform test matrix. `ruff check .` is clean and gated. 133 tests,
+~2.5 min, running real ngspice; coverage of `app/` is 71%.
 
 ---
 
@@ -32,41 +32,14 @@ action only the repository owner can take.
   blocking shows neither. The exe no longer expires either — it is a
   [v1.4 release asset](https://github.com/alexyudragonsword-collab/analog_skill/releases/tag/v1.4)
   now, not a 90-day artifact. Still needs one run on the reporting machine.
-- **English one-page overview (16:9).** Outline agreed; blocked on the
-  output format (PDF / PNG / HTML) and on the repository URL and contact to
-  put in the footer.
 
 ## Open
 
-Ordered by value, not by effort.
-
-- **Finish testing the GUI layer.** The floor is no longer zero:
-  `app/tests/test_ui.py` covers the `JobTabMixin` protocol, the main window's
-  ngspice wiring, the Settings round trip and the manual viewer, and simply
-  constructing each tab carries most of its `__init__`. Coverage of `app/`
-  went from **50% to 69%**, and no UI module sits below 59% (`main_window`
-  82%, `manual_dialog` 97%, `circuits_tab` 77%). The target chosen, and
-  worth keeping: **test what every tab shares and gets wrong the same way,
-  not what each tab draws.** Layout and geometry are excluded on purpose —
-  they change constantly and break tests without finding bugs. What is still
-  thin is `sizing_tab` (the largest UI module by far) and the per-tab run
-  paths, which need a real simulator and are the expensive half.
-- **Decide whether the API key needs a keyring.** The cheap half has
-  landed: `ANALOG_LLM_API_KEY` in the environment overrides the stored key,
-  the Settings dialog shows it read-only and does not write it back, and both
-  the dialog and the manual now say plainly that the saved key is plain text
-  (registry on Windows, an ini file elsewhere). That gives the shared-machine
-  case an answer without a dependency. What is still open is the general one:
-  a `keyring` dependency would protect the key for users who do not know to
-  set an environment variable, at the cost of a platform-specific package
-  that has to survive three freezing toolchains on two platforms. Worth doing
-  only if this app is expected to run where its users do not control the
-  machine; write down the answer either way.
-- **Connect a knowledge base to Project Cairn.** Cairn was initialized with
-  the graduation provider deferred (`provider: none` in `.cairn/config.yaml`),
-  which is fine — LOG, topic notes and audit all work without one. Graduation
-  is the cross-project half, and it stays unavailable until an Obsidian /
-  Notion / Lark target is configured at the first graduation.
+Nothing, as of 2026-09-13 — which is a statement about this list, not about
+the project. Everything that was here has either landed (see
+[`CHANGELOG.md`](./CHANGELOG.md)), been answered and moved to *Decided
+against*, or turned out to need the maintainer's own machine and sits above.
+The next item comes from *Ideas* below, or from a bug report.
 
 ## Ideas, not commitments
 
@@ -85,6 +58,30 @@ No one has committed to these; they are recorded so the thought is not lost.
 
 Reopening these is fine, but start from the reasoning, not from zero.
 
+- **A `keyring` dependency for the LLM API key** (asked and answered
+  2026-09-13). The key is stored in plain text by `QSettings`, and
+  `ANALOG_LLM_API_KEY` already covers the case that motivated changing it —
+  a machine the user shares. What `keyring` would add is protection for
+  users who never learn the variable exists, at the price of a
+  platform-specific package that has to survive PyInstaller, Nuitka and
+  Nuitka-onefile on two platforms, for a key its owner pasted in by hand.
+  The dialog and both manuals now state where the key lives, so the user
+  who cares can act on it. Reopen if this app is ever expected to run where
+  its users do not control the machine.
+- **Connecting a knowledge base to Project Cairn now** (asked and answered
+  2026-09-13). Cairn stays at `provider: none`. The local half — `LOG.md`,
+  the topic notes, the audit — works without one, and graduation only earns
+  its setup cost when there is a second project to graduate *into*. The
+  trigger for reopening is that second project, not a calendar date.
+- **Testing what the tabs draw.** The GUI tests stop at the reply: every
+  tab's `on_job_finished` / `on_job_failed` is driven with a fabricated
+  result, which is where the shared bugs live (a button left disabled after
+  a failure, a stale gm/ID table installed as if current, a render closure
+  that raises inside a Qt slot). Going further — asserting on pixels, widget
+  geometry, or the contents of a rendered PNG — buys little: those change
+  every time the layout does, and the plotting itself is covered at the
+  `app/core/` level against real ngspice. `sizing_tab` sits at 56% for this
+  reason, not by omission.
 - **Re-capturing the other eight manual screenshots.** Only the Sizing one
   was replaced for v1.4. The tabs behind the rest have not changed materially
   since those images were taken, and re-capturing them through offscreen Qt
