@@ -7,6 +7,47 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## Unreleased
 
+- **The LLM-guided optimizer was told a score and nothing else.**  Each
+  round it got back `cand 1: {...} -> cost 0.83` — one scalar — and had to
+  guess whether it was short on gain, long on power, or off on phase
+  margin, and which targets had slack to trade.  The information existed
+  the whole time: `_eval_one` computed the full nine-metric dict, scored
+  it, and returned only the number.  Now the feedback reads
+
+      cand 1: {...} -> cost 1.3980  [6/9 met; DC gain 62.1 dB
+      (want >= 100, off 38%); Power 0.00081 W (want <= 0.0005, off 62%);
+      Phase margin 59.2 deg (want = 60, off 1%)]
+
+  which is the difference between a directed move and a wander.  Only the
+  worst few misses are named and the rest are counted, so a deck that fails
+  everything cannot paste nine clauses into every candidate of every round.
+  `score()` is now `sum(score_detail())` rather than a second
+  implementation of the same arithmetic — the cost the optimizer minimizes
+  and the breakdown the model is shown cannot drift apart.  `run_batch`
+  takes `with_metrics`; every other algorithm still gets the bare list of
+  costs it always wanted.
+  **The A/B went against it, and the experiment cannot resolve that.**
+  One run per arm, `amp_hoilee_affc`, 60 evaluations:
+
+  | evals | 10 | 20 | 30 | 40 | 50 | 60 | best |
+  |---|---|---|---|---|---|---|---|
+  | with metrics | 2.135 | 2.025 | 1.900 | 1.899 | 1.899 | 1.495 | **1.4954** |
+  | cost only | 2.840 | 2.590 | 1.666 | 1.384 | 1.384 | 1.380 | **1.3798** |
+
+  The arm *with* the extra information finished 8.4% worse.  Before reading
+  anything into that, note what the earlier effort A/B accidentally
+  provided: its `low` arm is the same configuration as this one's
+  `cost only` arm, and the two runs came out at 1.3182 and 1.3798 — **4.6%
+  apart with nothing changed**.  So the effect here is 1.9x a noise range
+  measured from a single pair, which is not a result in either direction.
+  What is kept, regardless: `score()` as the sum of `score_detail()` is
+  correct whether or not the model reads the breakdown, and the claim that
+  the loop was being handed one scalar is a fact about the design, not a
+  finding.  Replicates are running; the default may yet flip.
+  Also caught while making the change: `objective()`, which feeds Powell,
+  returns `_safe_eval(...)` — which had just become a tuple.  The default
+  algorithm would have broken.
+
 - **Added — `chat(effort=...)`, and the sizing loop now asks for "low".**
   Almost none of a Claude Code call is overhead: measured on
   `amp_hoilee_affc`, startup is **1.0 s of 101**, and the other 100 s is the

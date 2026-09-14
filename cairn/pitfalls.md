@@ -188,6 +188,56 @@ drops fast and plateaus, the default keeps descending and overtakes it at
 the very end. A circuit where the plateau is the wrong answer would be the
 reason to revisit this.
 
+### A scalar is the weakest feedback channel you can give a model
+
+The LLM-guided optimizer ran for a release telling the model one number per
+candidate: `cost 0.83`. The circuit has **nine** metrics — gain, GBW, phase
+margin, two PSRRs, CMRR, power, offset, tempco — each with its own target,
+direction and weight, and `score()` folded all of them into that number
+before the model saw anything.
+
+So the model was asked to propose the next sizing without being told which
+spec it had missed, by how much, or which ones had slack to trade away.
+That is not a prompt-quality problem, it is a **missing channel**: an
+analog designer given "DC gain 62 dB against a target of 100, power 62%
+over" moves deliberately, and one given "0.83" can only wander.
+
+What makes it worth remembering is where the information was. It was not
+unavailable or expensive — `_eval_one` computed the whole metric dict,
+passed it to `score()`, and returned the scalar. The explanation was being
+*discarded* one frame below the code that needed it. When an LLM is inside
+a loop, treat the feedback line as part of the design and go looking for
+what the surrounding code already knows.
+
+The fix also made `score()` the sum of `score_detail()` rather than a
+parallel implementation. Two routines computing "the same" violation is how
+the number the optimizer minimizes and the story the model is told quietly
+stop matching.
+
+Watch the blast radius when you change a shared return type: `run_batch`
+feeds four algorithms, and `objective()` — the Powell refinement — returns
+`_safe_eval(...)` straight through. Making that a tuple broke the *default*
+algorithm while the change was nominally about the LLM one.
+
+**And then the A/B went the other way**, which is the part worth keeping.
+One run per arm on `amp_hoilee_affc` at 60 evaluations: with the metric
+breakdown 1.4954, with the bare cost 1.3798 — the better-informed arm 8.4%
+*worse*.
+
+It would be as wrong to conclude "richer feedback hurts" as it was to
+assume it helps, and the reason is an accident worth stealing as a method.
+The earlier effort A/B's `low` arm is the *same configuration* as this
+one's `cost only` arm, so those two runs are a replicate: **1.3182 and
+1.3798, 4.6% apart with nothing changed at all.** The effect being chased
+is 1.9x that. One run per arm cannot see it.
+
+So the standing lesson is about the experiment, not the feature: on a
+stochastic search driven by a stochastic model, *measure the noise floor
+before believing an effect*, and get it almost free by repeating a
+configuration you have already run. Three of this session's measurements —
+haiku being slower, the schema being free, effort=low being fine — were
+large enough to survive a 5% floor. This one is not.
+
 ### Monkeypatching the sizing package patches nothing
 
 `app/core/sizing/__init__.py` re-exports the package API. Rebinding an

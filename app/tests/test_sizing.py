@@ -670,6 +670,39 @@ def test_include_would_have_leaked_the_file(tmp_path):
         'import guard is still needed'
 
 
+def test_score_is_exactly_the_sum_of_its_explanation():
+    """score() was re-implemented as sum(score_detail()) so that the number
+    the optimizer minimizes and the breakdown the LLM is shown can never
+    disagree.  If they drift, the model is told a story about a cost it was
+    not scored on."""
+    m = {'dcgain': 62.1, 'gain_bandwidth_product': 1.35e6,
+         'phase_in_deg': 59.2, 'dcpsrp': -71.0, 'dcpsrn': -68.0,
+         'cmrrdc': -64.0, 'power': 8.1e-4, 'vos25': 4.2e-5, 'tc': 6.0e-6}
+    for overrides in (None, {'dcgain': (80.0, True)}):
+        detail = sizing.score_detail('amp_hoilee_affc', m, overrides)
+        assert len(detail) == len(sizing.SIZING['amp_hoilee_affc'].metrics)
+        assert sum(d.contribution for d in detail) == pytest.approx(
+            sizing.score('amp_hoilee_affc', m, overrides))
+    # a hard constraint weighs 10x, and that has to show up in the part
+    soft = next(d for d in sizing.score_detail('amp_hoilee_affc', m)
+                if d.spec.key == 'dcgain')
+    hard = next(d for d in sizing.score_detail('amp_hoilee_affc', m,
+                                               {'dcgain': (100.0, True)})
+                if d.spec.key == 'dcgain')
+    assert hard.contribution == pytest.approx(soft.contribution * 10)
+    assert hard.violation == pytest.approx(soft.violation)   # same physics
+
+
+def test_score_detail_marks_a_missing_metric_rather_than_hiding_it():
+    """A simulation that produced nothing takes the fixed penalty, and the
+    breakdown has to say so — otherwise the model reads a huge cost with
+    every target apparently met."""
+    detail = sizing.score_detail('amp_hoilee_affc', {'dcgain': 120.0})
+    absent = [d for d in detail if d.value is None]
+    assert len(absent) == len(detail) - 1
+    assert all(not d.met for d in absent)
+
+
 def test_user_data_lives_outside_the_versioned_workspace(tmp_path,
                                                          monkeypatch):
     """Saved runs and imports must not sit under ANALOG_WORK_DIR — that

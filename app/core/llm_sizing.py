@@ -14,7 +14,7 @@ import numpy as np
 
 from app import paths
 from app.core import llm_client
-from app.core.sizing import SIZING, VarSpec
+from app.core.sizing import SIZING, VarSpec, score_detail
 
 #: cap on netlist text sent to the model (keeps prompts ~2k tokens)
 NETLIST_CHARS = 6000
@@ -193,6 +193,42 @@ def _parse_candidates(reply: str, names, lo, hi, k: int) -> list[np.ndarray]:
     return out
 
 
+def metric_feedback(circuit: str, metrics: dict | None,
+                    overrides=None, limit: int = 5) -> str:
+    """One line saying which targets a candidate missed, and by how much.
+
+    Without this the model is told a single scalar — "cost 0.83" — and has
+    to guess whether it is short on gain, long on power, or off on phase
+    margin.  An analog designer given "DC gain 62 dB, want 100" moves
+    deliberately; given 0.83 they can only wander.
+
+    The worst `limit` contributors are named, because the whole point is
+    where to push next, and the metrics that are already met say only that
+    there is slack there.  That slack matters too, so the count of met
+    targets is reported rather than each one.
+    """
+    if not metrics:
+        return 'simulation produced no metrics'
+    detail = score_detail(circuit, metrics, overrides)
+    missed = sorted((d for d in detail if not d.met),
+                    key=lambda d: -d.contribution)
+    met = len(detail) - len(missed)
+    if not missed:
+        return f'all {met} targets met'
+    parts = []
+    for d in missed[:limit]:
+        ms = d.spec
+        if d.value is None:
+            parts.append(f'{ms.label} MISSING')
+            continue
+        want = {'max': '>=', 'min': '<=', 'absmin': '|x| <=',
+                'target': '='}[ms.direction]
+        parts.append(f'{ms.label} {d.value:.4g} {ms.unit} '
+                     f'(want {want} {d.target:.4g}, off {d.violation:.0%})')
+    more = f' +{len(missed) - limit} more' if len(missed) > limit else ''
+    return f'{met}/{len(detail)} met; ' + '; '.join(parts) + more
+
+
 def run_loop(circuit: str, variables: list[VarSpec], overrides,
              state: dict, run_batch, budget: int, workers: int,
              chat=None):
@@ -245,11 +281,13 @@ def run_loop(circuit: str, variables: list[VarSpec], overrides,
             points = [np.clip(x0n + (p - 0.5) * 0.5, 0.0, 1.0) for p in pts]
             messages.append({'role': 'assistant',
                              'content': '(unusable reply)'})
-        costs = run_batch(points)
-        feedback = [f'cand {i + 1}: {fmt_point(p)} -> cost '
-                    + (f'{c:.4f}' if np.isfinite(c) else 'FAILED')
-                    for i, (p, c) in enumerate(zip(points, costs,
-                                                   strict=True))]
+        costs, mets = run_batch(points, with_metrics=True)
+        feedback = [
+            f'cand {i + 1}: {fmt_point(p)} -> cost '
+            + (f'{c:.4f}' if np.isfinite(c) else 'FAILED')
+            + f'  [{metric_feedback(circuit, m, overrides)}]'
+            for i, (p, c, m) in enumerate(zip(points, costs, mets,
+                                              strict=True))]
         if state['best'] is not None and state['best_x'] is not None:
             best_m = ', '.join(f'{key}={val:.4g}'
                                for key, val in state['best_m'].items())

@@ -2,6 +2,25 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-14 · The optimizer was telling the model a scalar
+
+- Asked which of "more context" or "an MCP server" was worth doing. Neither
+  as described: 0 of 20 netlists were being truncated, so the context half
+  was empty. What the check turned up instead is that `_eval_one` computed
+  all nine metrics, scored them, and returned only the number — the model
+  proposing sizings never learned which target it missed.
+- Feedback now names the worst misses with values, targets and percentages.
+  `score()` became `sum(score_detail())` so the cost and its explanation
+  cannot drift; `run_batch` grew `with_metrics` without changing what the
+  other three algorithms receive.
+- A/B came back **against** it: 1.4954 with the breakdown, 1.3798 without.
+  But the earlier effort A/B's `low` arm is the same configuration as this
+  one's `cost only` arm — 1.3182 vs 1.3798, **4.6% apart with nothing
+  changed**. The effect is 1.9x that noise range, so one run per arm cannot
+  resolve it. Replicates running; the default may flip.
+- Details: `cairn/pitfalls.md` → "A scalar is the weakest feedback channel
+  you can give a model".
+
 ## 2026-09-14 · Effort is the latency lever; #2 and #3 were not
 
 - Asked whether bigger prompts or an MCP server would cut the ~100 s round.

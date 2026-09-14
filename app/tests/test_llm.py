@@ -523,9 +523,10 @@ def test_run_loop_asks_for_the_schema_of_the_circuit_it_is_sizing(monkeypatch):
 
     state = {'best': 1.0, 'best_x': None, 'cancel': False, 'dispatched': 0}
 
-    def run_batch(points):
+    def run_batch(points, with_metrics=False):
         state['dispatched'] += len(points)
-        return [1.0] * len(points)
+        costs = [1.0] * len(points)
+        return (costs, [None] * len(points)) if with_metrics else costs
 
     llm_sizing.run_loop('amp_hoilee_affc', variables, None, state=state,
                         run_batch=run_batch, budget=3, workers=1,
@@ -586,9 +587,10 @@ def test_the_search_loop_asks_for_low_effort_and_the_one_shots_do_not(
 
     state = {'best': 1.0, 'best_x': None, 'cancel': False, 'dispatched': 0}
 
-    def run_batch(points):
+    def run_batch(points, with_metrics=False):
         state['dispatched'] += len(points)
-        return [1.0] * len(points)
+        costs = [1.0] * len(points)
+        return (costs, [None] * len(points)) if with_metrics else costs
 
     llm_sizing.run_loop('amp_hoilee_affc', variables, None, state=state,
                         run_batch=run_batch, budget=2, workers=1,
@@ -598,3 +600,70 @@ def test_the_search_loop_asks_for_low_effort_and_the_one_shots_do_not(
     efforts.clear()
     llm_sizing.suggest_setup('amp_hoilee_affc', variables, chat=fake_chat)
     assert efforts == [None]          # the provider's own default
+
+
+# ── telling the model which target it missed ─────────────────────────────────
+_M = {'dcgain': 62.1, 'gain_bandwidth_product': 1.35e6, 'phase_in_deg': 59.2,
+      'dcpsrp': -71.0, 'dcpsrn': -68.0, 'cmrrdc': -64.0, 'power': 8.1e-4,
+      'vos25': 4.2e-5, 'tc': 6.0e-6}
+
+
+def test_metric_feedback_names_the_misses_and_counts_the_slack():
+    """"cost 1.398" tells the model nothing about where to push.  The line
+    has to name the worst offenders with their real numbers, and say how
+    many targets are already met, because that slack is what a designer
+    trades away."""
+    from app.core import llm_sizing
+    line = llm_sizing.metric_feedback('amp_hoilee_affc', _M)
+    assert '6/9 met' in line
+    assert 'DC gain 62.1 dB (want >= 100' in line       # value and target
+    assert 'off 38%' in line                            # and by how much
+    assert 'Power' in line and 'want <= 0.0005' in line  # direction per spec
+    assert 'PSRR' not in line                           # met ones are not listed
+
+
+def test_metric_feedback_says_so_when_everything_is_met_or_nothing_ran():
+    from app.core import llm_sizing
+    good = dict(_M, dcgain=104.0, power=3.0e-4, phase_in_deg=60.0)
+    assert llm_sizing.metric_feedback('amp_hoilee_affc', good) == \
+        'all 9 targets met'
+    assert 'no metrics' in llm_sizing.metric_feedback('amp_hoilee_affc', None)
+
+
+def test_metric_feedback_is_bounded_when_everything_fails():
+    """A deck that misses every target must not paste nine clauses into
+    every candidate line of every round."""
+    from app.core import llm_sizing
+    line = llm_sizing.metric_feedback('amp_hoilee_affc', {'dcgain': 1.0},
+                                      limit=3)
+    assert line.count('want') <= 3 and 'more' in line
+
+
+def test_run_loop_feeds_the_metrics_back_not_just_the_cost(monkeypatch):
+    """The whole point: the conversation the model sees must carry which
+    target each candidate missed."""
+    from app.core import llm_sizing
+    from app.core.sizing.spec import VarSpec
+    variables = [
+        VarSpec(name='W_IN', default=5.0, lo=1.0, hi=10.0, is_int=False)]
+    seen = []
+
+    def fake_chat(messages, system=None, schema=None, effort=None, **kw):
+        seen.append(messages[-1]['content'])
+        return json.dumps({'rationale': 'r', 'candidates': [{'W_IN': 6.0}]})
+
+    state = {'best': 1.0, 'best_x': None, 'cancel': False, 'dispatched': 0}
+    asked = {}
+
+    def run_batch(points, with_metrics=False):
+        asked['with_metrics'] = with_metrics
+        state['dispatched'] += len(points)
+        costs = [1.4] * len(points)
+        return (costs, [dict(_M)] * len(points)) if with_metrics else costs
+
+    llm_sizing.run_loop('amp_hoilee_affc', variables, None, state=state,
+                        run_batch=run_batch, budget=3, workers=1,
+                        chat=fake_chat)
+    assert asked['with_metrics'] is True
+    later = '\n'.join(seen[1:])            # the feedback turns
+    assert 'DC gain 62.1 dB' in later and 'want >= 100' in later

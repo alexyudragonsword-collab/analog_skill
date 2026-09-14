@@ -53,6 +53,14 @@ No one has committed to these; they are recorded so the thought is not lost.
   topologies have no import path.
 - macOS packaging. The test matrix runs on macOS, but no macOS build job
   exists — only Windows and Linux artifacts are produced.
+- Let `init_runtime()` honour an `ANALOG_WORK_DIR` that is already set.
+  Today it assigns one derived from `repo_root()`, so the scratch tree is
+  fixed per checkout and a long-running experiment cannot coexist with the
+  test suite — which is why AGENTS.md has to forbid running them together
+  rather than the code simply keeping them apart. Individual tests already
+  isolate themselves this way (`_isolate_workspace`); the gap is that a
+  whole run cannot. Small, but it turns a standing rule people must
+  remember into something the code enforces.
 - Make the LLM-guided algorithm cheaper per round. Through the Claude Code
   CLI a round measures ~90 s against ~3.5 s for an evaluation, so a
   150-evaluation run is about an hour and the model calls are essentially

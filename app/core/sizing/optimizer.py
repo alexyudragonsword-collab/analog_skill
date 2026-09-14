@@ -112,16 +112,21 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             state['history'].append((n, best))
         if progress is not None:
             progress(n, best, metrics)
-        return c
+        return c, metrics
 
     def _safe_eval(xn):
         try:
             return _eval_one(xn)
         except Exception:                     # sim failure → worst cost
-            return float('inf')
+            return float('inf'), None
 
-    def run_batch(points):
-        """Evaluate ≤ remaining-budget points (parallel); rest stay +inf."""
+    def run_batch(points, with_metrics=False):
+        """Evaluate ≤ remaining-budget points (parallel); rest stay +inf.
+
+        with_metrics returns (costs, metric_dicts) instead of costs — the
+        LLM loop needs them to tell the model *which* target it missed, and
+        every other algorithm only ever wanted the scalar.
+        """
         points = [np.asarray(p, float) for p in points]
         with lock:
             if _cancelled():
@@ -131,23 +136,23 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             todo = points[:allowed]
             state['dispatched'] += len(todo)
         out = [float('inf')] * len(points)
-        if not todo:
-            return out
-        if workers == 1:
-            for i, pt in enumerate(todo):
-                if _cancelled():
-                    with lock:
-                        state['cancel'] = True
-                        state['dispatched'] -= len(todo) - i   # refund
-                    break
-                out[i] = _safe_eval(pt)
-        else:
-            with ThreadPoolExecutor(max_workers=workers) as ex:
-                futs = {ex.submit(_safe_eval, pt): i
-                        for i, pt in enumerate(todo)}
-                for f in as_completed(futs):
-                    out[futs[f]] = f.result()
-        return out
+        mets: list[dict | None] = [None] * len(points)
+        if todo:
+            if workers == 1:
+                for i, pt in enumerate(todo):
+                    if _cancelled():
+                        with lock:
+                            state['cancel'] = True
+                            state['dispatched'] -= len(todo) - i   # refund
+                        break
+                    out[i], mets[i] = _safe_eval(pt)
+            else:
+                with ThreadPoolExecutor(max_workers=workers) as ex:
+                    futs = {ex.submit(_safe_eval, pt): i
+                            for i, pt in enumerate(todo)}
+                    for f in as_completed(futs):
+                        out[futs[f]], mets[futs[f]] = f.result()
+        return (out, mets) if with_metrics else out
 
     def objective(xn):
         """Serial single evaluation (Powell refinement)."""
@@ -157,7 +162,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             if state['cancel'] or state['dispatched'] >= budget:
                 raise _Cancelled
             state['dispatched'] += 1
-        return _safe_eval(xn)
+        return _safe_eval(xn)[0]      # Powell minimizes a scalar
 
     def run_sobol_powell():
         n_sobol = min(max(budget // 2, 0), max(budget - 5, 0))
