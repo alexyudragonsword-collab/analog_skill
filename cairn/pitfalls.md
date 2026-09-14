@@ -164,9 +164,29 @@ same place. Token rate is not throughput when the token count moves too.
 
 What does work is asking for less thinking. `--effort low` cuts the round
 to **25 s** and the output to 3 520 tokens while the answer itself stays the
-same size and still parses 4/4. Whether it proposes as *well* is a separate
-question, and a separate experiment — speed is cheap to measure and quality
-is not, so do not let the first stand in for the second.
+same size and still parses 4/4.
+
+Whether it proposes as *well* is a separate question, and it needed a
+separate experiment — speed is cheap to measure and quality is not, so do
+not let the first stand in for the second. One full optimization per arm
+(`amp_hoilee_affc`, 60 evaluations, cost against evaluation count):
+
+  | evals | 10 | 20 | 30 | 40 | 50 | 60 | wall |
+  |---|---|---|---|---|---|---|---|
+  | low | 1.632 | 1.338 | 1.333 | 1.328 | 1.323 | **1.318** | 12.3 min |
+  | default | 3.312 | 2.494 | 1.534 | 1.534 | 1.281 | **1.280** | 26.0 min |
+
+The honest reading is that **the answer depends on which budget is scarce**,
+and the two readings disagree. Per evaluation the default wins by 3% — and
+at one run per arm, 3% is not distinguishable from run-to-run variation.
+Per minute `low` wins by a lot: the default arm was still at 1.534 when
+`low` had finished, and `low` passed that level at evaluation 20 of 60.
+
+For a desktop app the scarce budget is the person's afternoon, so `low` is
+the default. The shapes differ in a way worth remembering, though: `low`
+drops fast and plateaus, the default keeps descending and overtakes it at
+the very end. A circuit where the plateau is the wrong answer would be the
+reason to revisit this.
 
 ### Monkeypatching the sizing package patches nothing
 

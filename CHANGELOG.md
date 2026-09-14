@@ -25,9 +25,25 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   times a run, proposing points near the current best — while
   `suggest_setup` and `explain_run` leave the provider's default alone,
   because each is called once and the user reads the result.
-  **Whether "low" proposes as *well* is still being measured** (an A/B over
-  two full optimizations); this entry records the speed, which is settled,
-  and not the quality, which is not.
+  **The A/B is in** — one run per arm, `amp_hoilee_affc`, 60 evaluations,
+  cost by evaluation count:
+
+  | evals | 10 | 20 | 30 | 40 | 50 | 60 | wall |
+  |---|---|---|---|---|---|---|---|
+  | low | 1.632 | 1.338 | 1.333 | 1.328 | 1.323 | **1.318** | 12.3 min |
+  | default | 3.312 | 2.494 | 1.534 | 1.534 | 1.281 | **1.280** | 26.0 min |
+
+  Read per *evaluation*, the default is 3% better (1.280 vs 1.318) — a gap
+  a single run cannot separate from noise.  Read per *minute*, which is the
+  budget a person sitting in front of the app actually spends, `low` is far
+  ahead: at the 12.3 minutes it needed to finish, the default arm was at
+  1.534, and `low` had already been below that since evaluation 20.  The
+  saved time also buys evaluations — 120 of them at `low` costs about what
+  60 cost at the default.  So `low` stands, on the equal-time comparison
+  rather than the equal-budget one.  What the curves do show is a real
+  difference in shape: `low` drops fast and plateaus, the default keeps
+  descending and edges past it at the very end.  Worth revisiting if a
+  circuit turns up where that plateau matters.
   The measurement also ruled out the two ideas that looked more promising:
   batching rounds into one CLI invocation would save that 1.0 s, and a
   smaller model is not the lever either — haiku ran **slower** than sonnet

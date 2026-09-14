@@ -12,8 +12,11 @@ This file records substantive progress in reverse-chronological order — newest
 - `chat(effort=...)` added on the same request-not-guarantee contract as
   `schema`. Loop asks for 'low' (25 s, 3 520 tokens, still 4/4 candidates);
   suggest_setup and explain_run keep the default, being read by a human.
-- Speed is settled, **quality is not** — an A/B over two full optimizations
-  is running as this is written. Recorded as such rather than as a verdict.
+- A/B came back (n=1 per arm, 60 evals): low 1.318 in 12.3 min, default
+  1.280 in 26.0 min. Per evaluation the default is 3% better, which one run
+  cannot separate from noise; per minute low is far ahead — the default was
+  still at 1.534 when low had finished. Kept low, on the equal-time
+  reading, and recorded that the curves differ in shape (low plateaus).
 - Details and the full table: `cairn/pitfalls.md` → "A CLI agent is not a
   chat endpoint until you disarm it".
 
