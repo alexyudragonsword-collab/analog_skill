@@ -2,6 +2,22 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-14 · Two gaps the llm/llm_agent comparison exposed
+
+- Writing the comparison table turned up both: the agentic path never passed
+  `--effort`, and Cancel could not reach an in-flight run.
+- Cancel fixed properly — Popen plus a watcher that kills the process group
+  (claude runs an MCP child of its own). 60 s child gone in ~3 s. Raises
+  `CallCancelled`, not `LLMError`: nothing failed, and the tabs paint an
+  LLMError red.
+- Effort: my first reading, "an oversight, add 'low'", was wrong. The
+  measurement behind `LOOP_EFFORT` is about 38 shallow turns costing an
+  hour; the agent takes a handful that each digest the whole history. Kept
+  at the provider default and named `AGENT_EFFORT` so it reads as a decision.
+- Worth keeping as a habit: a comparison table is a cheap audit. Neither gap
+  showed up while building either algorithm, only while putting them side by
+  side.
+
 ## 2026-09-14 · Agentic algorithm: the model drives
 
 - `llm_agent` added beside `llm`, on architectural grounds only — the model

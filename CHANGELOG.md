@@ -7,6 +7,29 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## Unreleased
 
+- **Fixed — Cancel could not reach an agentic run.**  `llm_agent` is one CLI
+  invocation that may be the entire search, and `subprocess.run()` offers no
+  way in once it has started: pressing Cancel stopped `run_batch` accepting
+  work, so the model got useless results and kept going until it finished on
+  its own or hit a `budget x 25 s` timeout.  The call now runs under `Popen`
+  with a watcher that kills the process — and on POSIX its whole session,
+  since `claude` has an MCP server of its own running.  Measured: a child
+  that would have run for 60 s is gone in about 3.  A cancel raises
+  `CallCancelled` rather than `LLMError`, because the tabs render an
+  `LLMError` as a red "Failed:" line and nothing failed.
+  The round-based `llm` algorithm never had this problem — it checks between
+  rounds, and a round is ~25 s.
+- **`AGENT_EFFORT` is now a stated decision rather than an omission.**  The
+  agentic loop was not passing `--effort` at all, which looked like a
+  straightforward oversight.  On inspection it is the right value for the
+  wrong reason, so it is written down instead of quietly copied from the
+  other loop: `LOOP_EFFORT = 'low'` was justified by a measurement about
+  **38 shallow turns** costing an hour, and the agentic loop takes a handful
+  of turns that each read every result so far and decide what to do next.
+  The thinking is the work there, and lowering it would save minutes rather
+  than an hour, so the default stays the provider's.  `run_agent` accepts
+  the parameter either way.
+
 - **Added — an agentic sizing algorithm, where the model drives.**  The
   existing `llm` algorithm asks the model a fixed question each round and
   simulates its answer; `llm_agent` hands it one prompt and a tool and lets

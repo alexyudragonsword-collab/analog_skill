@@ -12,10 +12,12 @@ Code.  Everything above them sees one `chat()` with one signature.
 
 import json
 import os
+import signal
 import subprocess
 import tempfile
 import urllib.error
 import sys
+import threading
 import urllib.request
 import uuid
 
@@ -54,6 +56,15 @@ ANTHROPIC_VERSION = '2023-06-01'
 
 class LLMError(RuntimeError):
     """Readable failure (bad config, HTTP error, timeout, bad payload)."""
+
+
+class CallCancelled(Exception):
+    """The user pressed Cancel while a CLI call was still running.
+
+    Not an LLMError: nothing failed, and the tabs render an LLMError as a
+    red "Failed:" line, which is the wrong thing to show someone who just
+    asked it to stop.
+    """
 
 
 def get_config() -> dict:
@@ -249,24 +260,81 @@ def _as_prompt(messages: list[dict]) -> str:
     return '\n\n'.join(out)
 
 
-def _run_cli(argv: list[str], prompt: str, timeout: float) -> dict:
+def _kill_tree(proc):
+    """Stop the CLI and everything it started.
+
+    On POSIX the process got its own session, so one signal reaches the
+    group — which matters because `claude` has an MCP server of its own
+    running.  On Windows killing the parent is enough in practice: our MCP
+    child's serve() loop ends when its stdin closes.
+    """
+    try:
+        if sys.platform == 'win32':
+            proc.kill()
+        else:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    except OSError:
+        pass
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        try:
+            proc.kill()
+        except OSError:
+            pass
+
+
+def _run_cli(argv: list[str], prompt: str, timeout: float,
+             should_stop=None) -> dict:
     """Run the CLI and return its decoded JSON.  The chokepoint tests fake.
 
     Runs in an empty scratch directory: the file tools are disallowed
     above, and this makes sure there is nothing to reach even if that ever
     stops being true.
+
+    `should_stop` is polled while the call runs.  Without it Cancel could
+    not reach an agentic search at all: that is a single invocation which
+    may be the whole run, and subprocess.run() offers no way in once it has
+    started.  Hence Popen and a watcher rather than the simpler call.
     """
     from app.core import claude_locator
+    kw = dict(claude_locator._no_window())
+    if sys.platform != 'win32':
+        kw['start_new_session'] = True          # so one signal gets the group
     with tempfile.TemporaryDirectory(prefix='analog-llm-') as cwd:
         try:
-            r = subprocess.run(argv, input=prompt, capture_output=True,
-                               text=True, timeout=timeout, cwd=cwd,
-                               **claude_locator._no_window())
-        except subprocess.TimeoutExpired as exc:
-            raise LLMError(
-                f'Claude Code did not answer within {timeout:.0f}s') from exc
+            proc = subprocess.Popen(
+                argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True, cwd=cwd, **kw)
         except OSError as exc:
             raise LLMError(f'could not run Claude Code: {exc}') from exc
+        box = {}
+
+        def pump():
+            try:
+                box['out'] = proc.communicate(input=prompt, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                box['timeout'] = True
+                _kill_tree(proc)
+            except OSError as exc:              # noqa: BLE001
+                box['error'] = exc
+
+        worker = threading.Thread(target=pump, daemon=True)
+        worker.start()
+        while worker.is_alive():
+            if should_stop is not None and should_stop():
+                _kill_tree(proc)
+                worker.join(timeout=5)
+                raise CallCancelled
+            worker.join(timeout=0.25)
+        if box.get('timeout'):
+            raise LLMError(
+                f'Claude Code did not answer within {timeout:.0f}s')
+        if 'error' in box:
+            raise LLMError(f'could not run Claude Code: {box["error"]}')
+        out, err = box.get('out', ('', ''))
+        r = type('R', (), {'stdout': out, 'stderr': err,
+                           'returncode': proc.returncode})()
     if not (r.stdout or '').strip():
         err = (r.stderr or '').strip().splitlines()
         raise LLMError('Claude Code produced no output'
@@ -397,7 +465,7 @@ def _mcp_server_argv() -> list[str]:
 
 def run_agent(prompt: str, system: str, vars_spec: dict, addr: str,
               token: str, timeout: float, should_stop=None,
-              cfg: dict | None = None) -> str:
+              effort: str | None = None, cfg: dict | None = None) -> str:
     """One CLI invocation that drives the whole search through our tool.
 
     The disarming flags still apply — this adds exactly one capability, our
@@ -430,12 +498,17 @@ def run_agent(prompt: str, system: str, vars_spec: dict, addr: str,
             '--mcp-config', json.dumps(mcp),
             '--allowed-tools', f'mcp__analog__{MCP_TOOL_NAME}',
             *_CLI_SAFE_FLAGS]
-    data = _run_cli(argv, prompt, timeout)
+    if effort in EFFORT_LEVELS:
+        argv += ['--effort', effort]
+    try:
+        data = _run_cli(argv, prompt, timeout, should_stop=should_stop)
+    except CallCancelled:
+        # not a failure: run_batch already stopped accepting work, and the
+        # optimizer builds the run from what it did measure
+        return 'stopped by the user.'
     if data.get('is_error'):
         raise LLMError('Claude Code reported an error: '
                        f"{str(data.get('result'))[:300]}")
-    if should_stop is not None and should_stop():
-        return 'cancelled'
     return str(data.get('result', ''))
 
 

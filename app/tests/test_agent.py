@@ -14,6 +14,8 @@ import os
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 
+import pytest
+
 from app.core import mcp_eval_server as mes
 from app.core.eval_service import EvalService
 
@@ -186,3 +188,81 @@ def test_agent_loop_denormalizes_and_clips_what_the_model_sends(monkeypatch):
                                      'lo': [1.0, 0.15], 'hi': [10.0, 4.0]}
     assert captured['addr'].startswith('127.0.0.1:')
     assert captured['token']
+
+
+# ── stopping an agentic run ──────────────────────────────────────────────────
+def test_cancel_kills_the_cli_instead_of_waiting_it_out():
+    """An agentic search is one invocation that may be the whole run, so
+    without this Cancel does nothing visible until the model happens to
+    finish — or until a budget x 25 s timeout expires."""
+    import sys
+    import threading
+    import time
+    from app.core import llm_client
+
+    flag = {'stop': False}
+    threading.Timer(0.5, lambda: flag.__setitem__('stop', True)).start()
+    t0 = time.time()
+    with pytest.raises(llm_client.CallCancelled):
+        llm_client._run_cli([sys.executable, '-c', 'import time; '
+                             'time.sleep(60)'], 'ignored', timeout=120,
+                            should_stop=lambda: flag['stop'])
+    assert time.time() - t0 < 20, 'it waited for the child instead of killing'
+
+
+def test_an_uncancelled_call_still_returns_normally():
+    """The watcher must not change the ordinary path — every other LLM call
+    in the app goes through this same function."""
+    import json
+    import sys
+    from app.core import llm_client
+
+    payload = json.dumps({'result': 'hi', 'is_error': False})
+    out = llm_client._run_cli(
+        [sys.executable, '-c',
+         f'import sys; sys.stdin.read(); print({payload!r})'],
+        'the prompt', timeout=60, should_stop=lambda: False)
+    assert out == {'result': 'hi', 'is_error': False}
+
+
+def test_cancel_is_reported_as_a_stop_not_a_failure(monkeypatch):
+    """The tabs render an LLMError as a red "Failed:" line, which is the
+    wrong thing to show someone who just pressed Cancel."""
+    from app.core import claude_locator, llm_client
+
+    def cancelled(*a, **kw):
+        raise llm_client.CallCancelled
+
+    monkeypatch.setattr(llm_client, '_run_cli', cancelled)
+    monkeypatch.setattr(claude_locator, 'resolve', lambda: '/bin/claude')
+    note = llm_client.run_agent(
+        prompt='p', system='s', vars_spec={'names': [], 'lo': [], 'hi': []},
+        addr='127.0.0.1:1', token='t', timeout=60,
+        cfg={'provider': 'claude_code', 'model': 'sonnet', 'base_url': '',
+             'api_key': ''})
+    assert 'stopped by the user' in note
+
+
+def test_agent_effort_is_a_stated_choice_not_an_accident(monkeypatch):
+    """AGENT_EFFORT is deliberately not LOOP_EFFORT — the measurement that
+    justified 'low' for the round-based loop was about 38 shallow turns,
+    not about a handful of turns that each read the whole history."""
+    from app.core import claude_locator, llm_client, llm_sizing
+
+    seen = {}
+    monkeypatch.setattr(llm_client, '_run_cli',
+                        lambda argv, prompt, timeout, should_stop=None:
+                        seen.update(argv=argv) or {'result': 'ok'})
+    monkeypatch.setattr(claude_locator, 'resolve', lambda: '/bin/claude')
+    cfg = {'provider': 'claude_code', 'model': 'sonnet', 'base_url': '',
+           'api_key': ''}
+    kw = dict(prompt='p', system='s',
+              vars_spec={'names': [], 'lo': [], 'hi': []},
+              addr='127.0.0.1:1', token='t', timeout=60, cfg=cfg)
+
+    llm_client.run_agent(effort=None, **kw)
+    assert '--effort' not in seen['argv']
+    llm_client.run_agent(effort='medium', **kw)
+    assert seen['argv'][seen['argv'].index('--effort') + 1] == 'medium'
+    # and the loop's own setting is not silently reused here
+    assert llm_sizing.AGENT_EFFORT != llm_sizing.LOOP_EFFORT

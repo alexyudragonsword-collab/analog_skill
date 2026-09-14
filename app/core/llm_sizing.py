@@ -388,6 +388,20 @@ def suggest_setup(circuit: str, variables: list[VarSpec],
 # either version is likely to have, so that claim could not be supported
 # either way.  What it changes is the shape of the control loop.
 # ─────────────────────────────────────────────────────────────────────────────
+#: Reasoning effort for the agentic loop — deliberately *not* LOOP_EFFORT.
+#:
+#: The measurement that justified 'low' for run_loop does not transfer.
+#: There the model answers the same narrow question ~38 times ("four points
+#: near the current best"), and the hour of model time was the whole
+#: problem.  Here it takes a handful of turns, and each one reads every
+#: result so far and decides what to do next — the thinking *is* the work,
+#: and there are few enough turns that lowering it saves minutes rather
+#: than an hour.  None means the provider's own default.
+#:
+#: Named rather than omitted so the next person sees a decision instead of
+#: wondering whether it was forgotten.  It was, once.
+AGENT_EFFORT = None
+
 AGENT_SYSTEM = (
     'You are an expert analog IC designer sizing a circuit. You have a tool '
     'that simulates candidate sizings with ngspice and returns each one\'s '
@@ -455,6 +469,7 @@ def run_agent_loop(circuit: str, variables: list[VarSpec], overrides,
             system=AGENT_SYSTEM,
             vars_spec={'names': names, 'lo': lo, 'hi': hi},
             addr=f'{svc.host}:{svc.port}', token=svc.token,
+            effort=AGENT_EFFORT,
             # the whole search happens inside this one call
             timeout=max(600.0, budget * 25.0),
             should_stop=lambda: state['cancel'])

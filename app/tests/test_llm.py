@@ -350,38 +350,69 @@ def test_claude_code_timeout_is_never_shorter_than_a_cold_start(monkeypatch):
     assert seen['timeout'] >= llm_client.CLI_MIN_TIMEOUT
 
 
-def test_run_cli_turns_every_failure_into_a_readable_llm_error(monkeypatch,
-                                                               tmp_path):
-    """_run_cli is the chokepoint the rest of the suite fakes, so it is the
-    one place these have to be handled for real.  A tab shows the last line
-    of the error, so a traceback or an empty string there is useless."""
+class _FakeProc:
+    """Enough of Popen for _run_cli: it writes the prompt through
+    communicate(), reads returncode, and may have to kill the thing."""
+
+    def __init__(self, out='', err='', rc=0, raises=None):
+        self._out, self._err, self._raises = out, err, raises
+        self.returncode, self.pid = rc, 424242
+        self.killed = False
+
+    def communicate(self, input=None, timeout=None):
+        if self._raises is not None:
+            raise self._raises
+        return self._out, self._err
+
+    def kill(self):
+        self.killed = True
+
+    def wait(self, timeout=None):
+        return self.returncode
+
+
+def _fake_popen(monkeypatch, proc=None, on_spawn=None, record=None):
     import subprocess
     from app.core import claude_locator
     monkeypatch.setattr(claude_locator, '_no_window', dict)
 
-    def fails(exc):
-        def run(*a, **kw):
-            raise exc
-        return run
+    def popen(argv, **kw):
+        if record is not None:
+            # the directory only exists while the call is in flight, so
+            # look now rather than after _run_cli has cleaned it up
+            from pathlib import Path as _P
+            record.update(kw)
+            record['listing'] = list(_P(kw['cwd']).iterdir())
+        if on_spawn is not None:
+            raise on_spawn
+        return proc
 
-    monkeypatch.setattr(subprocess, 'run',
-                        fails(subprocess.TimeoutExpired('claude', 90)))
-    with pytest.raises(llm_client.LLMError, match='within 90s'):
-        llm_client._run_cli(['claude'], 'hi', 90.0)
+    monkeypatch.setattr(subprocess, 'Popen', popen)
+    # killpg would signal this very test process
+    monkeypatch.setattr('app.core.llm_client._kill_tree', lambda p: None)
+    return proc
 
-    monkeypatch.setattr(subprocess, 'run', fails(OSError('no such file')))
+
+def test_run_cli_turns_every_failure_into_a_readable_llm_error(monkeypatch):
+    """_run_cli is the chokepoint the rest of the suite fakes, so it is the
+    one place these have to be handled for real.  A tab shows the last line
+    of the error, so a traceback or an empty string there is useless."""
+    import subprocess
+
+    _fake_popen(monkeypatch, on_spawn=OSError('no such file'))
     with pytest.raises(llm_client.LLMError, match='could not run'):
         llm_client._run_cli(['claude'], 'hi', 90.0)
 
-    done = type('R', (), {'stdout': '', 'stderr': 'not logged in\n',
-                          'returncode': 1})
-    monkeypatch.setattr(subprocess, 'run', lambda *a, **kw: done())
+    _fake_popen(monkeypatch, _FakeProc(
+        raises=subprocess.TimeoutExpired('claude', 90)))
+    with pytest.raises(llm_client.LLMError, match='within 90s'):
+        llm_client._run_cli(['claude'], 'hi', 90.0)
+
+    _fake_popen(monkeypatch, _FakeProc(out='', err='not logged in\n', rc=1))
     with pytest.raises(llm_client.LLMError, match='not logged in'):
         llm_client._run_cli(['claude'], 'hi', 90.0)
 
-    junk = type('R', (), {'stdout': 'Welcome to Claude!', 'stderr': '',
-                          'returncode': 0})
-    monkeypatch.setattr(subprocess, 'run', lambda *a, **kw: junk())
+    _fake_popen(monkeypatch, _FakeProc(out='Welcome to Claude!', rc=0))
     with pytest.raises(llm_client.LLMError, match='non-JSON'):
         llm_client._run_cli(['claude'], 'hi', 90.0)
 
@@ -389,22 +420,12 @@ def test_run_cli_turns_every_failure_into_a_readable_llm_error(monkeypatch,
 def test_run_cli_runs_in_an_empty_directory(monkeypatch):
     """Belt to the disallowed-tools braces: if a file tool ever does get
     through, there is nothing where it lands to read."""
-    import subprocess
     from pathlib import Path
-    from app.core import claude_locator
-    monkeypatch.setattr(claude_locator, '_no_window', dict)
-    seen = {}
-
-    def run(argv, **kw):
-        seen['cwd'] = kw['cwd']
-        seen['listing'] = list(Path(kw['cwd']).iterdir())
-        return type('R', (), {'stdout': '{"result": "x"}', 'stderr': '',
-                              'returncode': 0})()
-
-    monkeypatch.setattr(subprocess, 'run', run)
+    kw = {}
+    _fake_popen(monkeypatch, _FakeProc(out='{"result": "x"}'), record=kw)
     assert llm_client._run_cli(['claude'], 'hi', 90.0) == {'result': 'x'}
-    assert seen['listing'] == []
-    assert not Path(seen['cwd']).exists()      # and cleaned up afterwards
+    assert kw['listing'] == []                 # empty while it ran...
+    assert not Path(kw['cwd']).exists()        # ...and gone afterwards
 
 
 def test_claude_locator_prefers_the_configured_path(isolated_settings,
