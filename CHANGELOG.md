@@ -26,12 +26,31 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   On the default `amp_hoilee_affc` sizing it reports 7 of 30 devices out of
   saturation, six of them on one bias mirror, with gm/gds of 1–3 against
   57–79 for the healthy ones.
-  **Whether the model uses it is being measured** and this entry claims
-  nothing about that.  The experiment deliberately does not measure search
-  outcome — a 33% run-to-run spread swallows anything that subtle — but asks
-  both arms for a sizing and counts, in the simulator, how many devices end
-  up out of saturation.  That is what the extra information is about, and it
-  is a count rather than a draw.
+  **Measured, n=5 per arm, one-shot "propose a sizing that fixes this":**
+
+  | arm | out of saturation (baseline 7) | cost (baseline 3.31) |
+  |---|---|---|
+  | metrics only | 7 7 7 8 8 — median **7** | 9.26 11.49 14.41 15.21 15.39 — median **14.41** |
+  | + operating points | 7 7 7 7 7 — median **7** | 7.74 8.08 8.15 8.39 13.23 — median **8.15** |
+
+  The metric chosen up front — devices out of saturation, because that is
+  what the operating point is *about* — came back **null** (U=8, p=0.09).
+  Handed a list naming seven devices in triode and the variables that size
+  them, the model did not fix them.  That is the headline and it is a
+  negative one.
+  The cost difference is a **secondary** metric and is reported as such
+  rather than promoted because it is the one that moved: with-op proposals
+  were better in **23 of 25 pairings** (Mann-Whitney U=2, one-sided
+  p=0.016), median 8.15 against 14.41.  So the data appear to make
+  proposals less bad, but not through the mechanism predicted — worth
+  knowing, and worth not over-reading.
+  Two caveats that matter.  **Both arms are far worse than the default
+  sizing** (3.31), so this measures who fails less at a hard one-shot task,
+  not who succeeds.  And a simpler explanation than "it reasoned about
+  headroom" is available: the with-op prompt also *says* seven devices are
+  already marginal, which may just make the model more conservative.
+  Distinguishing those needs the proposals themselves, which this run did
+  not keep.
 
 - **Fixed — Cancel could not reach an agentic run.**  `llm_agent` is one CLI
   invocation that may be the entire search, and `subprocess.run()` offers no

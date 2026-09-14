@@ -293,6 +293,36 @@ Three things worth keeping:
   elsewhere in this file, and the same cause: shared scratch space with no
   owner.
 
+### Declare the metric before the run, and report it when it says no
+
+Operating points were added on a strong prior: the nine metrics say *that*
+a sizing failed, the operating point says *why*, and that is the first
+thing a designer looks at. The metric was declared in advance — devices out
+of saturation, because that is what the information is about — precisely so
+the answer could not be chosen afterwards.
+
+It came back null. Five proposals per arm, baseline seven devices in
+triode: with the operating points, 7 7 7 7 7; without, 7 7 7 8 8
+(p = 0.09). **The model was handed a list naming the seven devices and the
+variables that size them, and did not fix them.**
+
+Cost, a secondary metric, separated cleanly: 23 of 25 pairings, U = 2,
+p = 0.016, medians 8.15 against 14.41. The temptation is to lead with that
+number. Leading with it would mean the experiment had no way to come out
+negative, which makes it not an experiment.
+
+So: the information seems to help, by a mechanism that is not the one
+argued for, on a measure that was not the one declared — and a mundane
+rival explanation is still standing, that a prompt mentioning seven
+marginal devices simply induces caution. The next run keeps the proposals
+so that can be told apart.
+
+Worth keeping alongside the noise-floor lesson above: **a low-variance
+proxy makes small effects visible where the end-to-end outcome cannot.**
+n=5 was enough here because one-shot proposal quality has no compounding
+search randomness in it; the same five runs measured as search outcomes
+would have shown nothing at all.
+
 ### ngspice `show` is column-oriented, and the column is the only key
 
 `show m : id,vgs,gm,...` prints devices **three to a block**, one row per

@@ -64,6 +64,15 @@ No one has committed to these; they are recorded so the thought is not lost.
   meantime — run the suite from a copy of the tree, since `repo_root()`
   follows `paths.py` (CONTRIBUTING has the two lines) — which lowers the
   urgency without making the gap less real.
+- Follow up the operating-point result. One-shot proposals improve with the
+  data on cost (23/25 pairings, p=0.016) but do **not** fix the saturation
+  problem they describe, which was the declared metric and came back null.
+  Two readings survive and are worth separating, because they imply
+  different work: the model is reasoning about headroom, or the prompt
+  merely mentions that seven devices are marginal and that induces caution.
+  Keeping the proposed sizings and diffing them against the default would
+  tell — a conservative arm makes smaller moves. Cheap, and it decides
+  whether feeding operating points into the search loop is worth building.
 - Decide whether `llm_agent` earns its place beside `llm`. It exists on
   architectural grounds — the model chooses what to simulate rather than
   answering a fixed question per round — and deliberately carries no claim

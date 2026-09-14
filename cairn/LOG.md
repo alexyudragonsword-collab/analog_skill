@@ -10,10 +10,14 @@ This file records substantive progress in reverse-chronological order — newest
   emits 3.1 kB of gm/ID, gm/gds and Vds-Vdsat, worst device first.
 - Default amp_hoilee_affc: 7 of 30 devices out of saturation, six on one
   bias mirror. The nine metrics cannot express that.
-- **Claiming nothing about whether it helps.** Experiment running: both arms
-  asked for a fix, ground truth is the simulator counting devices out of
-  saturation afterwards. Chosen over search outcome because a count is not a
-  draw from the 33% spread — the lesson from the previous A/B, applied.
+- Result, n=5 per arm: the **declared** metric was null — both arms left
+  seven devices in triode (p=0.09), despite being told exactly which and
+  which variables size them. Cost, a secondary metric, separated cleanly
+  (23/25 pairings, U=2, p=0.016; medians 8.15 vs 14.41). Reported in that
+  order on purpose. A rival explanation stands: the prompt mentioning seven
+  marginal devices may just induce caution.
+- Both arms are far worse than the default sizing, so this ranks failure at
+  a hard one-shot task, not success.
 - Parser hazards: `cairn/pitfalls.md` -> "ngspice `show` is column-oriented".
 
 ## 2026-09-14 · Two gaps the llm/llm_agent comparison exposed
