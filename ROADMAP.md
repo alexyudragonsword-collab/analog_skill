@@ -61,6 +61,14 @@ No one has committed to these; they are recorded so the thought is not lost.
   isolate themselves this way (`_isolate_workspace`); the gap is that a
   whole run cannot. Small, but it turns a standing rule people must
   remember into something the code enforces.
+- Settle whether the LLM loop's per-metric feedback earns its place. It is
+  on by default as a judgment call, not a measured win: at n=3 vs n=4 on
+  `amp_hoilee_affc` the medians are 1.4954 with it and 1.3768 without, and
+  the no-feedback arm's own spread across four runs is 33%, so nothing is
+  resolvable. The interesting signal is variance, not mean — the arm with
+  feedback produced both the best run of the experiment and the worst.
+  Answering it properly costs dozens of runs per arm, several hours; worth
+  doing only alongside some other reason to burn that time.
 - Make the LLM-guided algorithm cheaper per round. Through the Claude Code
   CLI a round measures ~90 s against ~3.5 s for an evaluation, so a
   150-evaluation run is about an hour and the model calls are essentially

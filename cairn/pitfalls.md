@@ -238,6 +238,30 @@ configuration you have already run. Three of this session's measurements —
 haiku being slower, the schema being free, effort=low being fine — were
 large enough to survive a 5% floor. This one is not.
 
+**Correction, same day — the 4.6% floor was itself wrong, by about 7x.**
+Replicating to n=3 and n=4:
+
+| arm | runs (best cost, sorted) | median |
+|---|---|---|
+| with metrics | 1.2365 · 1.4954 · 2.8274 | 1.4954 |
+| cost only | 1.3182 · 1.3738 · 1.3798 · 1.7504 | 1.3768 |
+
+The `cost only` arm alone spans **33%** across four runs of one
+configuration. A two-run replicate does not measure spread, it samples it
+once — and the estimate it gives is a lower bound that reads like a
+measurement. Where the first pair happens to land close together, as here,
+it will talk you into believing far smaller effects than the setup can
+resolve.
+
+Separating an ~8% effect from a 33% spread needs on the order of (33/8)²
+more runs per arm — dozens, several hours of simulator and model time. That
+is the real price of the question, and worth knowing *before* deciding
+whether to ask it. The other thing the replicates showed is that the mean
+was the wrong statistic: the arms differ by 27% on means and by 8% on
+medians, because one run of three blew up (2.8274, with no LLM fallback in
+the log, so a genuine search failure). The interesting difference is in
+variance, and n=3 cannot establish that either.
+
 ### Monkeypatching the sizing package patches nothing
 
 `app/core/sizing/__init__.py` re-exports the package API. Rebinding an

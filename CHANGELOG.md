@@ -40,10 +40,28 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   `cost only` arm, and the two runs came out at 1.3182 and 1.3798 — **4.6%
   apart with nothing changed**.  So the effect here is 1.9x a noise range
   measured from a single pair, which is not a result in either direction.
-  What is kept, regardless: `score()` as the sum of `score_detail()` is
-  correct whether or not the model reads the breakdown, and the claim that
-  the loop was being handed one scalar is a fact about the design, not a
-  finding.  Replicates are running; the default may yet flip.
+  **Replicated to n=3 and n=4, and the answer is that this experiment
+  cannot answer it:**
+
+  | arm | runs (best cost, sorted) | median |
+  |---|---|---|
+  | with metrics | 1.2365 · 1.4954 · 2.8274 | 1.4954 |
+  | cost only | 1.3182 · 1.3738 · 1.3798 · 1.7504 | 1.3768 |
+
+  The best run of the entire experiment used the metric breakdown (1.2365);
+  so did the worst (2.8274), and no run hit an LLM fallback, so that was a
+  real search failure rather than a plumbing one.  The `cost only` arm's own
+  spread across four runs is 1.3182 to 1.7504 — **33%**, which retires the
+  4.6% noise figure estimated from the first two runs; a two-run replicate
+  understates spread badly.  Separating an ~8% effect from a 33% spread
+  needs on the order of (33/8)² more runs per arm — dozens, several hours.
+  The feature is kept as a **judgment call, explicitly not a measured win**:
+  the information-asymmetry argument stands on its own, no harm survives the
+  noise, and the extra cost is some cached input tokens.  The thing to watch
+  is variance rather than mean — this arm produced both tails.
+  Kept regardless of any of it: `score()` as the sum of `score_detail()` is
+  correct whether or not the model reads the breakdown, and the loop having
+  been handed one scalar is a fact about the design, not a finding.
   Also caught while making the change: `objective()`, which feeds Powell,
   returns `_safe_eval(...)` — which had just become a tuple.  The default
   algorithm would have broken.

@@ -17,7 +17,10 @@ This file records substantive progress in reverse-chronological order — newest
   But the earlier effort A/B's `low` arm is the same configuration as this
   one's `cost only` arm — 1.3182 vs 1.3798, **4.6% apart with nothing
   changed**. The effect is 1.9x that noise range, so one run per arm cannot
-  resolve it. Replicates running; the default may flip.
+  resolve it. Replicated to n=3/n=4: the cost-only arm alone spans 33%, so
+  the 4.6% floor was wrong by 7x — a two-run replicate samples spread, it
+  does not measure it. Feature kept as a judgment call, labelled as not a
+  measured win.
 - Details: `cairn/pitfalls.md` → "A scalar is the weakest feedback channel
   you can give a model".
 
