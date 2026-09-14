@@ -121,6 +121,30 @@ with the system prompt replaced and `--restricted` on, the prompt prefix
 carries ~34 k tokens of scaffolding; it caches for an hour, so the first
 call in a session is the expensive one and the rest read from cache.
 
+**Correction, 2026-09-14 — "4–6 s" was measured on a toy prompt and is not
+what this app's calls cost.** Re-measured on a real round of the sizing
+loop (`amp_hoilee_affc`: a 7.4 kB prompt with the netlist, asking for four
+candidate sizings across 33 variables):
+
+| | |
+|---|---|
+| with a JSON schema | 88 s |
+| without one | 112 s |
+
+Two things follow. The **schema is not the cost** — constrained decoding
+came back *faster* than freeform here, so a schema is free and the workload
+is what is expensive. And a 120 s timeout, which is what `chat()` defaults
+to, sits right on top of that distribution: the LLM algorithm would have
+timed out intermittently, retried for another two minutes, and fallen back
+to Sobol, quietly ceasing to be the LLM algorithm. The floor is 300 s.
+
+The knock-on is a user-visible one worth remembering when adding any
+provider: the Sizing tab estimated run time from `eval_seconds × budget`
+alone, which is right to within a rounding error for every other algorithm
+and wrong by a factor of thirty for this one. A transport whose latency is
+a hundred times an evaluation's is not just a slower transport; it changes
+which term dominates.
+
 ### Monkeypatching the sizing package patches nothing
 
 `app/core/sizing/__init__.py` re-exports the package API. Rebinding an

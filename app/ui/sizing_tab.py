@@ -7,6 +7,7 @@ panel and, on completion, the convergence curve plus the best metrics and
 sizing (exportable as a .PARAM file).
 """
 
+import math
 import threading
 
 from PySide6.QtCore import Qt
@@ -60,6 +61,7 @@ class SizingTab(QWidget, JobTabMixin):
             self.algo_combo.addItem('Optuna TPE', userData='optuna')
         self.algo_combo.addItem('LLM-guided (AI — configure in Settings)',
                                 userData='llm')
+        self.algo_combo.currentIndexChanged.connect(self._update_estimate)
 
         self.budget_spin = QSpinBox()
         self.budget_spin.setRange(10, 5000)
@@ -231,8 +233,19 @@ class SizingTab(QWidget, JobTabMixin):
         is_skill = spec.kind == 'skill'
         self.workers_spin.setEnabled(not is_skill)
         workers = 1 if is_skill else self.workers_spin.value()
-        secs = spec.eval_seconds * self.budget_spin.value() / workers
-        self._estimate.setText(f'≈ {secs / 60:.0f} min estimated')
+        budget = self.budget_spin.value()
+        secs = spec.eval_seconds * budget / workers
+        note = ''
+        if self.algo_combo.currentData() == 'llm':
+            # The simulations are the small half here.  One round is one LLM
+            # call plus min(workers, 4) evaluations, and the call can be a
+            # hundred times longer than an evaluation — an estimate counting
+            # only ngspice was reading "2 min" for an hour of work.
+            per_round = llm_client.round_seconds()
+            rounds = math.ceil(budget / max(1, min(workers, 4)))
+            secs += rounds * per_round
+            note = f'  ({rounds} AI rounds)'
+        self._estimate.setText(f'≈ {secs / 60:.0f} min estimated{note}')
 
     def _read_table(self) -> list:
         variables = []

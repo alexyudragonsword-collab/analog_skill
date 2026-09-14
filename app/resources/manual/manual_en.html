@@ -447,9 +447,14 @@ subscription you already have instead of an API key.  It needs the CLI
 installed and logged in (<code>npm i -g &#64;anthropic-ai/claude-code</code>,
 then run <code>claude</code> once); leave the path box empty to find it on
 PATH.  Put <code>sonnet</code>, <code>opus</code> or <code>haiku</code> in
-the Model box.  Two differences worth knowing: each call takes a few seconds
-longer than a direct API request, because a whole CLI starts up; and the
-calls draw on the same rate limit as your own Claude Code use.  The CLI is
+the Model box.  Two differences worth knowing.  <b>It is slower, and for the
+LLM-guided algorithm it is much slower</b>: a whole CLI starts up per call,
+and a real sizing round — a netlist plus four candidate sizings over 33
+variables — measured about 90 seconds, against a couple of seconds for a
+direct API request.  A 150-evaluation LLM run is therefore closer to an hour
+than to the simulation time alone; the estimate beside the Budget box counts
+those rounds.  And the calls draw on the same rate limit as your own Claude
+Code use.  The CLI is
 run with its tools switched off and with your own <code>CLAUDE.md</code>,
 hooks and MCP servers excluded, so it answers as a model and not as an agent
 on your machine.</p>

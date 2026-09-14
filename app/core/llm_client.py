@@ -173,9 +173,34 @@ _CLI_SAFE_FLAGS = (
     'Task,Agent,TodoWrite,Skill,SlashCommand,Bash,BashOutput,KillShell',
 )
 
-#: The CLI is a whole agent starting up, not a socket — a cold call runs
-#: several seconds before the model is even reached.
-CLI_MIN_TIMEOUT = 90.0
+#: The CLI is a whole agent starting up, not a socket, and the calls this
+#: app makes are not small.  Measured 2026-09-14 on amp_hoilee_affc — a
+#: 7.4 kB prompt asking for 4 candidate sizings over 33 variables, which is
+#: an ordinary round of the LLM algorithm, not a worst case:
+#:
+#:     with a JSON schema     88 s
+#:     without one           112 s
+#:
+#: chat()'s own default is 120 s, an HTTP-shaped number.  Left at that, a
+#: round on any wide circuit times out, retries (another two minutes), and
+#: then falls back to Sobol — so the LLM algorithm would quietly stop being
+#: the LLM algorithm.  The floor only ever raises a caller's timeout; a
+#: five-second call still returns in five seconds.
+CLI_MIN_TIMEOUT = 300.0
+
+#: Rough seconds per guided round — the LLM call itself, not the
+#: simulations it triggers — used only to keep the Sizing tab's time
+#: estimate from being wrong by an order of magnitude.  The claude_code
+#: figure is the measurement above; the default is a deliberately loose
+#: stand-in for the HTTP providers, which have not been measured here.
+ROUND_SECONDS = {'claude_code': 100.0}
+DEFAULT_ROUND_SECONDS = 15.0
+
+
+def round_seconds(cfg: dict | None = None) -> float:
+    """Seconds one LLM-guided round costs before any ngspice runs."""
+    cfg = cfg or get_config()
+    return ROUND_SECONDS.get(cfg.get('provider'), DEFAULT_ROUND_SECONDS)
 
 
 def _as_prompt(messages: list[dict]) -> str:
@@ -226,12 +251,19 @@ def _run_cli(argv: list[str], prompt: str, timeout: float) -> dict:
 
 
 def _chat_claude_code(messages: list[dict], system: str | None,
-                      timeout: float, cfg: dict) -> str:
+                      timeout: float, cfg: dict,
+                      schema: dict | None = None) -> str:
     """One completion through the locally installed Claude Code CLI.
 
     This is the subscription path: the CLI uses the login the user already
     has, so there is no API key to store or leak.  `max_tokens` has no
     equivalent flag and is ignored — the CLI's own limit applies.
+
+    A `schema` becomes --json-schema, which the CLI enforces at decode
+    time: the reply comes back as bare JSON with no prose and no ``` fence.
+    It goes on the command line, so it must stay small — the sizing schema
+    for the widest circuit (56 variables) is ~7 kB against Windows' ~32 kB
+    argv limit, and the prompt itself travels on stdin.
     """
     from app.core import claude_locator
     exe = claude_locator.resolve()
@@ -245,6 +277,8 @@ def _chat_claude_code(messages: list[dict], system: str | None,
             '--session-id', str(uuid.uuid4()),
             '--system-prompt', system or 'You are a helpful assistant.',
             *_CLI_SAFE_FLAGS]
+    if schema is not None:
+        argv += ['--json-schema', json.dumps(schema)]
     data = _run_cli(argv, _as_prompt(messages),
                     max(timeout, CLI_MIN_TIMEOUT))
     if data.get('is_error'):
@@ -263,14 +297,24 @@ def _chat_claude_code(messages: list[dict], system: str | None,
 
 def chat(messages: list[dict], system: str | None = None,
          timeout: float = 120.0, max_tokens: int = 2048,
-         cfg: dict | None = None) -> str:
+         cfg: dict | None = None, schema: dict | None = None) -> str:
     """One chat completion.  messages: [{'role': 'user'|'assistant',
-    'content': str}, ...] (oldest first).  Returns the reply text."""
+    'content': str}, ...] (oldest first).  Returns the reply text.
+
+    `schema` is a JSON Schema the reply should conform to.  It is a
+    **request, not a guarantee**: a provider that can enforce it does, and
+    one that cannot ignores it silently.  Callers must therefore keep
+    parsing defensively — `extract_json` still has to work — because the
+    same code runs against every provider.  Today only Claude Code
+    enforces it; the HTTP providers have their own mechanisms
+    (response_format, tool use) and can be taught later without any caller
+    changing.
+    """
     cfg = cfg or get_config()
     if not configured(cfg):
         raise not_configured_error(cfg)
     if cfg['provider'] == 'claude_code':
-        return _chat_claude_code(messages, system, timeout, cfg)
+        return _chat_claude_code(messages, system, timeout, cfg, schema)
     base = (cfg['base_url'] or DEFAULT_BASE[cfg['provider']]).rstrip('/')
     if cfg['provider'] == 'anthropic':
         data = _post_json(

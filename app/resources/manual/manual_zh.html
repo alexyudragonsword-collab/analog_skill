@@ -353,9 +353,11 @@ API key(本地端点可留空)、
 <p><b>Claude Code CLI</b> 是第三个选项:用你已有的 Claude 订阅,而不是
 API key。需要先装好 CLI 并登录过(<code>npm i -g &#64;anthropic-ai/claude-code</code>,
 然后跑一次 <code>claude</code>);路径框留空则自动在 PATH 上找。Model 填
-<code>sonnet</code>、<code>opus</code> 或 <code>haiku</code>。两点要知道:每次
-调用比直连 API 多几秒(要启动一整个 CLI);以及这些调用和你自己用 Claude Code
-共享同一份用量额度。CLI 是在关掉全部工具、并排除你自己的 <code>CLAUDE.md</code>、
+<code>sonnet</code>、<code>opus</code> 或 <code>haiku</code>。两点要知道。<b>它更慢,用在 LLM 引导算法上会慢很多</b>:每次调用要
+启动一整个 CLI,而一轮真实的 sizing —— 一份网表加 33 个变量上的四组候选尺寸
+—— 实测约 90 秒,直连 API 只要两三秒。所以一次 150 次评估的 LLM 优化,总时间
+更接近一小时,而不是仿真时间本身;Budget 旁边的预估已经把这些轮次算进去了。
+以及这些调用和你自己用 Claude Code 共享同一份用量额度。CLI 是在关掉全部工具、并排除你自己的 <code>CLAUDE.md</code>、
 hooks 与 MCP server 的前提下启动的 —— 它在这里只当模型用,不是一个在你机器上
 自由行动的 agent。</p>
 

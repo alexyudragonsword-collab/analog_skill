@@ -441,3 +441,108 @@ def test_claude_locator_only_reports_ok_for_a_binary_that_answers(monkeypatch):
     bad = type('R', (), {'stdout': '', 'stderr': '', 'returncode': 127})
     monkeypatch.setattr(subprocess, 'run', lambda *a, **kw: bad())
     assert not claude_locator.locate().ok
+
+
+# ── structured output ────────────────────────────────────────────────────────
+def test_schema_reaches_the_cli_and_is_optional(monkeypatch):
+    """chat(schema=...) is a request, not a guarantee: the provider that can
+    enforce it does, and callers still parse defensively because the same
+    code runs against providers that cannot."""
+    seen = _fake_cli(monkeypatch, result='{}')
+    llm_client.chat([{'role': 'user', 'content': 'q'}], cfg=_cc_cfg())
+    assert '--json-schema' not in seen['argv']       # omitted when unused
+
+    seen = _fake_cli(monkeypatch, result='{}')
+    llm_client.chat([{'role': 'user', 'content': 'q'}], cfg=_cc_cfg(),
+                    schema={'type': 'object'})
+    sent = seen['argv'][seen['argv'].index('--json-schema') + 1]
+    assert json.loads(sent) == {'type': 'object'}
+
+
+def test_schema_is_ignored_rather_than_sent_to_a_provider_that_cannot(
+        monkeypatch):
+    """The HTTP providers have their own mechanisms and have not been taught
+    this one.  Passing schema must not leak into the request body, where it
+    would be an unknown field."""
+    seen = {}
+
+    def fake_post(url, headers, payload, timeout):
+        seen.update(payload=payload)
+        return {'choices': [{'message': {'content': 'hi'}}]}
+
+    monkeypatch.setattr(llm_client, '_post_json', fake_post)
+    llm_client.chat([{'role': 'user', 'content': 'q'}], cfg=CFG_OPENAI,
+                    schema={'type': 'object'})
+    assert 'schema' not in seen['payload']
+    assert 'json_schema' not in seen['payload']
+
+
+def test_candidates_schema_demands_every_variable(monkeypatch):
+    """The whole point.  A candidate missing one of 33 long key names is
+    dropped silently by _parse_candidates; the schema makes it unbuildable."""
+    import numpy as np
+    from app.core import llm_sizing
+    names = ['W_IN', 'L_IN', 'CURRENT_0_BIAS']
+    lo, hi = np.array([1.0, 0.15, 5e-6]), np.array([10.0, 4.0, 8e-5])
+    s = llm_sizing.candidates_schema(names, lo, hi, 4)
+    item = s['properties']['candidates']['items']
+    assert item['required'] == names          # all of them, not a subset
+    assert item['additionalProperties'] is False
+    assert item['properties']['CURRENT_0_BIAS'] == {
+        'type': 'number', 'minimum': 5e-6, 'maximum': 8e-5}
+    assert s['properties']['candidates']['maxItems'] == 4
+
+
+def test_setup_schema_is_partial_on_purpose():
+    """suggest_setup asks for "only variables worth changing", so requiring
+    every name would be wrong.  What it does pin down is that a suggestion
+    cannot name a variable this circuit does not have."""
+    from app.core import llm_sizing
+    s = llm_sizing.setup_schema(['W_IN', 'L_IN'])
+    variables = s['properties']['variables']
+    assert 'required' not in variables         # partial is allowed
+    assert variables['additionalProperties'] is False
+    assert set(variables['properties']) == {'W_IN', 'L_IN'}
+
+
+def test_run_loop_asks_for_the_schema_of_the_circuit_it_is_sizing(monkeypatch):
+    """Built per round from that circuit's own variables — a schema for the
+    wrong circuit would reject every candidate."""
+    import numpy as np
+    from app.core import llm_sizing
+    from app.core.sizing.spec import VarSpec
+    variables = [
+        VarSpec(name='W_IN', default=5.0, lo=1.0, hi=10.0, is_int=False),
+        VarSpec(name='L_IN', default=0.5, lo=0.15, hi=4.0, is_int=False)]
+    seen = {}
+
+    def fake_chat(messages, system=None, schema=None, **kw):
+        seen['schema'] = schema
+        return json.dumps({'rationale': 'r',
+                           'candidates': [{'W_IN': 6.0, 'L_IN': 0.6}]})
+
+    state = {'best': 1.0, 'best_x': None, 'cancel': False, 'dispatched': 0}
+
+    def run_batch(points):
+        state['dispatched'] += len(points)
+        return [1.0] * len(points)
+
+    llm_sizing.run_loop('amp_hoilee_affc', variables, None, state=state,
+                        run_batch=run_batch, budget=3, workers=1,
+                        chat=fake_chat)
+    assert seen['schema'] is not None
+    assert seen['schema']['properties']['candidates']['items']['required'] \
+        == ['W_IN', 'L_IN']
+    assert np.isclose(
+        seen['schema']['properties']['candidates']['items'][
+            'properties']['W_IN']['maximum'], 10.0)
+
+
+def test_cli_timeout_floor_covers_a_real_sizing_round(monkeypatch):
+    """chat()'s 120 s default is an HTTP-shaped number.  A measured round on
+    a 33-variable circuit takes 88-112 s through the CLI, so at 120 s the
+    LLM algorithm would time out, retry, and fall back to Sobol — quietly
+    ceasing to be the LLM algorithm."""
+    seen = _fake_cli(monkeypatch, result='{}')
+    llm_client.chat([{'role': 'user', 'content': 'q'}], cfg=_cc_cfg())
+    assert seen['timeout'] >= 120.0 * 2

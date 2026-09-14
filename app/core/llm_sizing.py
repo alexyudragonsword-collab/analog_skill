@@ -93,6 +93,72 @@ def _ask_candidates(k: int, names: list[str]) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Closed-loop optimizer (called from sizing.optimize, algo='llm')
 # ─────────────────────────────────────────────────────────────────────────────
+def candidates_schema(names, lo, hi, k: int) -> dict:
+    """JSON Schema for one round's reply, built from this circuit's own
+    variables.
+
+    The point is `required`: a candidate has to carry every variable name,
+    and the median circuit has 24 of them (``ldo_2`` has 56, up to 26
+    characters each).  Asking a model to restate that list verbatim, four
+    times a round, for the ~37 rounds a 150-evaluation budget takes, is a
+    bet it loses eventually — and _parse_candidates drops an incomplete
+    candidate *silently*.  A schema makes the shape unforgeable instead of
+    hoped for.
+
+    The bounds go in too, so the model stops spending proposals outside
+    the box only to have them clipped onto an edge.
+    """
+    return {
+        'type': 'object',
+        'additionalProperties': False,
+        'required': ['rationale', 'candidates'],
+        'properties': {
+            'rationale': {'type': 'string'},
+            'candidates': {
+                'type': 'array', 'minItems': 1, 'maxItems': k,
+                'items': {
+                    'type': 'object',
+                    'additionalProperties': False,
+                    'required': list(names),
+                    'properties': {
+                        n: {'type': 'number', 'minimum': float(a),
+                            'maximum': float(b)}
+                        for n, a, b in zip(names, lo, hi, strict=True)},
+                },
+            },
+        },
+    }
+
+
+def setup_schema(names) -> dict:
+    """JSON Schema for suggest_setup's reply.
+
+    Unlike a candidate this one is deliberately partial — the prompt asks
+    for "only variables worth changing" — so there is no `required` list of
+    names.  What the schema buys here is `additionalProperties: False` on
+    the variables map: a suggestion for a name that is not in this circuit
+    is dropped silently today, and now cannot be produced.
+    """
+    entry = {
+        'type': 'object', 'additionalProperties': False,
+        'required': ['init', 'lo', 'hi'],
+        'properties': {k: {'type': 'number'} for k in ('init', 'lo', 'hi')},
+    }
+    return {
+        'type': 'object',
+        'additionalProperties': False,
+        'required': ['rationale', 'variables'],
+        'properties': {
+            'rationale': {'type': 'string'},
+            'budget': {'type': 'integer'},
+            'variables': {
+                'type': 'object', 'additionalProperties': False,
+                'properties': {n: entry for n in names},
+            },
+        },
+    }
+
+
 def _parse_candidates(reply: str, names, lo, hi, k: int) -> list[np.ndarray]:
     """LLM reply → ≤ k normalized points (clipped into the box)."""
     doc = llm_client.extract_json(reply)
@@ -152,7 +218,8 @@ def run_loop(circuit: str, variables: list[VarSpec], overrides,
         points, note = None, ''
         for _ in range(2):                      # one retry on a bad reply
             try:
-                reply = chat(messages, system=_SYSTEM)
+                reply = chat(messages, system=_SYSTEM,
+                             schema=candidates_schema(names, lo, hi, k))
                 points = _parse_candidates(reply, names, lo, hi, k)
                 messages.append({'role': 'assistant', 'content': reply})
                 break
@@ -223,7 +290,8 @@ def suggest_setup(circuit: str, variables: list[VarSpec],
                 '"budget": <int>, '
                 '"variables": {"<name>": {"init": x, "lo": x, "hi": x}, '
                 '...}} — only include variables worth changing.')
-    reply = chat([{'role': 'user', 'content': prompt}], system=_SYSTEM)
+    reply = chat([{'role': 'user', 'content': prompt}], system=_SYSTEM,
+                 schema=setup_schema([v.name for v in variables]))
     doc = llm_client.extract_json(reply)
     if not isinstance(doc, dict):
         raise llm_client.LLMError('advice reply was not a JSON object')

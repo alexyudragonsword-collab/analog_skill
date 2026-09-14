@@ -350,3 +350,29 @@ def test_gmid_failed_rebuild_stops_the_old_table_answering(window):
     assert tab._tbl is None and tab._curves is None
     assert not tab.size_btn.isEnabled() and not tab.lk_btn.isEnabled()
     assert 'OSError: no such model' in tab._range_lbl.text()
+
+
+# ── the Sizing tab's time estimate ───────────────────────────────────────────
+def test_estimate_counts_the_ai_rounds_not_just_the_simulations(window,
+                                                                monkeypatch):
+    """An LLM round is one model call plus min(workers, 4) evaluations, and
+    the call can outlast an evaluation by two orders of magnitude.  Counting
+    only ngspice read "2 min" for something closer to an hour."""
+    from app.core import llm_client
+    monkeypatch.setattr(llm_client, 'round_seconds', lambda cfg=None: 100.0)
+    tab = window.sizing_tab
+    tab.circuit_combo.setCurrentIndex(
+        tab.circuit_combo.findData('amp_hoilee_affc'))
+    tab.budget_spin.setValue(150)
+    tab.workers_spin.setValue(4)
+
+    tab.algo_combo.setCurrentIndex(tab.algo_combo.findData('sobol_powell'))
+    sims_only = tab._estimate.text()
+
+    tab.algo_combo.setCurrentIndex(tab.algo_combo.findData('llm'))
+    with_ai = tab._estimate.text()
+
+    assert 'AI rounds' in with_ai and 'AI rounds' not in sims_only
+    assert '38 AI rounds' in with_ai            # ceil(150 / 4)
+    minutes = lambda s: int(s.split('≈')[1].split('min')[0].strip())
+    assert minutes(with_ai) > minutes(sims_only) * 10

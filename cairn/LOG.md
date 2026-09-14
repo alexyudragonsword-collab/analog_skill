@@ -2,6 +2,23 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-14 · Structured output, and the latency it uncovered
+
+- `chat(schema=...)` added as a request-not-guarantee: Claude Code enforces
+  it with `--json-schema`, HTTP providers ignore it and keep parsing
+  defensively, callers stay provider-agnostic. Schemas are built per circuit
+  from its own variables — up to 56 names that a candidate previously had to
+  restate verbatim or be dropped in silence.
+- Verified live: 4/4 candidates, 0 missing keys, bare JSON with no fence.
+- **The measurement mattered more than the feature.** A real round costs
+  88 s with a schema and 112 s without — so the schema is free, and
+  `chat()`'s 120 s default was about to make the LLM algorithm fall back to
+  Sobol on every wide circuit. Floor raised to 300 s; the Sizing tab's time
+  estimate, which counted only ngspice, was reading "2 min" for an hour.
+- Corrected the "4-6 s per call" figure recorded yesterday — it was a toy
+  prompt. Correction appended, not overwritten: `cairn/pitfalls.md` → "A CLI
+  agent is not a chat endpoint until you disarm it".
+
 ## 2026-09-14 · AI features can run on a Claude subscription
 
 - Third LLM provider: the locally installed Claude Code CLI, driven through

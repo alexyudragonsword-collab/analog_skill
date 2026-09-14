@@ -53,6 +53,15 @@ No one has committed to these; they are recorded so the thought is not lost.
   topologies have no import path.
 - macOS packaging. The test matrix runs on macOS, but no macOS build job
   exists — only Windows and Linux artifacts are produced.
+- Make the LLM-guided algorithm cheaper per round. Through the Claude Code
+  CLI a round measures ~90 s against ~3.5 s for an evaluation, so a
+  150-evaluation run is about an hour and the model calls are essentially
+  all of it. Levers, none tried: a smaller model for the loop and a large
+  one only for `suggest_setup`; more workers so each round proposes more
+  points; or keeping one CLI session alive with `--resume` instead of
+  paying the cold start every round — that last one would make `chat()`
+  stateful, which is exactly the trade rejected when the provider was
+  added, so it needs a better reason than speed alone.
 
 ## Decided against
 

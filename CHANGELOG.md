@@ -7,6 +7,37 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## Unreleased
 
+- **Added — `chat(schema=...)`, so a reply's shape can be enforced instead
+  of hoped for.**  The LLM sizing loop asks for candidates as JSON, and
+  `_parse_candidates` requires every candidate to carry every variable name
+  verbatim — 24 for the median circuit, **56 for `ldo_2`**, names like
+  `MOSFET_0_8_L_BIASCM_PMOS`.  A candidate missing one key is dropped
+  *silently*; if all of them are, the round retries once and then falls back
+  to random Sobol samples, spending real evaluation budget on unguided
+  points.  Over the ~37 rounds a 150-evaluation run takes, that is a bet the
+  model loses eventually.  A JSON Schema built from the circuit's own
+  variables makes the shape unbuildable-wrong, and carries the per-variable
+  bounds too, so proposals stop landing outside the box only to be clipped
+  onto an edge.  `suggest_setup` gets a schema as well — a partial one, since
+  it asks for "only variables worth changing", but one that stops it naming
+  a variable the circuit does not have.
+  The parameter is a **request, not a guarantee**: Claude Code enforces it
+  via `--json-schema`, the HTTP providers ignore it for now and keep their
+  `extract_json` path, and no caller has to know which is which.
+- **Fixed — the LLM algorithm would have timed out on any wide circuit.**
+  Measured on `amp_hoilee_affc` (33 variables, a 7.4 kB prompt, four
+  candidates asked for): **88 s with a schema, 112 s without**.  `chat()`
+  defaults to a 120 s timeout, so a round would intermittently time out,
+  retry for another two minutes, and then fall back to Sobol — the LLM
+  algorithm quietly ceasing to be the LLM algorithm.  The CLI provider's
+  timeout floor goes from 90 s to 300 s.  Also worth recording: the schema
+  turned out to be *faster* than freeform, so this is the cost of the
+  workload, not of the constraint.
+- **Fixed — the Sizing tab's time estimate ignored the AI.**  It counted
+  `eval_seconds x budget / workers` and read "≈ 2 min" for an LLM run whose
+  ~38 model calls take closer to an hour.  It now adds the rounds and says
+  how many.
+
 - **Added — the AI features can run on a Claude subscription instead of an
   API key.**  A third provider, *Claude Code CLI*, drives the locally
   installed `claude` binary, which already carries the user's own login.
