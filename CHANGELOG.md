@@ -7,6 +7,32 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## Unreleased
 
+- **Added — `sizing.operating_points()`, the layer under the nine metrics.**
+  The metrics say *that* a sizing failed; the operating point says *why* —
+  which device left saturation, which one is starved, where the headroom
+  went.  It is the first thing a designer looks at and the one thing the LLM
+  path has never been shown.  Captured by injecting `op` and a targeted
+  `show` into the rendered control block, the same seam that already carries
+  `set num_threads=1` and `wrdata`, so no vendored testbench is touched.
+  Three things make it usable rather than a dump.  `show all` on this
+  amplifier is **3.6 MB** and even `show m : id,vgs,vds,vdsat,vth,gm,gds` is
+  37 kB of three-column blocks, so the output is parsed and re-emitted as
+  one line per device — **3.1 kB** — carrying the ratios a sizing decision
+  turns on (gm/ID, gm/gds, Vds−Vdsat) rather than raw volts and siemens.
+  Devices are sorted worst-first, so truncation drops the ones nobody needed.
+  And each line names the *variable* that sizes that device, read out of the
+  netlist (`xm10 ... w='MOSFET_9_2_W_gm1_PMOS'`), because an operating point
+  attributed to `xm10` is not something the model can act on.
+  On the default `amp_hoilee_affc` sizing it reports 7 of 30 devices out of
+  saturation, six of them on one bias mirror, with gm/gds of 1–3 against
+  57–79 for the healthy ones.
+  **Whether the model uses it is being measured** and this entry claims
+  nothing about that.  The experiment deliberately does not measure search
+  outcome — a 33% run-to-run spread swallows anything that subtle — but asks
+  both arms for a sizing and counts, in the simulator, how many devices end
+  up out of saturation.  That is what the extra information is about, and it
+  is a count rather than a draw.
+
 - **Fixed — Cancel could not reach an agentic run.**  `llm_agent` is one CLI
   invocation that may be the entire search, and `subprocess.run()` offers no
   way in once it has started: pressing Cancel stopped `run_batch` accepting

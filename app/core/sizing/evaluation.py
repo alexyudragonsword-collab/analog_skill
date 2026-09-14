@@ -449,3 +449,167 @@ def netlist_texts(circuit: str, values: dict | None = None) \
         out.append((f'variables ({spec.variables})',
                     _variables_path(spec).read_text(errors='replace')))
     return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Operating points
+#
+# The nine metrics say *that* a sizing failed; the operating point says
+# *why* — which device left saturation, which one is starved, where the
+# headroom went.  That is the first thing a designer looks at and the one
+# thing the LLM path has never been shown.
+#
+# Captured behind a flag and formatted rather than dumped: `show all` on
+# this amplifier is 3.6 MB, and even a targeted `show m : ...` is 37 kB of
+# three-column blocks.  What survives is one line per device with the
+# quantities a sizing decision actually turns on.
+# ─────────────────────────────────────────────────────────────────────────────
+_OP_BEGIN, _OP_END = '---ANALOG-OP-BEGIN---', '---ANALOG-OP-END---'
+
+#: What to ask ngspice for.  id/vgs/vds/vdsat/vth/gm/gds are enough to
+#: derive gm/ID, intrinsic gain and saturation headroom; everything else
+#: `show` offers (capacitances, leakages, junction terms) is weight.
+_OP_PARAMS = 'id,vgs,vds,vdsat,vth,gm,gds'
+
+_OP_INJECT = (f'.control\nop\necho {_OP_BEGIN}\n'
+              f'show m : {_OP_PARAMS}\necho {_OP_END}\n')
+
+#: `xm10 d g s b model l='VAR_L' w='VAR_W*1' m='VAR_M'`
+_DEVICE_LINE = re.compile(
+    r"(?im)^\s*(x?m\w+)\b[^\n]*?"
+    r"\bl\s*=\s*'([^']+)'[^\n]*?\bw\s*=\s*'([^']+)'")
+
+
+def device_variable_map(spec: SizingSpec) -> dict[str, dict]:
+    """instance name -> the design variables that size it.
+
+    Without this an operating point names `xm10`, which the model cannot
+    act on: the thing it is allowed to change is called
+    MOSFET_9_2_W_gm1_PMOS.  The netlist carries both on the same line.
+    """
+    try:
+        text = (_pkg_root(spec) / spec.kind / 'netlist'
+                / spec.netlist).read_text(errors='replace')
+    except OSError:
+        return {}
+    def _clean(expr: str) -> str:
+        # the netlists write w='VAR*1'; the variable is what matters
+        return re.split(r'[*/+\-\s]', expr.strip(), maxsplit=1)[0]
+
+    out = {}
+    for inst, lvar, wvar in _DEVICE_LINE.findall(text):
+        out[inst.lower()] = {'L': _clean(lvar), 'W': _clean(wvar)}
+    return out
+
+
+def parse_show(text: str) -> dict[str, dict]:
+    """ngspice `show` output -> {instance: {param: float}}.
+
+    `show` prints devices three to a block, one row per parameter, so the
+    column index is the only thing tying a number to a device.
+    """
+    a, b = text.find(_OP_BEGIN), text.find(_OP_END)
+    if a < 0 or b <= a:
+        return {}
+    out: dict[str, dict] = {}
+    names: list[str] = []
+    for line in text[a:b].splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        if parts[0] == 'device':
+            # m.xop5.xm14.msky130_f -> xm14
+            names = []
+            for tok in parts[1:]:
+                bits = [p for p in tok.split('.') if p.startswith(('xm', 'm'))]
+                names.append(bits[-2].lower() if len(bits) >= 2
+                             else tok.split('.')[-1].lower())
+            continue
+        if not names or parts[0] not in _OP_PARAMS.split(','):
+            continue
+        key = parts[0]
+        for name, raw in zip(names, parts[1:], strict=False):
+            try:
+                out.setdefault(name, {})[key] = float(raw)
+            except ValueError:
+                pass
+    return out
+
+
+def format_operating_points(spec: SizingSpec, ops: dict,
+                            vmap: dict | None = None, limit: int = 40) -> str:
+    """One line per device, in trouble-first order.
+
+    Raw `show` output is columns of volts and siemens; what a sizing
+    decision turns on is the ratios.  gm/ID says which inversion region a
+    device is biased in, gm/gds is the intrinsic gain it can contribute,
+    and Vds-Vdsat is the headroom that decides whether it is still a
+    current source at all.  A device in triode is the single most useful
+    thing to know and the hardest to infer from the nine metrics.
+
+    Sorted worst-headroom first so that truncation drops the devices
+    nobody needed to hear about.
+    """
+    vmap = vmap or {}
+    rows = []
+    for inst, p in ops.items():
+        idr, gm, gds = abs(p.get('id', 0.0)), abs(p.get('gm', 0.0)), \
+            abs(p.get('gds', 0.0))
+        vds, vdsat = abs(p.get('vds', 0.0)), abs(p.get('vdsat', 0.0))
+        on = abs(p.get('vgs', 0.0)) > abs(p.get('vth', 0.0))
+        head = vds - vdsat
+        region = 'OFF' if not on else ('sat' if head > 0 else 'TRIODE')
+        rows.append({
+            'inst': inst, 'region': region, 'head': head,
+            'gm_id': gm / idr if idr > 1e-15 else float('inf'),
+            'gain': gm / gds if gds > 1e-18 else float('inf'),
+            'id': idr,
+            'w': (vmap.get(inst) or {}).get('W', ''),
+        })
+    # OFF and TRIODE first, then the thinnest margins
+    rank = {'OFF': 0, 'TRIODE': 1, 'sat': 2}
+    rows.sort(key=lambda r: (rank[r['region']], r['head']))
+    out = []
+    for r in rows[:limit]:
+        out.append(
+            f"{r['inst']:<6} {r['region']:<6} "
+            f"Vds-Vdsat {r['head']:+.3f} V  "
+            f"gm/ID {r['gm_id']:5.1f}  gm/gds {r['gain']:6.0f}  "
+            f"Id {r['id']:.3g} A"
+            + (f"  W={r['w']}" if r['w'] else ''))
+    if len(rows) > limit:
+        out.append(f'... {len(rows) - limit} more, all saturated')
+    bad = sum(1 for r in rows if r['region'] != 'sat')
+    head = (f'{len(rows)} devices, {bad} not in saturation'
+            if bad else f'{len(rows)} devices, all in saturation')
+    return head + '\n' + '\n'.join(out)
+
+
+def operating_points(circuit: str, values: dict, slot: int = 0) -> str:
+    """Simulate one sizing and return its operating point as readable text.
+
+    A separate run from evaluate(): the `op` and `show` go in their own
+    deck so the measured metrics are never perturbed by an extra analysis
+    in the middle of the control block.  Costs one more ngspice invocation,
+    which is why this is on demand rather than part of every evaluation.
+    """
+    spec = SIZING[circuit]
+    if spec.kind == 'skill':
+        return 'operating points are only available for SPICE circuits'
+    paths.ensure_sky130()
+    run = _run_dir(circuit) if slot == 0 else _run_dir(circuit) / f'w{slot}'
+    run = run / 'op'
+    run.mkdir(parents=True, exist_ok=True)
+    _write_params(spec, values, run / 'params.spice')
+    tb = _render_testbench(spec, run, single_thread=True)
+    deck = run / 'op_probe.cir'
+    deck.write_text(tb.read_text().replace('.control', _OP_INJECT, 1))
+    try:
+        r = subprocess.run([_ngspice_cmd(), '-b', str(deck)], cwd=run,
+                           capture_output=True, text=True, timeout=300)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f'operating point capture failed: {exc}'
+    ops = parse_show((r.stdout or '') + (r.stderr or ''))
+    if not ops:
+        return 'operating point capture produced nothing'
+    return format_operating_points(spec, ops, device_variable_map(spec))

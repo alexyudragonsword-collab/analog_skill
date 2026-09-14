@@ -795,3 +795,64 @@ def test_diff_evolution_micro():
                           algo='diff_evolution', workers=2)
     assert run.evals <= 8
     assert run.best_cost <= run.initial_cost
+
+
+def test_show_parser_keeps_devices_and_columns_aligned():
+    """ngspice prints `show` three devices to a block, one row per
+    parameter, so the *column index* is the only thing tying a number to a
+    device.  Get that wrong and every operating point is attributed to the
+    wrong transistor — which reads as plausible physics, not as a bug."""
+    text = (
+        'noise\n---ANALOG-OP-BEGIN---\n'
+        ' BSIM4v5: Berkeley Short Channel IGFET Model-4\n'
+        '     device m.xop5.xm14.msky130_f m.xop5.xm19.msky130_f\n'
+        '      model xop5.xm14:sky130_fd_p xop5.xm19:sky130_fd_p\n'
+        '         id           1.0e-05           2.0e-05\n'
+        '        vds          0.60              0.09\n'
+        '      vdsat          0.11              0.12\n'
+        '        vth          0.63              0.61\n'
+        '        vgs          0.70              0.70\n'
+        '         gm          3.0e-04           2.0e-04\n'
+        '        gds          2.0e-06           9.0e-05\n'
+        '---ANALOG-OP-END---\ntrailing junk\n')
+    from app.core.sizing import evaluation as ev
+    ops = ev.parse_show(text)
+    assert set(ops) == {'xm14', 'xm19'}
+    assert ops['xm14']['id'] == 1.0e-05 and ops['xm19']['id'] == 2.0e-05
+    assert ops['xm19']['vds'] == 0.09            # second column, not first
+    assert ev.parse_show('nothing here') == {}   # no markers, no guessing
+
+
+def test_operating_point_text_flags_devices_out_of_saturation():
+    """A device in triode is the most useful thing the nine metrics cannot
+    say, so it has to survive both the sort and any truncation."""
+    from app.core.sizing import evaluation as ev
+    ops = {
+        'xm1': {'id': 2e-5, 'gm': 1e-4, 'gds': 3e-7, 'vds': 1.3,
+                'vdsat': 0.35, 'vgs': 1.3, 'vth': 0.96},          # sat
+        'xm2': {'id': 2e-5, 'gm': 1e-4, 'gds': 1e-4, 'vds': 0.10,
+                'vdsat': 0.35, 'vgs': 1.3, 'vth': 0.96},          # triode
+        'xm3': {'id': 1e-9, 'gm': 1e-9, 'gds': 1e-12, 'vds': 1.0,
+                'vdsat': 0.30, 'vgs': 0.10, 'vth': 0.96},         # off
+    }
+    spec = sizing.SIZING['amp_hoilee_affc']
+    text = ev.format_operating_points(spec, ops, {'xm2': {'W': 'W_TAIL'}})
+    head, *lines = text.splitlines()
+    assert '2 not in saturation' in head
+    assert lines[0].startswith('xm3') and 'OFF' in lines[0]     # worst first
+    assert 'TRIODE' in lines[1] and 'W=W_TAIL' in lines[1]      # actionable
+    assert lines[2].startswith('xm1') and 'sat' in lines[2]
+    assert 'gm/ID   5.0' in lines[2]            # 1e-4 / 2e-5
+
+
+def test_device_variable_map_reads_the_netlist_not_a_guess():
+    """An operating point names `xm10`; the thing the model may change is
+    called MOSFET_9_2_W_gm1_PMOS.  The netlist carries both on one line,
+    and several devices deliberately share one variable (a mirror bank)."""
+    from app.core.sizing import evaluation as ev
+    vmap = ev.device_variable_map(sizing.SIZING['amp_hoilee_affc'])
+    assert vmap['xm10'] == {'L': 'MOSFET_9_2_L_gm1_PMOS',
+                            'W': 'MOSFET_9_2_W_gm1_PMOS'}   # the `*1` is gone
+    shared = [d for d, v in vmap.items()
+              if v['W'] == 'MOSFET_0_8_W_BIASCM_PMOS']
+    assert len(shared) > 1, 'a mirror bank shares one variable'

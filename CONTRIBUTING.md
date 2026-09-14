@@ -35,7 +35,7 @@ python -m pytest app/tests/ -v
 python -m ruff check .
 ```
 
-**Tests.** ~175 of them, about 2 minutes, because most of them run real
+**Tests.** ~180 of them, about 2 minutes, because most of them run real
 ngspice rather than mocking it. Tests that need the simulator skip themselves
 when it is absent (`needs_ngspice`), so a run without ngspice is still worth
 something but proves much less.
@@ -56,6 +56,21 @@ Two more things to know before you debug a failure:
   user-data store, so a second concurrent run produces failures that look real
   and are not (`KeyError: 'dcgain'`, saved-run counts off by the other run's
   runs). If a failure surprises you, re-run that test alone first.
+
+  When you need the suite *while* something long is running — a sizing
+  experiment, a soak — copy the tree and run it there. `paths.repo_root()`
+  is derived from `app/paths.py`'s own location, so a copy gets its own
+  `app_output/` and the two never meet:
+
+  ```bash
+  tar -c --exclude=.git --exclude=app_output --exclude=__pycache__ . \
+      | tar -x -C /tmp/gate-copy
+  cd /tmp/gate-copy && python -m pytest app/tests/ -q
+  ```
+
+  53 MB and a few seconds. It is a workaround, not the fix — see
+  `ROADMAP.md` on `init_runtime()` honouring an `ANALOG_WORK_DIR` that is
+  already set.
 - **Patch where the name is looked up.** `app/core/sizing/__init__.py`
   re-exports the package's API; rebinding an attribute there does not affect
   the submodule that calls it. Patch `sizing.optimizer.evaluate`, not

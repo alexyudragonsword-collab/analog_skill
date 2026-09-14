@@ -44,6 +44,7 @@ from app.core.sizing.assets import (
     user_circuits_dir,
 )
 from app.core.sizing.evaluation import (
+    operating_points,
     _run_dir, capture_waves, evaluate, netlist_texts,
 )
 from app.core.sizing.optimizer import optimize, optuna_available

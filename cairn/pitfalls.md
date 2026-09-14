@@ -293,6 +293,38 @@ Three things worth keeping:
   elsewhere in this file, and the same cause: shared scratch space with no
   owner.
 
+### ngspice `show` is column-oriented, and the column is the only key
+
+`show m : id,vgs,gm,...` prints devices **three to a block**, one row per
+parameter:
+
+```
+     device m.xop5.xm14.msky130_f m.xop5.xm19.msky130_f m.xop5.xm13.msky130_f
+         id           1.99231e-05           1.99231e-05           1.99231e-05
+        vds              0.602269              0.094204              0.602269
+```
+
+Nothing in a value row says which device it belongs to. The position does.
+Get the alignment wrong — by one column, or by mis-splitting the dotted
+instance path — and every operating point is attributed to the wrong
+transistor. That does not look like a bug: it looks like a plausible
+amplifier with a surprising bias point, and it would go into a prompt as
+fact.
+
+Two related traps in the same output:
+
+- The instance name is `m.xop5.xm14.msky130_f`; the netlist calls it
+  `xm14`. The useful token is second from the end, not last.
+- `show all` on a 30-device amplifier is **3.6 MB**. Ask for the parameters
+  you need or the log is unusable — and the deck's own sweep output is
+  large enough that the block has to be fenced with markers to be found at
+  all.
+
+What makes the data actionable is the last hop, which nothing in ngspice
+provides: the netlist line that sizes the device carries the design
+variable, `xm10 ... w='MOSFET_9_2_W_gm1_PMOS'`. Without that join an
+operating point names something the model is not allowed to change.
+
 ### Monkeypatching the sizing package patches nothing
 
 `app/core/sizing/__init__.py` re-exports the package API. Rebinding an

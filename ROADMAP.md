@@ -60,7 +60,10 @@ No one has committed to these; they are recorded so the thought is not lost.
   rather than the code simply keeping them apart. Individual tests already
   isolate themselves this way (`_isolate_workspace`); the gap is that a
   whole run cannot. Small, but it turns a standing rule people must
-  remember into something the code enforces.
+  remember into something the code enforces. There is a workaround in the
+  meantime — run the suite from a copy of the tree, since `repo_root()`
+  follows `paths.py` (CONTRIBUTING has the two lines) — which lowers the
+  urgency without making the gap less real.
 - Decide whether `llm_agent` earns its place beside `llm`. It exists on
   architectural grounds — the model chooses what to simulate rather than
   answering a fixed question per round — and deliberately carries no claim

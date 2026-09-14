@@ -2,6 +2,20 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-14 · Operating points captured; measuring whether they are used
+
+- `sizing.operating_points()` injects `op` + a targeted `show` into the
+  rendered control block (existing seam, no vendored edit), parses the
+  three-column output, joins it to the design variables via the netlist, and
+  emits 3.1 kB of gm/ID, gm/gds and Vds-Vdsat, worst device first.
+- Default amp_hoilee_affc: 7 of 30 devices out of saturation, six on one
+  bias mirror. The nine metrics cannot express that.
+- **Claiming nothing about whether it helps.** Experiment running: both arms
+  asked for a fix, ground truth is the simulator counting devices out of
+  saturation afterwards. Chosen over search outcome because a count is not a
+  draw from the 33% spread — the lesson from the previous A/B, applied.
+- Parser hazards: `cairn/pitfalls.md` -> "ngspice `show` is column-oriented".
+
 ## 2026-09-14 · Two gaps the llm/llm_agent comparison exposed
 
 - Writing the comparison table turned up both: the agentic path never passed
