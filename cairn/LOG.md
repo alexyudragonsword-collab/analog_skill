@@ -2,6 +2,23 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-14 · AI features can run on a Claude subscription
+
+- Third LLM provider: the locally installed Claude Code CLI, driven through
+  `-p --output-format json`. Verified end to end before writing the UI —
+  locate, configured, test_connection, a multi-turn JSON exchange, and
+  `llm_sizing.suggest_setup` returning a real per-variable bounds dict.
+- `chat()`'s contract is unchanged, so `llm_sizing` needed no edits: the
+  history is flattened into the single prompt the CLI takes, which is what
+  the HTTP providers are re-sent every call anyway. Stateless beat
+  `--resume` for exactly that reason.
+- The work was mostly *disarming* it, not calling it — tools off, user
+  config excluded, empty cwd, fresh session id per call. Details and the
+  measured numbers: `cairn/pitfalls.md` → "A CLI agent is not a chat
+  endpoint until you disarm it".
+- Scope decided by the maintainer: self-use, not published, so the usage-
+  terms question raised in the feasibility review does not gate it.
+
 ## 2026-09-13 · ROADMAP's Open section is empty
 
 - GUI tests extended from "does it build" to "what does it do with a reply".

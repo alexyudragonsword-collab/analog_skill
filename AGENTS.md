@@ -51,7 +51,7 @@ A PySide6 desktop workbench for analog IC design, driving ngspice locally — gm
 ```bash
 python -m app.main                      # run (QT_QPA_PLATFORM=offscreen if headless)
 python -m app.main --smoke              # build every tab, exit 0
-python -m pytest app/tests/ -v          # ~135 tests, ~2.5 min, real ngspice
+python -m pytest app/tests/ -v          # ~145 tests, ~2.5 min, real ngspice
 python -m ruff check .                  # must be clean; config in ruff.toml
 python tools/gen_sizing_schematics.py   # redraw the 20 Sizing schematics
 ```
@@ -64,7 +64,8 @@ app/core/sizing/   the Sizing engine, split by responsibility; import graph is
                    spec -> registry -> assets -> scoring -> evaluation ->
                    user_circuits -> report -> optimizer -> runs -> plots
 app/core/          worker (single background thread), circuits, gm/ID services,
-                   LLM client, ngspice locator, model registry
+                   LLM client (HTTP + Claude Code CLI), ngspice and Claude
+                   Code locators, model registry
 app/ui/            main_window + six tabs; job_mixin.py is the shared
                    submit/cancel/failure protocol every tab uses
 app/paths.py       frozen-vs-source path resolution, workspace sync, user data

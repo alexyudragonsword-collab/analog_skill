@@ -123,9 +123,7 @@ def run_loop(circuit: str, variables: list[VarSpec], overrides,
     from scipy.stats import qmc
     if chat is None:
         if not llm_client.configured():
-            raise llm_client.LLMError(
-                'LLM not configured — set provider/model/API key in '
-                'Settings before using the LLM-guided algorithm.')
+            raise llm_client.not_configured_error()
         chat = llm_client.chat
     names = [v.name for v in variables]
     lo = np.array([v.lo for v in variables], float)

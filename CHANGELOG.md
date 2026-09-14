@@ -7,6 +7,33 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## Unreleased
 
+- **Added — the AI features can run on a Claude subscription instead of an
+  API key.**  A third provider, *Claude Code CLI*, drives the locally
+  installed `claude` binary, which already carries the user's own login.
+  Settings swaps the API-key row for a path box (empty = find it on PATH)
+  and its Test button reports the CLI version before asking it anything.
+  `chat()`'s contract is unchanged, so `llm_sizing` needed no edits: the CLI
+  takes one prompt rather than a message array, and the history is flattened
+  into it — which is the same conversation the HTTP providers get re-sent on
+  every call anyway.
+  **The CLI is disarmed before it is used.**  This spawns an agent on the
+  user's machine, so it is run `--restricted` (no shell, no code execution,
+  no WebFetch), with the remaining file tools in `--disallowed-tools`, with
+  `--setting-sources ''` and `--strict-mcp-config` so the user's own
+  `CLAUDE.md`, hooks and MCP servers cannot steer a transistor-sizing
+  prompt, in an empty scratch directory, and never with
+  `--dangerously-skip-permissions`.  It also pins a fresh `--session-id` per
+  call: without one the CLI joins a session inherited from the environment,
+  which happens whenever the app is launched from inside a Claude Code
+  session — a sizing prompt would land in the user's own conversation.
+  Measured against claude 2.1.270: ~4–6 s per call against ~1–2 s for a
+  direct API request, so the Test button's timeout has a floor that a
+  15-second HTTP timeout would have tripped over.
+- **Fixed — "LLM not configured" gave advice that did not fit the
+  provider.**  It told every user to set an API key, including the ones
+  whose provider has no API key to set.  The message is now chosen per
+  provider, in one place both call sites share.
+
 - **The GUI tests now cover what a tab does with a reply.**  The previous
   round got every tab off 0% by constructing it; this one drives the half
   that actually breaks.  Three rules are now locked down across all six

@@ -5,7 +5,7 @@ summary: "Failure modes in this codebase that are silent, expensive, or look lik
 tags: [analog-studio, ngspice, pyside6, packaging, testing, security]
 contains: [lesson, experience]
 created: "2026-08-18"
-updated: "2026-09-11"
+updated: "2026-09-14"
 related: [existing-knowledge]
 authoring_mode: ai_generated
 ---
@@ -84,6 +84,42 @@ the run log the user is looking at. So the read is not merely attempted, it
 is reported. No shipped netlist or variables file uses any of the three —
 only our own testbenches do — so the guard now covers all four directives
 under one regex.
+
+### A CLI agent is not a chat endpoint until you disarm it
+
+Driving Claude Code as an LLM backend looks like swapping one transport for
+another. It is not: the thing on the other end defaults to being an agent
+with tools, on the user's own machine, reading the user's own
+configuration. Four behaviours had to be switched off deliberately, and
+three of them are silent when you miss them.
+
+- **It inherits a session from the environment.** With no `--session-id`,
+  the CLI picks one up from `CLAUDE_CODE_SESSION_ID` — which is set
+  whenever the app is launched from inside a Claude Code session.
+  Reproduced: two unrelated `-p` calls came back carrying the *host*
+  session's id. A sizing prompt would be appended to the user's own
+  conversation. Every call now pins a fresh uuid.
+- **It reads the user's project configuration.** Their `CLAUDE.md`, hooks
+  and MCP servers load unless `--setting-sources ''` and
+  `--strict-mcp-config` are passed. An analog-sizing prompt has no business
+  being steered by whatever instructions happen to be on that disk, and
+  some MCP servers spawn processes of their own.
+- **It keeps its tools.** `--restricted` drops the shell and code-running
+  tools and WebFetch; the file tools survive it and need
+  `--disallowed-tools`. It is run in an empty temp directory as well, so
+  that there is nothing to reach if that list ever goes stale.
+- **`--bare` would defeat the whole point.** It looks like the right flag
+  for "use this as a plain model" — it is documented as skipping hooks,
+  plugins and auto-memory — but it also restricts auth to
+  `ANTHROPIC_API_KEY`, never OAuth. On a subscription that means no
+  credentials at all.
+
+Two measured numbers, against claude 2.1.270: a call costs ~4–6 s against
+~1–2 s for a direct API request, because a whole CLI starts up each time —
+so a 15 s timeout that is generous for HTTP is not generous here. And even
+with the system prompt replaced and `--restricted` on, the prompt prefix
+carries ~34 k tokens of scaffolding; it caches for an hour, so the first
+call in a session is the expensive one and the rest read from cache.
 
 ### Monkeypatching the sizing package patches nothing
 

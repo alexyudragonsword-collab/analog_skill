@@ -415,7 +415,8 @@ bugs).</small></p>
 
 <p>Configure once under <b>Settings → LLM</b>: pick a protocol
 (<b>OpenAI-compatible</b> — OpenAI / DeepSeek / Qwen / local Ollama …,
-or <b>Anthropic</b> for Claude), fill in base URL, API key (optional for
+or <b>Anthropic</b> for Claude, or <b>Claude Code CLI</b>), fill in base
+URL, API key (optional for
 local endpoints) and model name, then hit Test.  Examples: DeepSeek =
 <code>https://api.deepseek.com/v1</code> + key +
 <code>deepseek-chat</code>; local Ollama =
@@ -440,6 +441,18 @@ local endpoints) and model name, then hit Test.  Examples: DeepSeek =
       device to resize, whether bounds/targets should move — appended
       below the report.</li>
 </ul>
+
+<p><b>Claude Code CLI</b> is a third option that spends the Claude
+subscription you already have instead of an API key.  It needs the CLI
+installed and logged in (<code>npm i -g &#64;anthropic-ai/claude-code</code>,
+then run <code>claude</code> once); leave the path box empty to find it on
+PATH.  Put <code>sonnet</code>, <code>opus</code> or <code>haiku</code> in
+the Model box.  Two differences worth knowing: each call takes a few seconds
+longer than a direct API request, because a whole CLI starts up; and the
+calls draw on the same rate limit as your own Claude Code use.  The CLI is
+run with its tools switched off and with your own <code>CLAUDE.md</code>,
+hooks and MCP servers excluded, so it answers as a model and not as an agent
+on your machine.</p>
 
 <p><small><b>Privacy</b>: AI features send netlist excerpts, the
 variable/metric tables and result reports to the endpoint you configured

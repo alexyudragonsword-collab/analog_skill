@@ -1,18 +1,26 @@
-"""Minimal LLM chat client — OpenAI-compatible and Anthropic protocols.
+"""Minimal LLM chat client — OpenAI-compatible, Anthropic, Claude Code.
 
-Standard-library only (urllib): the frozen bundles gain no dependency.
-Configuration lives in QSettings (same pattern as ngspice_locator):
-provider / base URL / API key / model; an empty model disables every AI
-feature in the GUI.  All HTTP goes through the single module-level
-``_post_json`` — tests monkeypatch exactly that.
+Standard-library only (urllib + subprocess): the frozen bundles gain no
+dependency.  Configuration lives in QSettings (same pattern as
+ngspice_locator): provider / base URL / API key / model; an empty model
+disables every AI feature in the GUI.
+
+Two transports, one chokepoint each, and the tests monkeypatch exactly
+those: ``_post_json`` for the two HTTP protocols, ``_run_cli`` for Claude
+Code.  Everything above them sees one `chat()` with one signature.
 """
 
 import json
 import os
+import subprocess
+import tempfile
 import urllib.error
 import urllib.request
+import uuid
 
-PROVIDERS = ('openai', 'anthropic')
+#: 'claude_code' drives the locally installed Claude Code CLI, which uses
+#: the user's own login rather than an API key — see _chat_claude_code.
+PROVIDERS = ('openai', 'anthropic', 'claude_code')
 
 #: QSettings keys
 KEY_PROVIDER = 'llm/provider'
@@ -80,10 +88,39 @@ def set_config(provider: str, base_url: str, api_key: str, model: str,
 
 
 def configured(cfg: dict | None = None) -> bool:
-    """AI features need a model plus either a key or a custom endpoint
-    (a local Ollama endpoint works without a key)."""
+    """AI features need a model plus a way to reach one.
+
+    For the HTTP providers that means a key or a custom endpoint (a local
+    Ollama endpoint works without a key).  For Claude Code it means the CLI
+    is installed — there is no key to hold.  The check stays a PATH lookup:
+    this runs on button clicks, and running the binary to find out would
+    put a second or two into every one of them.
+    """
     cfg = cfg or get_config()
-    return bool(cfg['model']) and bool(cfg['api_key'] or cfg['base_url'])
+    if not cfg['model']:
+        return False
+    if cfg['provider'] == 'claude_code':
+        from app.core import claude_locator
+        return claude_locator.resolve() is not None
+    return bool(cfg['api_key'] or cfg['base_url'])
+
+
+def not_configured_error(cfg: dict | None = None) -> 'LLMError':
+    """The right thing to tell someone whose AI features are switched off.
+
+    Provider-specific on purpose: telling a Claude Code user to set an API
+    key sends them looking for something that does not exist, when what
+    they need is to install the CLI.
+    """
+    cfg = cfg or get_config()
+    if cfg.get('provider') == 'claude_code':
+        if not cfg.get('model'):
+            return LLMError('No model set — put "sonnet" (or another model) '
+                            'in Settings to enable the AI features.')
+        from app.core import claude_locator
+        return LLMError(claude_locator.INSTALL_HINT)
+    return LLMError('LLM not configured — set model and API key/base URL '
+                    'in Settings.')
 
 
 def _post_json(url: str, headers: dict, payload: dict,
@@ -110,6 +147,120 @@ def _post_json(url: str, headers: dict, payload: dict,
         raise LLMError(f'non-JSON response from {url}') from exc
 
 
+#: Flags that turn the CLI into a text-completion endpoint instead of a
+#: coding agent loose on the user's machine.  Every one is load-bearing:
+#:
+#: * --restricted drops the tools that run commands or code, and WebFetch.
+#: * --disallowed-tools takes away the file tools that remain, so a reply
+#:   cannot read or rewrite anything even if the model decides to try.
+#: * --setting-sources '' and --strict-mcp-config keep the user's *own*
+#:   CLAUDE.md, hooks and MCP servers out of a transistor-sizing prompt.
+#:   Their project instructions have no business steering this, and some
+#:   of them spawn processes of their own.
+#: * --system-prompt (passed separately) replaces the coding-agent persona
+#:   rather than appending to it.
+#:
+#: Measured against claude 2.1.270.  Not passing --dangerously-skip-
+#: permissions or --permission-mode bypassPermissions is the other half:
+#: with neither, a tool that wants permission is denied rather than
+#: prompting a user who is looking at a different window entirely.
+_CLI_SAFE_FLAGS = (
+    '--restricted',
+    '--setting-sources', '',
+    '--strict-mcp-config',
+    '--disallowed-tools',
+    'Read,Write,Edit,MultiEdit,NotebookEdit,Glob,Grep,WebSearch,WebFetch,'
+    'Task,Agent,TodoWrite,Skill,SlashCommand,Bash,BashOutput,KillShell',
+)
+
+#: The CLI is a whole agent starting up, not a socket — a cold call runs
+#: several seconds before the model is even reached.
+CLI_MIN_TIMEOUT = 90.0
+
+
+def _as_prompt(messages: list[dict]) -> str:
+    """Flatten a chat history into one prompt.
+
+    Claude Code takes a single prompt, not a message array.  That is no
+    loss: `chat()` is stateless and the HTTP providers are re-sent the
+    whole history on every call too, so this is the same conversation by
+    another spelling.  The CLI's own --resume would be faster, but it
+    would make chat() stateful, and every caller here rebuilds the history
+    itself (see llm_sizing.run_loop).
+    """
+    out = []
+    for m in messages:
+        role = 'Assistant' if m.get('role') == 'assistant' else 'User'
+        out.append(f"{role}: {m.get('content', '')}")
+    return '\n\n'.join(out)
+
+
+def _run_cli(argv: list[str], prompt: str, timeout: float) -> dict:
+    """Run the CLI and return its decoded JSON.  The chokepoint tests fake.
+
+    Runs in an empty scratch directory: the file tools are disallowed
+    above, and this makes sure there is nothing to reach even if that ever
+    stops being true.
+    """
+    from app.core import claude_locator
+    with tempfile.TemporaryDirectory(prefix='analog-llm-') as cwd:
+        try:
+            r = subprocess.run(argv, input=prompt, capture_output=True,
+                               text=True, timeout=timeout, cwd=cwd,
+                               **claude_locator._no_window())
+        except subprocess.TimeoutExpired as exc:
+            raise LLMError(
+                f'Claude Code did not answer within {timeout:.0f}s') from exc
+        except OSError as exc:
+            raise LLMError(f'could not run Claude Code: {exc}') from exc
+    if not (r.stdout or '').strip():
+        err = (r.stderr or '').strip().splitlines()
+        raise LLMError('Claude Code produced no output'
+                       + (f' (exit {r.returncode}): {err[-1][:200]}'
+                          if err else f' (exit {r.returncode})'))
+    try:
+        return json.loads(r.stdout)
+    except json.JSONDecodeError as exc:
+        raise LLMError('Claude Code returned non-JSON output: '
+                       f'{r.stdout[:200]!r}') from exc
+
+
+def _chat_claude_code(messages: list[dict], system: str | None,
+                      timeout: float, cfg: dict) -> str:
+    """One completion through the locally installed Claude Code CLI.
+
+    This is the subscription path: the CLI uses the login the user already
+    has, so there is no API key to store or leak.  `max_tokens` has no
+    equivalent flag and is ignored — the CLI's own limit applies.
+    """
+    from app.core import claude_locator
+    exe = claude_locator.resolve()
+    if exe is None:
+        raise LLMError(claude_locator.INSTALL_HINT)
+    argv = [exe, '-p', '--output-format', 'json',
+            '--model', cfg['model'],
+            # a fresh id every call: without one the CLI can join a session
+            # it inherits from the environment (it does when Analog Studio
+            # is launched from inside a Claude Code session)
+            '--session-id', str(uuid.uuid4()),
+            '--system-prompt', system or 'You are a helpful assistant.',
+            *_CLI_SAFE_FLAGS]
+    data = _run_cli(argv, _as_prompt(messages),
+                    max(timeout, CLI_MIN_TIMEOUT))
+    if data.get('is_error'):
+        raise LLMError('Claude Code reported an error: '
+                       f"{str(data.get('result'))[:300]}")
+    result = data.get('result')
+    if not isinstance(result, str):
+        raise LLMError(f'unexpected Claude Code reply: {str(data)[:200]}')
+    denials = data.get('permission_denials') or []
+    if denials:
+        # not fatal — the answer still came back — but it means the model
+        # tried to use a tool, which is worth seeing in the log panel
+        print(f'claude code: {len(denials)} tool use(s) denied')
+    return result
+
+
 def chat(messages: list[dict], system: str | None = None,
          timeout: float = 120.0, max_tokens: int = 2048,
          cfg: dict | None = None) -> str:
@@ -117,8 +268,9 @@ def chat(messages: list[dict], system: str | None = None,
     'content': str}, ...] (oldest first).  Returns the reply text."""
     cfg = cfg or get_config()
     if not configured(cfg):
-        raise LLMError('LLM not configured — set model and API key/base '
-                       'URL in Settings.')
+        raise not_configured_error(cfg)
+    if cfg['provider'] == 'claude_code':
+        return _chat_claude_code(messages, system, timeout, cfg)
     base = (cfg['base_url'] or DEFAULT_BASE[cfg['provider']]).rstrip('/')
     if cfg['provider'] == 'anthropic':
         data = _post_json(

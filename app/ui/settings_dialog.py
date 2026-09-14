@@ -3,11 +3,12 @@
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
     QGroupBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout,
+    QWidget,
 )
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QCursor
 
-from app.core import llm_client, ngspice_locator
+from app.core import claude_locator, llm_client, ngspice_locator
 
 
 class SettingsDialog(QDialog):
@@ -46,8 +47,11 @@ class SettingsDialog(QDialog):
         self._llm_provider.addItem('OpenAI-compatible (OpenAI / DeepSeek / '
                                    'Qwen / Ollama …)', userData='openai')
         self._llm_provider.addItem('Anthropic (Claude)', userData='anthropic')
-        self._llm_provider.setCurrentIndex(
-            1 if cfg['provider'] == 'anthropic' else 0)
+        self._llm_provider.addItem('Claude Code CLI — uses your own login, '
+                                   'no API key', userData='claude_code')
+        idx = self._llm_provider.findData(cfg['provider'])
+        self._llm_provider.setCurrentIndex(max(idx, 0))
+        self._llm_provider.currentIndexChanged.connect(self._on_provider)
         self._llm_base = QLineEdit(cfg['base_url'])
         self._llm_base.setPlaceholderText(
             'empty = provider default; e.g. https://api.deepseek.com/v1 '
@@ -67,6 +71,19 @@ class SettingsDialog(QDialog):
         self._llm_model = QLineEdit(cfg['model'])
         self._llm_model.setPlaceholderText(
             'e.g. deepseek-chat / gpt-4o-mini / claude-sonnet-4-5')
+
+        # Claude Code needs a binary rather than a key; same shape as the
+        # ngspice row above, and empty means "find it on PATH".
+        self._cc_path = QLineEdit(claude_locator.user_path())
+        self._cc_path.setPlaceholderText(
+            'empty = auto-detect "claude" on PATH')
+        cc_browse = QPushButton('Browse…')
+        cc_browse.clicked.connect(self._browse_claude)
+        self._cc_row = QWidget()
+        cc_row = QHBoxLayout(self._cc_row)
+        cc_row.setContentsMargins(0, 0, 0, 0)
+        cc_row.addWidget(self._cc_path)
+        cc_row.addWidget(cc_browse)
         self._llm_status = QLabel('')
         self._llm_status.setWordWrap(True)
         llm_test = QPushButton('Test')
@@ -75,11 +92,16 @@ class SettingsDialog(QDialog):
         llm_box = QGroupBox('LLM for AI-assisted sizing (optional)')
         lf = QFormLayout(llm_box)
         lf.addRow('Provider', self._llm_provider)
-        lf.addRow('Base URL', self._llm_base)
-        lf.addRow('API key', self._llm_key)
+        self._base_label = QLabel('Base URL')
+        lf.addRow(self._base_label, self._llm_base)
+        self._key_label = QLabel('API key')
+        lf.addRow(self._key_label, self._llm_key)
+        self._cc_label = QLabel('Claude Code')
+        lf.addRow(self._cc_label, self._cc_row)
         lf.addRow('Model', self._llm_model)
         lf.addRow('', llm_test)
         lf.addRow(self._llm_status)
+        self._on_provider()          # show the fields this provider uses
 
         llm_hint = QLabel(
             'Used by the Sizing tab (LLM-guided algorithm, AI '
@@ -90,7 +112,12 @@ class SettingsDialog(QDialog):
             f'<code>{llm_client.ENV_API_KEY}</code> in the environment '
             'instead — it overrides this field and is never written to disk.'
             + (f'<br><i>Currently supplied by ${llm_client.ENV_API_KEY}.</i>'
-               if cfg.get('api_key_from_env') else ''))
+               if cfg.get('api_key_from_env') else '')
+            + '<br><b>Claude Code</b> spends your own subscription instead of '
+              'an API key — it needs the CLI installed and logged in, and '
+              'each call costs a few seconds more than a direct API request. '
+              'It is driven with its tools switched off and your CLAUDE.md, '
+              'hooks and MCP servers excluded.')
         llm_hint.setWordWrap(True)
 
         buttons = QDialogButtonBox(
@@ -125,6 +152,29 @@ class SettingsDialog(QDialog):
         self._status.setText(msg)
 
     # ── LLM ────────────────────────────────────────────────────────────────
+    def _on_provider(self, *_):
+        """Show only the fields the selected provider actually uses.
+
+        Hidden rather than merely disabled: a greyed-out API key box next
+        to a provider that has no API key still invites someone to look
+        for one.
+        """
+        cc = self._llm_provider.currentData() == 'claude_code'
+        for widget in (self._llm_base, self._base_label,
+                       self._llm_key, self._key_label):
+            widget.setVisible(not cc)
+        for widget in (self._cc_row, self._cc_label):
+            widget.setVisible(cc)
+        self._llm_model.setPlaceholderText(
+            'sonnet / opus / haiku, or a full model id'
+            if cc else 'e.g. deepseek-chat / gpt-4o-mini / claude-sonnet-4-5')
+
+    def _browse_claude(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, 'Select the Claude Code executable')
+        if path:
+            self._cc_path.setText(path)
+
     def _llm_cfg(self) -> dict:
         return {'provider': self._llm_provider.currentData(),
                 'base_url': self._llm_base.text().strip(),
@@ -133,6 +183,16 @@ class SettingsDialog(QDialog):
 
     def _test_llm(self):
         cfg = self._llm_cfg()
+        if cfg['provider'] == 'claude_code':
+            # the path box is only saved on OK, so honour it here too —
+            # otherwise Test answers about the old setting
+            claude_locator.set_user_path(self._cc_path.text())
+            st = claude_locator.locate()
+            if not st.ok:
+                self._llm_status.setText(
+                    f'<font color="red">{claude_locator.INSTALL_HINT}</font>')
+                return
+            self._llm_status.setText(f'Found {st.version} — asking it…')
         if not llm_client.configured(cfg):
             self._llm_status.setText('Set at least a model plus an API key '
                                      'or base URL.')
@@ -153,6 +213,7 @@ class SettingsDialog(QDialog):
             ngspice_locator.set_user_path(path)
         else:
             QSettings().remove(ngspice_locator.SETTINGS_KEY)
+        claude_locator.set_user_path(self._cc_path.text())
         cfg = self._llm_cfg()
         llm_client.set_config(cfg['provider'], cfg['base_url'],
                               cfg['api_key'], cfg['model'],

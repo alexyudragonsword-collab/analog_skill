@@ -331,7 +331,8 @@ Tan_CLIA(默认宽度低于模型 bin 下限)两个存在上游缺陷,未注册�
 
 <p>在 <b>Settings</b> 的 "LLM" 组里配置一次即可启用三个 AI 功能
 (协议二选一:<b>OpenAI 兼容</b>——OpenAI/DeepSeek/通义/本地 Ollama 等,
-或 <b>Anthropic</b>(Claude);填 Base URL、API key(本地端点可留空)、
+或 <b>Anthropic</b>(Claude)、或 <b>Claude Code CLI</b>;填 Base URL、
+API key(本地端点可留空)、
 模型名,点 Test 验证连通)。示例:DeepSeek 填
 <code>https://api.deepseek.com/v1</code> + key + <code>deepseek-chat</code>;
 本地 Ollama 填 <code>http://localhost:11434/v1</code> + 模型名。</p>
@@ -348,6 +349,15 @@ Tan_CLIA(默认宽度低于模型 bin 下限)两个存在上游缺陷,未注册�
   <li><b>AI explain(结果解读)</b>:跑完后一键让 LLM 分析报告(英文输出)——
       哪个指标是瓶颈、该动哪个管子、边界要不要放宽,追加显示在报告栏。</li>
 </ul>
+
+<p><b>Claude Code CLI</b> 是第三个选项:用你已有的 Claude 订阅,而不是
+API key。需要先装好 CLI 并登录过(<code>npm i -g &#64;anthropic-ai/claude-code</code>,
+然后跑一次 <code>claude</code>);路径框留空则自动在 PATH 上找。Model 填
+<code>sonnet</code>、<code>opus</code> 或 <code>haiku</code>。两点要知道:每次
+调用比直连 API 多几秒(要启动一整个 CLI);以及这些调用和你自己用 Claude Code
+共享同一份用量额度。CLI 是在关掉全部工具、并排除你自己的 <code>CLAUDE.md</code>、
+hooks 与 MCP server 的前提下启动的 —— 它在这里只当模型用,不是一个在你机器上
+自由行动的 agent。</p>
 
 <p><small><b>隐私提示</b>:使用 AI 功能时,电路网表片段、变量/指标表与
 结果报告会发送到你配置的 API 端点(本地 Ollama 则不出本机)。
