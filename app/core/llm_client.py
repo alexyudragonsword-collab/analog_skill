@@ -188,19 +188,42 @@ _CLI_SAFE_FLAGS = (
 #: five-second call still returns in five seconds.
 CLI_MIN_TIMEOUT = 300.0
 
-#: Rough seconds per guided round — the LLM call itself, not the
+#: Reasoning effort the CLI accepts.  Nearly all of a call's wall time is
+#: the model generating, and most of what it generates is reasoning rather
+#: than answer, so this is the one lever that moves the number much.
+#: Measured 2026-09-14 — same prompt, model and schema (amp_hoilee_affc,
+#: four candidates over 33 variables):
+#:
+#:     default   101 s   11 128 output tokens   4/4 candidates
+#:     medium     49 s    7 380                 4/4
+#:     high/max   not measured
+#:     low        25 s    3 520                 4/4
+#:
+#: The answer stayed ~3 950 characters throughout; what disappeared was
+#: thinking (11 128 -> 3 520 tokens).  The same measurement rules out two
+#: other ideas: startup is 1.0 s of the 101, so batching rounds into one
+#: invocation cannot help, and a smaller model is not the lever either —
+#: haiku ran *slower* than sonnet (117 s), generating more tokens to reach
+#: the same place.
+EFFORT_LEVELS = ('low', 'medium', 'high')
+
+#: Rough seconds one guided round costs — the LLM call itself, not the
 #: simulations it triggers — used only to keep the Sizing tab's time
-#: estimate from being wrong by an order of magnitude.  The claude_code
-#: figure is the measurement above; the default is a deliberately loose
-#: stand-in for the HTTP providers, which have not been measured here.
-ROUND_SECONDS = {'claude_code': 100.0}
+#: estimate from being wrong by an order of magnitude.  These are the wall
+#: times from the table above, so they move with the effort the loop asks
+#: for; the fallback is a deliberately loose stand-in for the HTTP
+#: providers, which have not been measured here.
+CLI_ROUND_SECONDS = {'low': 25.0, 'medium': 49.0, None: 100.0}
 DEFAULT_ROUND_SECONDS = 15.0
 
 
-def round_seconds(cfg: dict | None = None) -> float:
+def round_seconds(cfg: dict | None = None,
+                  effort: str | None = None) -> float:
     """Seconds one LLM-guided round costs before any ngspice runs."""
     cfg = cfg or get_config()
-    return ROUND_SECONDS.get(cfg.get('provider'), DEFAULT_ROUND_SECONDS)
+    if cfg.get('provider') == 'claude_code':
+        return CLI_ROUND_SECONDS.get(effort, CLI_ROUND_SECONDS[None])
+    return DEFAULT_ROUND_SECONDS
 
 
 def _as_prompt(messages: list[dict]) -> str:
@@ -252,7 +275,8 @@ def _run_cli(argv: list[str], prompt: str, timeout: float) -> dict:
 
 def _chat_claude_code(messages: list[dict], system: str | None,
                       timeout: float, cfg: dict,
-                      schema: dict | None = None) -> str:
+                      schema: dict | None = None,
+                      effort: str | None = None) -> str:
     """One completion through the locally installed Claude Code CLI.
 
     This is the subscription path: the CLI uses the login the user already
@@ -279,6 +303,8 @@ def _chat_claude_code(messages: list[dict], system: str | None,
             *_CLI_SAFE_FLAGS]
     if schema is not None:
         argv += ['--json-schema', json.dumps(schema)]
+    if effort in EFFORT_LEVELS:
+        argv += ['--effort', effort]
     data = _run_cli(argv, _as_prompt(messages),
                     max(timeout, CLI_MIN_TIMEOUT))
     if data.get('is_error'):
@@ -297,7 +323,8 @@ def _chat_claude_code(messages: list[dict], system: str | None,
 
 def chat(messages: list[dict], system: str | None = None,
          timeout: float = 120.0, max_tokens: int = 2048,
-         cfg: dict | None = None, schema: dict | None = None) -> str:
+         cfg: dict | None = None, schema: dict | None = None,
+         effort: str | None = None) -> str:
     """One chat completion.  messages: [{'role': 'user'|'assistant',
     'content': str}, ...] (oldest first).  Returns the reply text.
 
@@ -309,12 +336,17 @@ def chat(messages: list[dict], system: str | None = None,
     enforces it; the HTTP providers have their own mechanisms
     (response_format, tool use) and can be taught later without any caller
     changing.
+
+    `effort` ('low' | 'medium' | 'high') is a hint about how much reasoning
+    the answer is worth, under the same contract.  It is the difference
+    between a 101-second answer and a 25-second one — see EFFORT_LEVELS.
     """
     cfg = cfg or get_config()
     if not configured(cfg):
         raise not_configured_error(cfg)
     if cfg['provider'] == 'claude_code':
-        return _chat_claude_code(messages, system, timeout, cfg, schema)
+        return _chat_claude_code(messages, system, timeout, cfg,
+                                 schema, effort)
     base = (cfg['base_url'] or DEFAULT_BASE[cfg['provider']]).rstrip('/')
     if cfg['provider'] == 'anthropic':
         data = _post_json(

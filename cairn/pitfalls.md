@@ -145,6 +145,29 @@ and wrong by a factor of thirty for this one. A transport whose latency is
 a hundred times an evaluation's is not just a slower transport; it changes
 which term dominates.
 
+**And then measure where that latency actually is, because the obvious
+answers were wrong.** Breaking down the 101 s:
+
+| | |
+|---|---|
+| CLI startup and overhead | **1.0 s** |
+| model generating | 100.2 s (11 128 output tokens at 111 tok/s) |
+| of which the answer | ~1 300 tokens |
+
+So nine tenths of what the model emits is reasoning, and the transport is
+free. Two plausible-sounding optimisations die on that table. Batching
+rounds into a single invocation — the reason to build an MCP server, or to
+hold a session open with `--resume` — buys back one second in a hundred.
+And a *smaller* model is not the lever: haiku took **117 s** against
+sonnet's 101, because it generated more tokens (14 434) to arrive at the
+same place. Token rate is not throughput when the token count moves too.
+
+What does work is asking for less thinking. `--effort low` cuts the round
+to **25 s** and the output to 3 520 tokens while the answer itself stays the
+same size and still parses 4/4. Whether it proposes as *well* is a separate
+question, and a separate experiment — speed is cheap to measure and quality
+is not, so do not let the first stand in for the second.
+
 ### Monkeypatching the sizing package patches nothing
 
 `app/core/sizing/__init__.py` re-exports the package API. Rebinding an

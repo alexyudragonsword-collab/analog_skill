@@ -546,3 +546,55 @@ def test_cli_timeout_floor_covers_a_real_sizing_round(monkeypatch):
     seen = _fake_cli(monkeypatch, result='{}')
     llm_client.chat([{'role': 'user', 'content': 'q'}], cfg=_cc_cfg())
     assert seen['timeout'] >= 120.0 * 2
+
+
+def test_effort_is_passed_when_asked_for_and_validated(monkeypatch):
+    """Same contract as schema — a hint the provider may honour.  An
+    unrecognised level is dropped rather than handed to the CLI, which
+    would reject the whole invocation and take the round with it."""
+    seen = _fake_cli(monkeypatch, result='{}')
+    llm_client.chat([{'role': 'user', 'content': 'q'}], cfg=_cc_cfg())
+    assert '--effort' not in seen['argv']
+
+    seen = _fake_cli(monkeypatch, result='{}')
+    llm_client.chat([{'role': 'user', 'content': 'q'}], cfg=_cc_cfg(),
+                    effort='low')
+    assert seen['argv'][seen['argv'].index('--effort') + 1] == 'low'
+
+    seen = _fake_cli(monkeypatch, result='{}')
+    llm_client.chat([{'role': 'user', 'content': 'q'}], cfg=_cc_cfg(),
+                    effort='ludicrous')
+    assert '--effort' not in seen['argv']
+
+
+def test_the_search_loop_asks_for_low_effort_and_the_one_shots_do_not(
+        monkeypatch):
+    """The loop runs ~38 times for points nobody reads; advise and explain
+    run once for text the user does read.  Spending the same reasoning on
+    both is what made a two-minute optimization take an hour."""
+    from app.core import llm_sizing
+    from app.core.sizing.spec import VarSpec
+    variables = [
+        VarSpec(name='W_IN', default=5.0, lo=1.0, hi=10.0, is_int=False)]
+    efforts = []
+
+    def fake_chat(messages, system=None, schema=None, effort=None, **kw):
+        efforts.append(effort)
+        return json.dumps({'rationale': 'r', 'budget': 60,
+                           'candidates': [{'W_IN': 6.0}],
+                           'variables': {}})
+
+    state = {'best': 1.0, 'best_x': None, 'cancel': False, 'dispatched': 0}
+
+    def run_batch(points):
+        state['dispatched'] += len(points)
+        return [1.0] * len(points)
+
+    llm_sizing.run_loop('amp_hoilee_affc', variables, None, state=state,
+                        run_batch=run_batch, budget=2, workers=1,
+                        chat=fake_chat)
+    assert efforts and set(efforts) == {'low'}
+
+    efforts.clear()
+    llm_sizing.suggest_setup('amp_hoilee_affc', variables, chat=fake_chat)
+    assert efforts == [None]          # the provider's own default

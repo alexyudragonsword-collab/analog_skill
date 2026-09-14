@@ -7,6 +7,35 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## Unreleased
 
+- **Added — `chat(effort=...)`, and the sizing loop now asks for "low".**
+  Almost none of a Claude Code call is overhead: measured on
+  `amp_hoilee_affc`, startup is **1.0 s of 101**, and the other 100 s is the
+  model generating — mostly reasoning, not answer.  The same prompt, model
+  and schema at three effort levels:
+
+  | effort | wall | output tokens | candidates |
+  |---|---|---|---|
+  | default | 101 s | 11 128 | 4/4 |
+  | medium | 49 s | 7 380 | 4/4 |
+  | low | **25 s** | 3 520 | 4/4 |
+
+  The answer stayed ~3 950 characters throughout; what disappeared was
+  thinking.  For a 150-evaluation run that is roughly an hour of model time
+  against sixteen minutes.  The search loop asks for `low` — it runs ~38
+  times a run, proposing points near the current best — while
+  `suggest_setup` and `explain_run` leave the provider's default alone,
+  because each is called once and the user reads the result.
+  **Whether "low" proposes as *well* is still being measured** (an A/B over
+  two full optimizations); this entry records the speed, which is settled,
+  and not the quality, which is not.
+  The measurement also ruled out the two ideas that looked more promising:
+  batching rounds into one CLI invocation would save that 1.0 s, and a
+  smaller model is not the lever either — haiku ran **slower** than sonnet
+  (117 s), spending more tokens to reach the same place.
+- **Fixed — the time estimate would have overstated LLM runs fourfold.**
+  Its per-round constant was measured at the provider default; the loop now
+  runs at `low`. It follows the effort instead of assuming one.
+
 - **Added — `chat(schema=...)`, so a reply's shape can be enforced instead
   of hoped for.**  The LLM sizing loop asks for candidates as JSON, and
   `_parse_candidates` requires every candidate to carry every variable name

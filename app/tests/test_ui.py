@@ -359,7 +359,8 @@ def test_estimate_counts_the_ai_rounds_not_just_the_simulations(window,
     the call can outlast an evaluation by two orders of magnitude.  Counting
     only ngspice read "2 min" for something closer to an hour."""
     from app.core import llm_client
-    monkeypatch.setattr(llm_client, 'round_seconds', lambda cfg=None: 100.0)
+    monkeypatch.setattr(llm_client, 'round_seconds',
+                        lambda cfg=None, effort=None: 100.0)
     tab = window.sizing_tab
     tab.circuit_combo.setCurrentIndex(
         tab.circuit_combo.findData('amp_hoilee_affc'))

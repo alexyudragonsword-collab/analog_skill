@@ -72,6 +72,18 @@ def describe_circuit(circuit: str, variables: list[VarSpec],
     return '\n'.join(lines)
 
 
+#: How hard the model should think per round of the search loop.
+#:
+#: This runs ~38 times for a 150-evaluation budget and asks for something
+#: modest each time: a few plausible points near the current best.  At the
+#: provider default that is 101 s a round — an hour of model time for a run
+#: whose simulations take two minutes.  At 'low' it is 25 s, with the same
+#: four complete candidates coming back.
+#:
+#: suggest_setup and explain_run deliberately leave this unset: each is
+#: called once, the user reads the result, and it is worth the wait.
+LOOP_EFFORT = 'low'
+
 _SYSTEM = ('You are an expert analog IC designer sizing a circuit. '
            'You will iteratively propose device sizings; each proposal is '
            'measured with a real SPICE simulation and you get the cost '
@@ -219,7 +231,8 @@ def run_loop(circuit: str, variables: list[VarSpec], overrides,
         for _ in range(2):                      # one retry on a bad reply
             try:
                 reply = chat(messages, system=_SYSTEM,
-                             schema=candidates_schema(names, lo, hi, k))
+                             schema=candidates_schema(names, lo, hi, k),
+                             effort=LOOP_EFFORT)
                 points = _parse_candidates(reply, names, lo, hi, k)
                 messages.append({'role': 'assistant', 'content': reply})
                 break

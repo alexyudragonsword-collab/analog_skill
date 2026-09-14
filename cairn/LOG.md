@@ -2,6 +2,21 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-14 · Effort is the latency lever; #2 and #3 were not
+
+- Asked whether bigger prompts or an MCP server would cut the ~100 s round.
+  Measured instead of reasoned: startup is 1.0 s of 101, so neither can —
+  the cost is the model emitting ~11 k tokens, nine tenths of them
+  reasoning. A smaller model is not it either (haiku 117 s > sonnet 101 s,
+  more tokens to the same place).
+- `chat(effort=...)` added on the same request-not-guarantee contract as
+  `schema`. Loop asks for 'low' (25 s, 3 520 tokens, still 4/4 candidates);
+  suggest_setup and explain_run keep the default, being read by a human.
+- Speed is settled, **quality is not** — an A/B over two full optimizations
+  is running as this is written. Recorded as such rather than as a verdict.
+- Details and the full table: `cairn/pitfalls.md` → "A CLI agent is not a
+  chat endpoint until you disarm it".
+
 ## 2026-09-14 · Structured output, and the latency it uncovered
 
 - `chat(schema=...)` added as a request-not-guarantee: Claude Code enforces

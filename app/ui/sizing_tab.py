@@ -241,7 +241,8 @@ class SizingTab(QWidget, JobTabMixin):
             # call plus min(workers, 4) evaluations, and the call can be a
             # hundred times longer than an evaluation — an estimate counting
             # only ngspice was reading "2 min" for an hour of work.
-            per_round = llm_client.round_seconds()
+            from app.core.llm_sizing import LOOP_EFFORT
+            per_round = llm_client.round_seconds(effort=LOOP_EFFORT)
             rounds = math.ceil(budget / max(1, min(workers, 4)))
             secs += rounds * per_round
             note = f'  ({rounds} AI rounds)'
