@@ -61,6 +61,16 @@ No one has committed to these; they are recorded so the thought is not lost.
   isolate themselves this way (`_isolate_workspace`); the gap is that a
   whole run cannot. Small, but it turns a standing rule people must
   remember into something the code enforces.
+- Decide whether `llm_agent` earns its place beside `llm`. It exists on
+  architectural grounds — the model chooses what to simulate rather than
+  answering a fixed question per round — and deliberately carries no claim
+  about search quality, since the 33% run-to-run spread measured on this
+  problem makes such a claim unsupportable at any affordable sample size.
+  Two things would settle it without needing that: whether its written
+  account of a run is worth reading (one person, a few runs), and whether
+  it reliably spends the budget — the first real run stopped at 9 of 12,
+  which the round-based loop never does. If the narrative is the value,
+  say so in the docs and stop pretending the cost curve is the point.
 - Settle whether the LLM loop's per-metric feedback earns its place. It is
   on by default as a judgment call, not a measured win: at n=3 vs n=4 on
   `amp_hoilee_affc` the medians are 1.4954 with it and 1.3768 without, and

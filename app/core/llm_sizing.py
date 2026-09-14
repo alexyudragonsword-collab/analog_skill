@@ -14,6 +14,7 @@ import numpy as np
 
 from app import paths
 from app.core import llm_client
+from app.core.mcp_eval_server import TOOL_NAME as MCP_TOOL
 from app.core.sizing import SIZING, VarSpec, score_detail
 
 #: cap on netlist text sent to the model (keeps prompts ~2k tokens)
@@ -370,3 +371,90 @@ def suggest_setup(circuit: str, variables: list[VarSpec],
         out['_budget'] = int(budget)
     rationale = str(doc.get('rationale', '')).strip()
     return out, rationale
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Agentic loop (sizing.optimize, algo='llm_agent')
+#
+# The difference from run_loop is who holds the turn.  There, the app asks
+# for k candidates, simulates them, and reports back — the model answers
+# questions.  Here the app hands over one prompt and a tool, and the model
+# decides what to try, how many at a time, and when what it just learned
+# changes its mind.  One CLI invocation for the whole search rather than one
+# per round.
+#
+# It is *not* claimed to search better.  The session that built it measured
+# a 33% run-to-run spread on this problem, which is wider than any effect
+# either version is likely to have, so that claim could not be supported
+# either way.  What it changes is the shape of the control loop.
+# ─────────────────────────────────────────────────────────────────────────────
+AGENT_SYSTEM = (
+    'You are an expert analog IC designer sizing a circuit. You have a tool '
+    'that simulates candidate sizings with ngspice and returns each one\'s '
+    'cost (lower is better, 0 = every target met) and per-metric results. '
+    'Work from circuit fundamentals — gm/ID, headroom, compensation, '
+    'matching — and from what each simulation tells you. Simulate several '
+    'candidates per call when exploring, since they run in parallel; '
+    'simulate one when you are testing a specific idea. Keep going until '
+    'the budget is spent. Finish with one short paragraph on what you '
+    'found; do not restate the numbers.')
+
+
+def agent_prompt(circuit: str, variables: list[VarSpec], overrides,
+                 budget: int, workers: int) -> str:
+    return (describe_circuit(circuit, variables, overrides)
+            + f'\n\nYou have a budget of {budget} simulations, '
+              f'{workers} of which run in parallel. Call '
+              f'{MCP_TOOL} to try sizings. Start from the default sizing '
+              f'above, then improve on it.')
+
+
+def run_agent_loop(circuit: str, variables: list[VarSpec], overrides,
+                   state: dict, run_batch, budget: int, workers: int,
+                   run_agent=None):
+    """The 'llm_agent' algorithm body.
+
+    Stands up an EvalService over run_batch, points an MCP server at it,
+    and lets one CLI invocation spend the budget through that tool.  The
+    app still owns everything that matters: run_batch refuses work past the
+    budget and after Cancel, so the worst a confused model can do is make
+    calls that come back empty.
+    """
+    from app.core.eval_service import EvalService
+
+    if run_agent is None:
+        from app.core import llm_client
+        if not llm_client.configured():
+            raise llm_client.not_configured_error()
+        cfg = llm_client.get_config()
+        if cfg['provider'] != 'claude_code':
+            raise llm_client.LLMError(
+                'The agentic algorithm needs the Claude Code CLI provider — '
+                'it drives a tool, which the HTTP providers are not wired '
+                'for here. Switch provider in Settings, or use the '
+                'LLM-guided algorithm instead.')
+        run_agent = llm_client.run_agent
+
+    names = [v.name for v in variables]
+    lo = [float(v.lo) for v in variables]
+    hi = [float(v.hi) for v in variables]
+
+    def handler(points):
+        # the model sends real values; run_batch works in the unit box
+        import numpy as np
+        a, b = np.array(lo), np.array(hi)
+        span = np.where(b > a, b - a, 1.0)
+        xs = [np.clip((np.clip(np.array(p, float), a, b) - a) / span, 0, 1)
+              for p in points]
+        return run_batch(xs, with_metrics=True)
+
+    with EvalService(handler) as svc:
+        return run_agent(
+            prompt=agent_prompt(circuit, variables, overrides, budget,
+                                workers),
+            system=AGENT_SYSTEM,
+            vars_spec={'names': names, 'lo': lo, 'hi': hi},
+            addr=f'{svc.host}:{svc.port}', token=svc.token,
+            # the whole search happens inside this one call
+            timeout=max(600.0, budget * 25.0),
+            should_stop=lambda: state['cancel'])

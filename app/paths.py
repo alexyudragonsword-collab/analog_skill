@@ -13,6 +13,7 @@ code is needed for the write paths to land somewhere writable.
 import os
 import shutil
 import sys
+import threading
 from pathlib import Path
 
 from app import __version__
@@ -273,24 +274,44 @@ def sky130_pdk_dir() -> Path:
     return _workspace_root().parent.parent / 'sky130' / 'sky130_pdk'
 
 
+#: Serializes the one-time extraction below.  See ensure_sky130.
+_SKY130_LOCK = threading.Lock()
+
+
 def ensure_sky130() -> Path:
-    """Extract analoggym/pdk/sky130_pdk.zip if not present yet (atomic)."""
-    dst = sky130_pdk_dir().parent            # …/sky130
-    if sky130_pdk_dir().is_dir():
+    """Extract analoggym/pdk/sky130_pdk.zip if not present yet (atomic).
+
+    Serialized, and re-checked inside the lock, because the callers are
+    parallel: `optimize(workers=4)` evaluates on four threads and each one
+    reaches here.  Unguarded, two of them both saw the directory missing,
+    and the second `rmtree`d the first's half-written temp tree while it was
+    still extracting into it — so the survivor could `os.replace` a partial
+    PDK into place and every simulation afterwards would quietly be wrong.
+    Observed as two "Extracting…" lines against one "ready".
+
+    The temp name carries the pid as well, so two *processes* racing (an app
+    and a test run) do not collide either; only the lock is load-bearing
+    within one.
+    """
+    if sky130_pdk_dir().is_dir():            # fast path, no lock
         return sky130_pdk_dir()
-    import zipfile
-    zip_path = analoggym_dir() / 'pdk' / 'sky130_pdk.zip'
-    tmp = dst.with_name(dst.name + '.tmp')
-    if tmp.exists():
-        shutil.rmtree(tmp)
-    tmp.mkdir(parents=True)
-    print('Extracting SKY130 PDK (first run, ~109 MB) ...')
-    with zipfile.ZipFile(zip_path) as zf:
-        zf.extractall(tmp)
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    os.replace(tmp, dst)
-    print('SKY130 PDK ready.')
-    return sky130_pdk_dir()
+    with _SKY130_LOCK:
+        if sky130_pdk_dir().is_dir():        # someone won while we waited
+            return sky130_pdk_dir()
+        import zipfile
+        dst = sky130_pdk_dir().parent        # …/sky130
+        zip_path = analoggym_dir() / 'pdk' / 'sky130_pdk.zip'
+        tmp = dst.with_name(f'{dst.name}.tmp.{os.getpid()}')
+        if tmp.exists():
+            shutil.rmtree(tmp)
+        tmp.mkdir(parents=True)
+        print('Extracting SKY130 PDK (first run, ~109 MB) ...')
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(tmp)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(tmp, dst)
+        print('SKY130 PDK ready.')
+        return sky130_pdk_dir()
 
 
 def ensure_skill_assets() -> Path:

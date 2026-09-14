@@ -262,6 +262,37 @@ medians, because one run of three blew up (2.8274, with no LLM fallback in
 the log, so a genuine search failure). The interesting difference is in
 variance, and n=3 cannot establish that either.
 
+### "Check then create" is a race when the callers are your own threads
+
+`ensure_sky130()` read like careful code: return early if the directory is
+there, otherwise extract the zip into a temp tree and `os.replace` it into
+place, which is atomic. The atomic step was never the problem. Between the
+check and the rename sat a **fixed** temp path and a `shutil.rmtree` of it,
+and the callers are `optimize(workers=4)` — four evaluation threads, each
+reaching this on the first run.
+
+Two threads both saw the directory missing. The second deleted the first's
+half-written tree while it was still extracting into it. The survivor then
+renamed whatever remained into place, and every simulation afterwards read
+a **partial PDK** — which does not announce itself as corruption, it
+announces itself as physics.
+
+The tell was in the log the whole time and reads as noise: two
+`Extracting SKY130 PDK …` lines against one `SKY130 PDK ready.`
+
+Three things worth keeping:
+
+- A fast-path check outside a lock is fine; the work behind it still needs
+  the lock *and a second check inside it*, because whoever waited must not
+  redo what the winner just did.
+- `os.replace` being atomic says nothing about the directory you build
+  before calling it. Give it a name only this caller can own — the pid is
+  enough — so a second *process* cannot clobber it either.
+- The failure mode is silent and downstream. Nothing throws; the numbers
+  just stop being right. That is the same shape as the two-suites rule
+  elsewhere in this file, and the same cause: shared scratch space with no
+  owner.
+
 ### Monkeypatching the sizing package patches nothing
 
 `app/core/sizing/__init__.py` re-exports the package API. Rebinding an

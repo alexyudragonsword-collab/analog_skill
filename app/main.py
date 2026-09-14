@@ -160,6 +160,14 @@ def _start() -> int:
 
 
 def main() -> int:
+    # A frozen build has no python to run `-m` with, so the MCP eval server
+    # re-enters this executable (see llm_client._mcp_server_argv).  First
+    # thing in main and before any Qt import: the child is a stdio JSON-RPC
+    # server, it must never build a window, and anything printed to stdout
+    # that is not JSON-RPC corrupts the protocol.
+    if '--mcp-eval-server' in sys.argv:
+        from app.core.mcp_eval_server import serve
+        return serve()
     try:
         return _start()
     except Exception:

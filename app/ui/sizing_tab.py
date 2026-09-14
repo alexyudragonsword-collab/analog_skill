@@ -61,6 +61,8 @@ class SizingTab(QWidget, JobTabMixin):
             self.algo_combo.addItem('Optuna TPE', userData='optuna')
         self.algo_combo.addItem('LLM-guided (AI — configure in Settings)',
                                 userData='llm')
+        self.algo_combo.addItem('LLM agent (AI drives, Claude Code only)',
+                                userData='llm_agent')
         self.algo_combo.currentIndexChanged.connect(self._update_estimate)
 
         self.budget_spin = QSpinBox()
@@ -236,7 +238,12 @@ class SizingTab(QWidget, JobTabMixin):
         budget = self.budget_spin.value()
         secs = spec.eval_seconds * budget / workers
         note = ''
-        if self.algo_combo.currentData() == 'llm':
+        if self.algo_combo.currentData() == 'llm_agent':
+            # one invocation for the whole search, and the model decides how
+            # many simulations to ask for at a time — there are no rounds to
+            # count, so say so rather than inventing a number
+            note = '  (+ AI time, varies)'
+        elif self.algo_combo.currentData() == 'llm':
             # The simulations are the small half here.  One round is one LLM
             # call plus min(workers, 4) evaluations, and the call can be a
             # hundred times longer than an evaluation — an estimate counting

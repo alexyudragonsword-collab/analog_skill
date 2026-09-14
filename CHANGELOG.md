@@ -7,6 +7,39 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## Unreleased
 
+- **Added — an agentic sizing algorithm, where the model drives.**  The
+  existing `llm` algorithm asks the model a fixed question each round and
+  simulates its answer; `llm_agent` hands it one prompt and a tool and lets
+  it decide what to try, how many at once, and when what it just learned
+  changes its mind.  One CLI invocation covers the whole search.
+  Mechanically: `EvalService` listens on loopback with a per-run token,
+  `mcp_eval_server` is a stdlib JSON-RPC MCP server that forwards to it, and
+  the CLI gets it through `--mcp-config` plus `--allowed-tools` — so the app
+  keeps the budget, the Cancel flag, the parallelism and the ngspice scratch
+  slots exactly where the other four algorithms already have them.  The
+  disarming flags are unchanged and `--strict-mcp-config` still excludes the
+  user's own servers, so the only tool in the session is this one.
+  **It is not claimed to search better**, and on this project's measured
+  33% run-to-run spread that claim could not be supported either way.  What
+  it changes is the shape of the control loop.  A first real run (budget 12)
+  spent 9 evaluations, improved cost 4.05 → 2.99, and came back with an
+  account of *why* — that the input pair was undersized for the bias current
+  and that the AFFC nested-loop cap restored phase margin better than the
+  Miller cap — which the round-based loop has no way to produce.
+  Requires the Claude Code provider; the HTTP providers are not wired for
+  tool use here and the algorithm says so rather than failing obscurely.
+- **Fixed — parallel evaluation could install a half-extracted PDK.**
+  `ensure_sky130()` checked for the directory, then extracted into a temp
+  tree whose name was fixed.  `optimize(workers=4)` evaluates on four
+  threads and each one reaches it, so two could both find it missing — and
+  the second `rmtree`d the first's tree *while it was still extracting into
+  it*, after which the survivor could `os.replace` a partial PDK into place
+  and every simulation afterwards would quietly be wrong.  It showed up as
+  two "Extracting…" lines against one "ready".  Now serialized, re-checked
+  inside the lock, and the temp name carries the pid so two processes do not
+  collide either.  Found while running the agentic algorithm, unrelated to
+  it, and older than both.
+
 - **The LLM-guided optimizer was told a score and nothing else.**  Each
   round it got back `cand 1: {...} -> cost 0.83` — one scalar — and had to
   guess whether it was short on gain, long on power, or off on phase

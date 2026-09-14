@@ -15,8 +15,14 @@ import os
 import subprocess
 import tempfile
 import urllib.error
+import sys
 import urllib.request
 import uuid
+
+from pathlib import Path
+
+import app
+from app.core.mcp_eval_server import TOOL_NAME as MCP_TOOL_NAME
 
 #: 'claude_code' drives the locally installed Claude Code CLI, which uses
 #: the user's own login rather than an API key — see _chat_claude_code.
@@ -376,6 +382,61 @@ def chat(messages: list[dict], system: str | None = None,
         return data['choices'][0]['message']['content'] or ''
     except (KeyError, IndexError, TypeError) as exc:
         raise LLMError(f'unexpected reply shape: {data}') from exc
+
+
+def _mcp_server_argv() -> list[str]:
+    """How to launch our MCP server, source build or frozen.
+
+    Frozen there is no python to run `-m` with — sys.executable *is* the
+    app, so it re-enters itself through the flag main() checks first.
+    """
+    if getattr(sys, 'frozen', False):
+        return [sys.executable, '--mcp-eval-server']
+    return [sys.executable, '-m', 'app.core.mcp_eval_server']
+
+
+def run_agent(prompt: str, system: str, vars_spec: dict, addr: str,
+              token: str, timeout: float, should_stop=None,
+              cfg: dict | None = None) -> str:
+    """One CLI invocation that drives the whole search through our tool.
+
+    The disarming flags still apply — this adds exactly one capability, our
+    own MCP server, and takes nothing away.  --strict-mcp-config is what
+    makes that true: the user's own servers stay out, so the only tool in
+    the session is the one we handed it.
+    """
+    cfg = cfg or get_config()
+    exe = None
+    from app.core import claude_locator
+    exe = claude_locator.resolve()
+    if exe is None:
+        raise LLMError(claude_locator.INSTALL_HINT)
+    mcp = {'mcpServers': {'analog': {
+        'command': _mcp_server_argv()[0],
+        'args': _mcp_server_argv()[1:],
+        'env': {'ANALOG_EVAL_ADDR': addr,
+                'ANALOG_EVAL_TOKEN': token,
+                'ANALOG_EVAL_VARS': json.dumps(vars_spec),
+                # The child re-imports the app, and the CLI starts it in a
+                # working directory of our own making (see _run_cli), so a
+                # relative path finds nothing.  This is the directory that
+                # *contains* the app package, not the package itself.
+                'PYTHONPATH': str(Path(app.__file__).resolve().parent.parent),
+                'PATH': os.environ.get('PATH', '')}}}}
+    argv = [exe, '-p', '--output-format', 'json',
+            '--model', cfg['model'],
+            '--session-id', str(uuid.uuid4()),
+            '--system-prompt', system,
+            '--mcp-config', json.dumps(mcp),
+            '--allowed-tools', f'mcp__analog__{MCP_TOOL_NAME}',
+            *_CLI_SAFE_FLAGS]
+    data = _run_cli(argv, prompt, timeout)
+    if data.get('is_error'):
+        raise LLMError('Claude Code reported an error: '
+                       f"{str(data.get('result'))[:300]}")
+    if should_stop is not None and should_stop():
+        return 'cancelled'
+    return str(data.get('result', ''))
 
 
 def test_connection(cfg: dict | None = None) -> str:

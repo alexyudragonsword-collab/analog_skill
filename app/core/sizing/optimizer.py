@@ -39,6 +39,12 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                         scrambled-Sobol sample around it (parallel batch,
                         ~half the budget), then refine the best point with
                         bounded Powell (serial by nature).
+      'llm_agent'       hands the model a tool and one prompt and lets it
+                        drive: it chooses what to simulate, how many at a
+                        time, and when to change its mind, instead of
+                        answering a fixed question each round.  Needs the
+                        Claude Code provider.  Not measured as better than
+                        'llm' — a different control loop, not a better one.
       'diff_evolution'  scipy differential_evolution with a thread-pool map
                         (population 4x dims per generation — needs larger
                         budgets), polish disabled.
@@ -220,6 +226,14 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                             state=state, run_batch=run_batch,
                             budget=budget, workers=workers)
 
+    def run_llm_agent():
+        from app.core import llm_sizing
+        note = llm_sizing.run_agent_loop(circuit, variables, overrides,
+                                         state=state, run_batch=run_batch,
+                                         budget=budget, workers=workers)
+        if note:
+            print(f'llm agent: {str(note)[:600]}')
+
     try:
         if algo == 'optuna':
             run_optuna()
@@ -227,6 +241,8 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             run_de()
         elif algo == 'llm':
             run_llm()
+        elif algo == 'llm_agent':
+            run_llm_agent()
         else:
             run_sobol_powell()
     except _Cancelled:

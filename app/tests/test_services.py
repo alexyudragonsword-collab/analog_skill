@@ -234,3 +234,58 @@ def test_first_run_expected_only_when_frozen(monkeypatch):
     monkeypatch.setattr(p, '_workspace_root',
                         lambda: (_ for _ in ()).throw(OSError('no Qt')))
     assert p.first_run_expected() is False      # never breaks startup
+
+
+def test_pdk_extraction_is_serialized(tmp_path, monkeypatch):
+    """optimize(workers=4) evaluates on four threads and every one of them
+    reaches ensure_sky130().  Unguarded, two both saw the directory missing
+    and the second rmtree'd the first's half-written temp tree — leaving a
+    partial PDK in place, after which every simulation is quietly wrong.
+    Observed in the wild as two "Extracting..." lines against one "ready"."""
+    import threading
+    import time
+    import zipfile
+    from pathlib import Path
+
+    from app import paths
+
+    target = tmp_path / 'sky130' / 'sky130_pdk'
+    monkeypatch.setattr(paths, 'sky130_pdk_dir', lambda: target)
+    monkeypatch.setattr(paths, 'analoggym_dir', lambda: tmp_path)
+    (tmp_path / 'pdk').mkdir(parents=True, exist_ok=True)
+    (tmp_path / 'pdk' / 'sky130_pdk.zip').write_bytes(b'')
+    inside = []
+
+    class FakeZip:
+        def __init__(self, *a):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def extractall(self, dest):
+            inside.append(dest)
+            time.sleep(0.2)          # hold the window open for the racers
+            (Path(dest) / 'sky130_pdk').mkdir(parents=True)
+
+    monkeypatch.setattr(zipfile, 'ZipFile', FakeZip)
+    errors = []
+
+    def go():
+        try:
+            paths.ensure_sky130()
+        except Exception as exc:             # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=go) for _ in range(4)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join(timeout=20)
+
+    assert not errors, errors
+    assert inside == inside[:1], f'extracted {len(inside)} times, not once'
+    assert target.is_dir()

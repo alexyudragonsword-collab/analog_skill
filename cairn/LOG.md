@@ -2,6 +2,22 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-14 · Agentic algorithm: the model drives
+
+- `llm_agent` added beside `llm`, on architectural grounds only — the model
+  chooses what to simulate and when, instead of answering a fixed question
+  per round. Explicitly not claimed to search better; the 33% spread
+  measured earlier makes that unprovable either way.
+- Shape: EvalService on loopback + a stdlib JSON-RPC MCP server forwarding
+  to it, handed to the CLI via --mcp-config. Budget, Cancel, parallelism and
+  scratch slots stay in the app, so the other four algorithms are untouched.
+- First real run: 9 of 12 evaluations, 4.05 → 2.99, and a written account of
+  why (input pair undersized; the AFFC cap beat the Miller cap for phase
+  margin) — output the round-based loop cannot produce.
+- Found on the way, and older than this work: `ensure_sky130()` could
+  install a half-extracted PDK under `workers=4`. Details:
+  `cairn/pitfalls.md` → "Check then create is a race".
+
 ## 2026-09-14 · The optimizer was telling the model a scalar
 
 - Asked which of "more context" or "an MCP server" was worth doing. Neither
