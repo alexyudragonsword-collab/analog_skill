@@ -2,6 +2,23 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-15 · v1.5 released; the Windows launch report is closed
+
+- v1.5 published with all five packages. Tag pushes are refused by this
+  session's credential proxy, so it went out through the workflow_dispatch
+  route CONTRIBUTING documents for exactly that case (`release_tag` input —
+  the workflow creates the tag itself).
+- Shipped because two of the twenty-one entries reach every user and had
+  nothing to do with the AI work: the half-extracted PDK (silent, on the
+  default `workers` path) and `.include` file reads.
+- "Double-click does nothing" reported resolved. **Root cause not
+  recorded** — the three candidates were instrumented but which one it was
+  never came back, so a recurrence starts from zero. Noted as such in
+  ROADMAP rather than guessed at.
+- A near-miss worth remembering: a script that reordered CHANGELOG bullets
+  deleted 12 of 21 (117 lines). `git diff --stat` caught it. Prettier
+  release notes are not worth a script that can eat them.
+
 ## 2026-09-14 · Operating points captured; measuring whether they are used
 
 - `sizing.operating_points()` injects `op` + a targeted `show` into the

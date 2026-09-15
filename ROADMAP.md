@@ -18,20 +18,16 @@ three-platform test matrix. `ruff check .` is clean and gated. 133 tests,
 
 ## Blocked on the maintainer
 
-Nothing here can be moved by a contributor; each needs a decision or an
-action only the repository owner can take.
+Nothing, as of 2026-09-15. The one item that lived here for the whole of
+this project's public life — "double-click does nothing" on the single-file
+Windows build — was reported resolved by the maintainer.
 
-- **Confirm the single-file Windows build actually launches.** The
-  `nuitka-onefile` job builds the exe and runs it with `--smoke` on a clean
-  runner, exit 0 — but a report of "double-click does nothing" on a real
-  machine is unresolved. Diagnosing it is now much easier: a startup failure
-  writes `%TEMP%\AnalogStudio-crash.txt` and says so in a dialog, and a slow
-  first launch shows a splash saying the assets are being unpacked. So the
-  three candidate causes are now distinguishable rather than guesswork — a
-  crash leaves the file, a slow unpack shows the splash, and SmartScreen
-  blocking shows neither. The exe no longer expires either — it is a
-  [v1.4 release asset](https://github.com/alexyudragonsword-collab/analog_skill/releases/tag/v1.4)
-  now, not a 90-day artifact. Still needs one run on the reporting machine.
+**The root cause was not recorded.** Three candidates were instrumented for
+it (a crash leaves `%TEMP%\AnalogStudio-crash.txt`, a slow first unpack
+shows the splash, SmartScreen shows neither), and any of them would have
+been worth writing down; none was. So a recurrence starts from zero rather
+than from the answer. If it comes back, ask which of the three it looked
+like before touching anything.
 
 ## Open
 
