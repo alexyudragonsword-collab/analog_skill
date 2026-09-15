@@ -230,6 +230,44 @@ def metric_feedback(circuit: str, metrics: dict | None,
     return f'{met}/{len(detail)} met; ' + '; '.join(parts) + more
 
 
+#: Whether each round's feedback carries the best sizing's operating point.
+#:
+#: Measured 2026-09-15, one-shot proposals, n=3 vs 4 with zero overlap: shown
+#: the operating point, the model moves the variables that size the offending
+#: devices **10-12x** more than the rest, where without it the same ratio is
+#: ~1 (0.71-1.46) — it is not targeting at all.  It also moves less overall
+#: (0.035-0.048 against 0.071-0.152), so it is both more selective and more
+#: conservative.  Both p=0.029.
+#:
+#: What that does *not* show is a better outcome: those same proposals left
+#: exactly as many devices out of saturation as before.  Aiming correctly and
+#: failing is what a one-shot task looks like, and a loop is the thing that
+#: fixes one-shot failures — which is the argument for putting it here, and
+#: the whole argument.  It is not evidence that the search converges better.
+LOOP_OPERATING_POINTS = True
+
+
+def _operating_point_note(circuit: str, values: dict | None) -> str:
+    """The best sizing's operating point, or '' if it cannot be had.
+
+    Costs one extra ngspice run, and deliberately **not** charged to the
+    evaluation budget: the budget bounds the search, and this is an
+    observation of a point the search already paid for.  Captured only when
+    the best improves, so a plateaued run stops paying for it.
+
+    Never raises — a failed capture must cost the round its extra context,
+    not the round itself.
+    """
+    if not values:
+        return ''
+    try:
+        from app.core.sizing.evaluation import operating_points
+        return operating_points(circuit, values)
+    except Exception as exc:                          # noqa: BLE001
+        print(f'operating point capture skipped: {exc}')
+        return ''
+
+
 def run_loop(circuit: str, variables: list[VarSpec], overrides,
              state: dict, run_batch, budget: int, workers: int,
              chat=None):
@@ -253,6 +291,7 @@ def run_loop(circuit: str, variables: list[VarSpec], overrides,
                           for n, v in zip(names, vals, strict=True))
         return '{' + inner + '}'
 
+    best_seen = float('inf')                    # gates the op capture below
     run_batch([x0n])                            # evaluation #1: defaults
     messages = [
         {'role': 'user',
@@ -296,6 +335,12 @@ def run_loop(circuit: str, variables: list[VarSpec], overrides,
                        - lo) / span
             feedback.append(f'best so far: cost {state["best"]:.4f} at '
                             f'{fmt_point(best_xn)}  metrics: {best_m}')
+            if LOOP_OPERATING_POINTS and state['best'] < best_seen:
+                best_seen = state['best']
+                op = _operating_point_note(circuit, state['best_x'])
+                if op:
+                    feedback.append('operating point of that best sizing:\n'
+                                    + op)
         remaining = budget - state['dispatched']
         if remaining <= 0 or state['cancel']:
             break

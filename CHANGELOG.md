@@ -5,6 +5,45 @@ development milestones and were never tagged — v1.4 is the first release;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
+## vNext — unreleased
+
+- **The LLM search loop now sees the best sizing's operating point**, and
+  the reason is a measurement rather than a prior.  The earlier one-shot
+  experiment left two readings standing — the model reasons about headroom,
+  or the prompt merely mentions that seven devices are marginal and that
+  induces caution.  They separate: a cautious arm moves *less*, a reasoning
+  arm moves *the implicated variables* more.  Seven devices out of
+  saturation are sized by 4 of this circuit's 33 variables, so both are
+  countable.
+
+  | arm | overall move | implicated / other |
+  |---|---|---|
+  | metrics only | 0.071–0.152 | 0.71 · 0.85 · 0.87 · 1.46 |
+  | + operating points | 0.035–0.048 | **10.5 · 10.9 · 12.5** |
+
+  Shown the operating point, the model moves those four variables **10–12x**
+  more than the rest; without it the same ratio is about 1, which is no
+  targeting at all.  It also moves less overall.  Both effects p=0.029 with
+  zero overlap (n=4 vs 3 — a weekly usage limit ended the run early).  So
+  **both readings are true and targeting is the dominant one**: the data
+  reach the reasoning and are aimed correctly.
+  What this does **not** show is a better outcome — those same proposals
+  left exactly as many devices out of saturation as before.  Aiming
+  correctly and still failing is what a one-shot task looks like, and a
+  loop is the thing that fixes one-shot failures.  That is the argument for
+  putting it in the loop, and it is the whole argument; it is not evidence
+  that the search converges better.
+  Captured only when the best improves, so a plateaued run stops paying for
+  a picture that has not changed, and **not charged to the evaluation
+  budget**: the budget bounds the search, this observes a point the search
+  already paid for.  A failed capture costs the round its extra context,
+  not the round.
+  **The live path has not been exercised.**  The same usage limit that cut
+  the experiment short blocks any real call until it resets, and every
+  previous piece of AI plumbing in this project had a defect that only a
+  live run found.  `ROADMAP.md` carries that as the next step; the offline
+  tests cover the integration, not the model's half of it.
+
 ## v1.5 — 2026-09-15
 
 A second LLM provider and a second sizing algorithm — but the two entries

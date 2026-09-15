@@ -688,3 +688,60 @@ def test_run_loop_feeds_the_metrics_back_not_just_the_cost(monkeypatch):
     assert asked['with_metrics'] is True
     later = '\n'.join(seen[1:])            # the feedback turns
     assert 'DC gain 62.1 dB' in later and 'want >= 100' in later
+
+
+def test_the_loop_shows_the_operating_point_only_when_the_best_improves(
+        monkeypatch):
+    """One extra ngspice run per improvement, not per round — a plateaued
+    search must stop paying for a picture that has not changed.  And it is
+    deliberately not charged to the evaluation budget: the budget bounds
+    the search, this observes a point the search already paid for."""
+    from app.core import llm_sizing
+    from app.core.sizing.spec import VarSpec
+    variables = [
+        VarSpec(name='W_IN', default=5.0, lo=1.0, hi=10.0, is_int=False)]
+    captured = []
+    monkeypatch.setattr(llm_sizing, '_operating_point_note',
+                        lambda c, v: captured.append(v) or 'OP-TEXT-HERE')
+    seen = []
+
+    def fake_chat(messages, **kw):
+        seen.append(messages[-1]['content'])
+        return json.dumps({'rationale': 'r', 'candidates': [{'W_IN': 6.0}]})
+
+    # costs improve, then plateau
+    costs = iter([2.0, 1.0, 1.0, 1.0])
+    state = {'best': None, 'best_x': None, 'best_m': {'dcgain': 60.0},
+             'cancel': False, 'dispatched': 0}
+
+    def run_batch(points, with_metrics=False):
+        state['dispatched'] += len(points)
+        c = next(costs, 1.0)
+        if state['best'] is None or c < state['best']:
+            state['best'], state['best_x'] = c, {'W_IN': 6.0}
+        out = [c] * len(points)
+        return (out, [{'dcgain': 60.0}] * len(points)) if with_metrics else out
+
+    llm_sizing.run_loop('amp_hoilee_affc', variables, None, state=state,
+                        run_batch=run_batch, budget=4, workers=1,
+                        chat=fake_chat)
+    body = '\n'.join(seen)
+    assert 'OP-TEXT-HERE' in body, 'the operating point never reached a prompt'
+    # improved twice (2.0 then 1.0); the plateau rounds must not re-capture
+    assert len(captured) <= 2, f'captured {len(captured)} times on 2 improvements'
+    assert all(v == {'W_IN': 6.0} for v in captured)   # the *best* point
+
+
+def test_a_failed_operating_point_capture_costs_only_its_context(monkeypatch):
+    """ngspice can fail on a point the search accepted.  That must cost the
+    round its extra context, not the round."""
+    from app.core import llm_sizing
+    from app.core.sizing import evaluation as ev
+
+    def boom(circuit, values, slot=0):
+        raise RuntimeError('ngspice went away')
+
+    monkeypatch.setattr(ev, 'operating_points', boom)
+    assert llm_sizing._operating_point_note('amp_hoilee_affc',
+                                            {'W_IN': 1.0}) == ''
+    assert llm_sizing._operating_point_note('amp_hoilee_affc', None) == ''

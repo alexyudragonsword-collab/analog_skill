@@ -2,6 +2,23 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-15 · Operating points: used, and aimed correctly
+
+- The "reasoning or just caution" question is answered, and it is both —
+  with targeting dominant. Shown the operating point the model moves the
+  4 of 33 variables that size the offending devices 10-12x more than the
+  rest; without it the ratio is ~1. It also moves less overall. Both
+  p=0.029, zero overlap, n=4 vs 3 (a weekly limit ended the run).
+- The design that made this measurable: a *countable* consequence of each
+  hypothesis (caution -> smaller moves; reasoning -> skewed moves), chosen
+  before the run. The outcome metric would have shown nothing again.
+- Wired into `run_loop` on that basis — and on nothing else. The same
+  proposals still failed to fix saturation; a loop is what fixes one-shot
+  failures, which is the argument and the whole argument.
+- **Live path unexercised** (same usage limit). Recorded in ROADMAP as the
+  next step, because every earlier AI plumbing change here had a defect
+  that only a live run surfaced.
+
 ## 2026-09-15 · v1.5 released; the Windows launch report is closed
 
 - v1.5 published with all five packages. Tag pushes are refused by this
