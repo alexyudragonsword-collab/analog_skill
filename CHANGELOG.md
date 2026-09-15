@@ -5,7 +5,14 @@ development milestones and were never tagged — v1.4 is the first release;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
-## Unreleased
+## v1.5 — 2026-09-15
+
+A second LLM provider and a second sizing algorithm — but the two entries
+that matter to every user are about neither. **Parallel evaluation could
+install a half-extracted PDK**, silently, after which every simulation is
+wrong; and **an imported netlist could read any file on disk** (v1.4 closed
+the code-execution half of that, not this one). Both are listed below among
+the rest.
 
 - **Added — `sizing.operating_points()`, the layer under the nine metrics.**
   The metrics say *that* a sizing failed; the operating point says *why* —
