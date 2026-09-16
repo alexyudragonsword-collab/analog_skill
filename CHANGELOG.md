@@ -7,42 +7,50 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
-- **The LLM search loop now sees the best sizing's operating point**, and
-  the reason is a measurement rather than a prior.  The earlier one-shot
-  experiment left two readings standing — the model reasons about headroom,
-  or the prompt merely mentions that seven devices are marginal and that
-  induces caution.  They separate: a cautious arm moves *less*, a reasoning
-  arm moves *the implicated variables* more.  Seven devices out of
-  saturation are sized by 4 of this circuit's 33 variables, so both are
-  countable.
+- **The LLM search loop can carry the best sizing's operating point, and
+  does not by default.**  It was switched on for a measured reason and
+  switched off by two later ones, all three in this entry because the middle
+  of that sequence is where the useful part is.
 
-  | arm | overall move | implicated / other |
-  |---|---|---|
-  | metrics only | 0.071–0.152 | 0.71 · 0.85 · 0.87 · 1.46 |
-  | + operating points | 0.035–0.048 | **10.5 · 10.9 · 12.5** |
+  *On:* one-shot proposals, n=4 vs 3 with zero overlap. Shown the operating
+  point the model moves the four variables that size the offending devices
+  **10–12x** more than the rest; without it that ratio is ~1, which is no
+  targeting at all. It also moves less overall. Both p=0.029. The data
+  reach the reasoning and are aimed correctly — that part still stands.
 
-  Shown the operating point, the model moves those four variables **10–12x**
-  more than the rest; without it the same ratio is about 1, which is no
-  targeting at all.  It also moves less overall.  Both effects p=0.029 with
-  zero overlap (n=4 vs 3 — a weekly usage limit ended the run early).  So
-  **both readings are true and targeting is the dominant one**: the data
-  reach the reasoning and are aimed correctly.
-  What this does **not** show is a better outcome — those same proposals
-  left exactly as many devices out of saturation as before.  Aiming
-  correctly and still failing is what a one-shot task looks like, and a
-  loop is the thing that fixes one-shot failures.  That is the argument for
-  putting it in the loop, and it is the whole argument; it is not evidence
-  that the search converges better.
-  Captured only when the best improves, so a plateaued run stops paying for
-  a picture that has not changed, and **not charged to the evaluation
-  budget**: the budget bounds the search, this observes a point the search
-  already paid for.  A failed capture costs the round its extra context,
-  not the round.
-  **The live path has not been exercised.**  The same usage limit that cut
-  the experiment short blocks any real call until it resets, and every
-  previous piece of AI plumbing in this project had a defect that only a
-  live run found.  `ROADMAP.md` carries that as the next step; the offline
-  tests cover the integration, not the model's half of it.
+  *Off, reason one:* **the thing they aim at cannot be fixed by sizing.**
+  The seven devices this circuit reports out of saturation are the same
+  seven at the default sizing, at mid-range, at the low quartile and at the
+  high quartile — the entire design space. They are a property of the
+  topology, a bias mirror sitting 30–80 mV below Vdsat, not a fault.
+
+  *Off, reason two:* **in the loop the targeting collapses.** Across
+  fourteen rounds of a live run the implicated/other ratio went 0.0, 0.9,
+  1.0, 1.7 and then **exactly 0.0 for the last ten** — the model stopped
+  touching those four variables entirely while still moving everything
+  else. Which is the right call: it tried them, cost did not move, it
+  stopped paying. Feedback corrects the misdirection in about four rounds.
+
+  So the measurable effect is four rounds down a dead end, for 5.6% wall
+  time and ~10 kB of prompt per round. `LOOP_OPERATING_POINTS` keeps the
+  mechanism — on a circuit whose out-of-saturation devices *are* fixable it
+  could pay — but a default is set on evidence and this is the evidence.
+  `sizing.operating_points()` is unaffected and still worth calling.
+
+  **Correcting the v1.5 entry**, which cannot be edited because it is a
+  published release note: it reported the declared metric coming back null
+  as "handed a list naming seven devices in triode, the model did not fix
+  them", framed as a negative result about the model. That framing was
+  wrong. Nobody could have fixed them by sizing. The null was guaranteed by
+  the metric, not earned by the model.
+
+  Live-path numbers, since the previous entry said they were unknown: the
+  prompt plateaus at ~83 kB by round 7 (the `HISTORY_ROUNDS = 6` window),
+  the extra ngspice run costs 4.3 s and fires only on improvement (9 times
+  in 60 evaluations), and the run finished 3.3123 → 1.2339 in 11.6 min —
+  the best figure of any run this session and, at a 33% spread, worth
+  nothing as evidence.
+
 
 ## v1.5 — 2026-09-15
 

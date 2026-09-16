@@ -60,17 +60,16 @@ No one has committed to these; they are recorded so the thought is not lost.
   meantime — run the suite from a copy of the tree, since `repo_root()`
   follows `paths.py` (CONTRIBUTING has the two lines) — which lowers the
   urgency without making the gap less real.
-- **Run the LLM loop once for real with operating points on.** The
-  integration is written and covered offline, but no live call has gone
-  through it — a weekly usage limit landed mid-experiment. Every earlier
-  piece of AI plumbing here had a defect only a live run found (the MCP
-  server's PYTHONPATH, the CLI timeout floor), so this is not a formality.
-  What to watch: prompt size across rounds, the extra ngspice run per
-  improvement, and whether the model keeps targeting once it is getting
-  feedback rather than answering cold. `LOOP_OPERATING_POINTS` turns it off.
-  The question it replaces is answered — the model does use the data and
-  aims correctly (10-12x targeting, p=0.029), it just did not succeed in
-  one shot.
+- Find a circuit where the operating point points at something *fixable*.
+  The mechanism works and is measured — cold, the model targets the
+  implicated variables 10-12x harder — but on `amp_hoilee_affc` the devices
+  it names are structurally out of saturation across the entire design
+  space, so the signal is a red herring and `LOOP_OPERATING_POINTS` is off.
+  Whether any of the other 26 circuits has genuinely fixable ones is a
+  question four simulations per circuit can answer, with no model calls:
+  sweep the inputs across their range and see whether the out-of-saturation
+  set changes. If one does, that is where to switch the flag back on and
+  measure properly.
 - Decide whether `llm_agent` earns its place beside `llm`. It exists on
   architectural grounds — the model chooses what to simulate rather than
   answering a fixed question per round — and deliberately carries no claim

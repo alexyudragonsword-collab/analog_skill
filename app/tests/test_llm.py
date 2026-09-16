@@ -701,6 +701,8 @@ def test_the_loop_shows_the_operating_point_only_when_the_best_improves(
     variables = [
         VarSpec(name='W_IN', default=5.0, lo=1.0, hi=10.0, is_int=False)]
     captured = []
+    # the mechanism, not the default — see the test below for that
+    monkeypatch.setattr(llm_sizing, 'LOOP_OPERATING_POINTS', True)
     monkeypatch.setattr(llm_sizing, '_operating_point_note',
                         lambda c, v: captured.append(v) or 'OP-TEXT-HERE')
     seen = []
@@ -745,3 +747,20 @@ def test_a_failed_operating_point_capture_costs_only_its_context(monkeypatch):
     assert llm_sizing._operating_point_note('amp_hoilee_affc',
                                             {'W_IN': 1.0}) == ''
     assert llm_sizing._operating_point_note('amp_hoilee_affc', None) == ''
+
+
+def test_the_loop_does_not_show_operating_points_by_default():
+    """Off on measurement, after being on for a measurement.
+
+    Turning it on rested on a cold-start result — shown the operating point
+    the model targets the implicated variables 10-12x harder.  Two later
+    runs undid it: those devices are structurally out of saturation on this
+    circuit (same seven across the whole design space, so unfixable by
+    sizing), and in the loop the targeting collapses to exactly zero after
+    four rounds once real cost feedback arrives.  What is left is four
+    rounds down a dead end.
+    """
+    from app.core import llm_sizing
+    assert llm_sizing.LOOP_OPERATING_POINTS is False
+    # the capture itself stays available and unconditional
+    assert callable(llm_sizing._operating_point_note)

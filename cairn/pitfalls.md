@@ -317,6 +317,34 @@ rival explanation is still standing, that a prompt mentioning seven
 marginal devices simply induces caution. The next run keeps the proposals
 so that can be told apart.
 
+**Correction, 2026-09-16 — the declared metric could not move, and that is
+a worse mistake than picking the wrong one.** Declaring it in advance was
+right. Never checking whether the *treatment could change it* was not. The
+seven devices come back identical at the default sizing, at mid-range, at
+the low quartile and at the high quartile — the whole design space. They
+are a bias mirror sitting 30–80 mV below Vdsat: a property of the topology,
+not a fault. So "the model did not fix them" was never a finding about the
+model. **A pre-declared metric with no variance under the treatment is not
+a test, it is a guaranteed null**, and it reads exactly like a real
+negative result.
+
+One cheap check would have caught it, and it is now the habit: before
+running the arms, move the *inputs* across their range and confirm the
+metric responds. Four simulations, no model calls.
+
+The same question asked a third way finally answered it. In the loop, with
+real cost feedback, the targeting collapses — fourteen rounds went 0.0,
+0.9, 1.0, 1.7 and then **exactly 0.0 for the last ten**, the model dropping
+those four variables entirely while still moving every other one. That is
+the correct behaviour and it is what a search is for: it tried the thing it
+was pointed at, the cost did not move, it stopped. Cold, the same data
+makes it chase them 10-12x harder.
+
+Which leaves the transferable shape: **information that survives a
+cold-start test can still be useless in a loop, because feedback already
+supplies what the information was standing in for.** Test a loop feature in
+the loop.
+
 Worth keeping alongside the noise-floor lesson above: **a low-variance
 proxy makes small effects visible where the end-to-end outcome cannot.**
 n=5 was enough here because one-shot proposal quality has no compounding

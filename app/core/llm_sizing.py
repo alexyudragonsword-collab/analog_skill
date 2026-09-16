@@ -232,19 +232,31 @@ def metric_feedback(circuit: str, metrics: dict | None,
 
 #: Whether each round's feedback carries the best sizing's operating point.
 #:
-#: Measured 2026-09-15, one-shot proposals, n=3 vs 4 with zero overlap: shown
-#: the operating point, the model moves the variables that size the offending
-#: devices **10-12x** more than the rest, where without it the same ratio is
-#: ~1 (0.71-1.46) — it is not targeting at all.  It also moves less overall
-#: (0.035-0.048 against 0.071-0.152), so it is both more selective and more
-#: conservative.  Both p=0.029.
+#: **Off, on measurement, after being turned on for the same reason.**
 #:
-#: What that does *not* show is a better outcome: those same proposals left
-#: exactly as many devices out of saturation as before.  Aiming correctly and
-#: failing is what a one-shot task looks like, and a loop is the thing that
-#: fixes one-shot failures — which is the argument for putting it here, and
-#: the whole argument.  It is not evidence that the search converges better.
-LOOP_OPERATING_POINTS = True
+#: Turning it on rested on a one-shot result: shown the operating point the
+#: model moved the four variables sizing the offending devices 10-12x more
+#: than the rest, against a ratio of ~1 without it.  That much is real.  Two
+#: later measurements say it does not carry over.
+#:
+#: 1. The seven devices this circuit reports out of saturation are the same
+#:    seven at the default sizing, at mid-range, at the low quartile and at
+#:    the high quartile — the whole design space.  They are a property of the
+#:    topology (a bias mirror sitting 30-80 mV below Vdsat), not a fault the
+#:    search can fix.
+#: 2. In the loop, targeting collapses. Over fourteen rounds the ratio ran
+#:    0.0, 0.9, 1.0, 1.7 and then **exactly 0.0 for the last ten** — the
+#:    model stopped touching those four variables altogether while still
+#:    moving everything else. That is correct: it tried them, cost did not
+#:    improve, it stopped paying for them.
+#:
+#: So the measurable effect here is four rounds spent on a dead end that
+#: feedback then corrects, for 5.6% wall time and ~10 kB of prompt a round.
+#: The mechanism is sound and the capture is kept — on a circuit whose
+#: out-of-saturation devices *are* fixable by sizing it could pay — but a
+#: default has to be set on evidence, and this is the evidence there is.
+#: `sizing.operating_points()` remains available on its own.
+LOOP_OPERATING_POINTS = False
 
 
 def _operating_point_note(circuit: str, values: dict | None) -> str:

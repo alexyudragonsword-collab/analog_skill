@@ -2,6 +2,24 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-16 · Operating points in the loop: measured, then turned off
+
+- Ran it live as ROADMAP asked. Prompt plateaus ~83 kB at round 7, the extra
+  ngspice costs 4.3 s and fires only on improvement (9 in 60 evals), cost
+  3.3123 -> 1.2339 in 11.6 min — best of the session and, at 33% spread,
+  meaningless as evidence.
+- Two findings reversed the default. The seven out-of-saturation devices are
+  identical across the whole design space, so they are topology, not a
+  fault — **my declared metric could never have moved**. And in the loop
+  targeting collapses to exactly 0.0 after four rounds once cost feedback
+  arrives; cold it is 10-12x.
+- `LOOP_OPERATING_POINTS = False`. Mechanism kept, capture unaffected.
+- Corrections appended, not overwritten: `cairn/pitfalls.md` -> "Declare the
+  metric before the run". The v1.5 CHANGELOG entry is published and stays;
+  the correction lives in vNext.
+- My own instrumentation bug ate the first run's third measurement (best
+  point never recorded, silently zero samples). Re-run caught it.
+
 ## 2026-09-15 · Operating points: used, and aimed correctly
 
 - The "reasoning or just caution" question is answered, and it is both —
