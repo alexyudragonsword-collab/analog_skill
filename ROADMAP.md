@@ -31,17 +31,20 @@ like before touching anything.
 
 ## Open
 
-- Measure `de_llm_finish` beyond the one circuit and one DE point it was
-  built on. The result that justified it — three of six proposals land
-  within 0.2° of the phase-margin target with the other eight intact, from
-  a point DE could not leave — is one circuit, one starting point, six
-  proposals. Enough to choose what to build, not enough for a claim in the
-  README. What would settle it: the same finish from DE's endpoint on five
-  or six of the other AnalogGym amplifiers and both LDO families, judged
-  on the same question (does the miss close without breaking a met
-  target), with the raw-proposal and after-line-search costs both
-  recorded. About fifteen minutes of simulator time per circuit and one
-  model call each.
+- `de_llm_finish` is measured on eight circuits, one run each (table in
+  `cairn/pitfalls.md`): DE alone finishes two, the finish closes one more
+  and improves three, and does nothing on one. What is still open is a
+  second seed per circuit before any *rate* is quoted, and what to do
+  where DE stalls far from feasible — `amp_leung_nmcf` at phase margin
+  5° with three targets short — since that is the one case a one-shot
+  diagnosis had nothing for, and the case *Decided against* names as the
+  reopening condition for a model inside the search.
+- Whether the two circuit-skills gain targets are reachable at all
+  (40 dB on the five-transistor OTA, 70 dB on the two-stage; the shipped
+  defaults measure 34 and 64). The finish got to 37 and 65 and the
+  model's rationales describe the remaining gap as set by the topology.
+  A DE run at a much larger budget would say whether the box contains the
+  target; if not, the target is the thing to change.
 - Whether 90° is the right ceiling. It was chosen as the point where
   over-compensation starts costing what nothing else charges for, on one
   design (156°, dominant pole below 0.1 Hz) and one maintainer's call —

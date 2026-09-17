@@ -820,11 +820,12 @@ def test_finish_treats_the_proposal_as_a_direction_and_lands():
     assert 'cost 2.3000 ->' in note and 'widen the input pair' in note
 
 
-def test_finish_tells_the_model_when_a_direction_did_not_help():
-    """A second round is a second opinion, not a repeat: the model is
-    shown what it proposed and that nothing along it improved, and asked
-    not to repeat it.  Re-running the converged search would return the
-    same point, which is why the continuation is another question."""
+def test_finish_rounds_continue_from_the_new_best_with_history():
+    """A second round is a second opinion, not a repeat: it starts from
+    the first round's best and the model is shown what was proposed and
+    what the search made of it.  Re-running the converged search would
+    return the same point, which is why the continuation is another
+    question."""
     from app.core import llm_sizing
     cost_of = lambda w: abs(w - 7.3)
     budget = llm_sizing.finish_reserve()
@@ -834,21 +835,41 @@ def test_finish_tells_the_model_when_a_direction_did_not_help():
 
     def fake_chat(messages, **kw):
         prompts.append(messages[-1]['content'])
-        w = 3.0 if len(prompts) == 1 else 9.0       # wrong way, then right
+        w = 6.0 if len(prompts) == 1 else 9.0       # timid, then bolder
         return json.dumps({'rationale': f'try {w}',
                            'candidates': [{'W_IN': w}]})
 
     note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
                                  state=state, run_batch=run_batch,
                                  budget=budget, workers=4, chat=fake_chat)
-    assert 'round 1' in prompts[1] and 'no point along it improved' in \
-        prompts[1] and 'Do not repeat' in prompts[1]
+    assert 'round 1' in prompts[1] and 'cost 2.3000 ->' in prompts[1] \
+        and 'Do not repeat' in prompts[1]
     assert 'round 1' not in prompts[0]
+    assert 'W_IN: 5' not in prompts[1]            # round 2 starts further on
     assert state['best'] < 0.1
-    assert note.count('round ') >= 2 and 'no point along it improved' in note
+    assert note.count('round ') >= 2
     assert state['dispatched'] <= budget
-    # nothing was spent walking uphill past the coarse scan
-    assert sum(1 for w in evaluated if w < 5.0) <= len(llm_sizing.FINISH_ALPHAS)
+
+
+def test_finish_ends_after_a_round_that_improved_nothing():
+    """Measured on eight circuits: the round after a failed round failed
+    too, five times of five.  So a failed round ends the finish, and the
+    model is not asked again; the remaining reserve goes unspent."""
+    from app.core import llm_sizing
+    budget = llm_sizing.finish_reserve()
+    variables, state, run_batch, evaluated = _finish_harness(
+        5.0, lambda w: abs(w - 7.3), budget)
+    calls = []
+    fake_chat = lambda messages, **kw: calls.append(1) or json.dumps(
+        {'rationale': 'wrong way', 'candidates': [{'W_IN': 3.0}]})
+    note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
+                                 state=state, run_batch=run_batch,
+                                 budget=budget, workers=4, chat=fake_chat)
+    assert len(calls) == 1 and note.count('round ') == 1
+    assert 'no point along it improved' in note
+    assert state['best'] == 2.3                   # the search result survives
+    # the coarse scan and nothing more: no refining toward the start
+    assert len(evaluated) <= len(llm_sizing.FINISH_ALPHAS)
 
 
 def test_finish_stops_at_zero_and_leaves_the_rest_of_the_budget():

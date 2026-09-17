@@ -35,6 +35,25 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   whose best is its own start stops refining instead of bisecting
   toward zero.  The Sizing tab estimates `up to 3 AI calls`.
 
+  **And it stops after a round that improves nothing.**  Validated on
+  eight circuits of four kinds, shipped path, real CLI:
+
+  | circuit | DE at its cap | after the finish | rounds | wall |
+  |---|---|---|---|---|
+  | amp_leung_nmcf | 1.4999 | 1.4999 | 3, none helped (PM 5°) | 17.7 min |
+  | amp_peng_tcfc | 0.6695 | 0.5817 | 1 helped, 2 did not | 18.7 min |
+  | amp_ramos_pfc | 1.3094 | 0.7784 | 1 helped (2 variables), 2 did not | 16.0 min |
+  | amp_fan_smc | 0.4891 | **0.0000** | 3, each helped: 0.058, 0.001, 0 | 11.5 min |
+  | studio_cm_ota | 0 | 0 | DE alone; finish skipped | 1.8 min |
+  | ldo_basic | 0 | 0 | DE alone; finish skipped | 8.8 min |
+  | skill_ota5t | 0.1731 | 0.1492 | 2 helped, 1 did not (gain 37 of 40 dB) | 2.5 min |
+  | skill_opamp2 | 0.2215 | 0.1326 | 1 helped (IBIAS), 2 did not (gain 65 of 70 dB) | 5.1 min |
+
+  Five of six finishes that ran improved in round one; the round after a
+  failed round failed too, five of five, so a failed round now ends the
+  finish (it cost nothing on any of the eight); `amp_fan_smc` needed all
+  three rounds and got them.  Detail in `cairn/pitfalls.md`.
+
 - **Added — `de_llm_finish`, the sixth sizing algorithm and the first
   one to meet every target on the reference amplifier.**  No model in the
   loop.  Differential evolution runs the search with all but the last

@@ -12,9 +12,12 @@ This file records substantive progress in reverse-chronological order — newest
   outcome fed back and "do not repeat" — not more DE, which had
   converged and would hand back the same point. Points memoised across
   rounds; a line search that cannot beat its start stops refining.
-  (3) Validation on eight circuits of four kinds (four more amps, the
-  CM OTA, an LDO, two circuit-skills) — running; results in the next
-  entry.
+  (3) Validation on eight circuits of four kinds, shipped path, real
+  CLI: DE alone finishes 2, the finish closes 1 more (`amp_fan_smc`,
+  three rounds each paying), improves 3, does nothing on 1
+  (`amp_leung_nmcf`, PM 5°). The round after a failed round failed
+  5/5 times, so the finish now stops on a failed round. Table in
+  `cairn/pitfalls.md`.
 - Pointers: CHANGELOG vNext (two new entries at the top), ROADMAP Open
   (ceiling question reframed), tests in `test_llm.py` (finish rounds)
   and `test_sizing.py` (band arithmetic).

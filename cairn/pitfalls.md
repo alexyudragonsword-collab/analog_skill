@@ -443,6 +443,57 @@ proposal then three bisection rounds. The prompt tells the model the app
 will search along its answer — the one thing this measurement says it
 should spend its effort on.
 
+### The finish on eight circuits: round one pays, later rounds rarely do
+
+The maintainer asked for the finish to run more than one round and to be
+tried beyond the one circuit it was built on. Both at once, shipped path,
+real CLI, four kinds of circuit (amps 600 evaluations, CM OTA 400, LDO
+600, circuit-skills 120, three rounds of 16 held back):
+
+| circuit | DE at its cap | after the finish | rounds | wall |
+|---|---|---|---|---|
+| amp_leung_nmcf | 1.4999 | 1.4999 | 3, none helped (PM 5°) | 17.7 min |
+| amp_peng_tcfc | 0.6695 | 0.5817 | 1 helped, 2 did not | 18.7 min |
+| amp_ramos_pfc | 1.3094 | 0.7784 | 1 helped (2 variables), 2 did not | 16.0 min |
+| amp_fan_smc | 0.4891 | **0.0000** | 3, each helped: 0.058, 0.001, 0 | 11.5 min |
+| studio_cm_ota | 0 | 0 | DE alone; finish skipped | 1.8 min |
+| ldo_basic | 0 | 0 | DE alone; finish skipped | 8.8 min |
+| skill_ota5t | 0.1731 | 0.1492 | 2 helped, 1 did not (gain 37 of 40 dB) | 2.5 min |
+| skill_opamp2 | 0.2215 | 0.1326 | 1 helped (IBIAS), 2 did not (gain 65 of 70 dB) | 5.1 min |
+
+Read across the rows, three things are true.
+
+**Where DE stalls short, the first round usually moves it**: five of six
+finishes that ran improved in round one, by 13% to 100%, and the two
+largest gains came from proposals that touched *two* variables (a
+capacitor and the bias current). The one that moved nothing is the one
+that started furthest away — phase margin 5°, three targets short — and
+that is the case ROADMAP already names as where a one-shot diagnosis has
+nothing to say.
+
+**A round after a failed round failed too, five times of five.** The
+model's own rationales say why: by round two it is describing a
+trade-off it believes is fundamental ("GBW ≈ gm1/2πC0 with C0 Miller-
+multiplied", "gain set by IBIAS and the mirror ratio") and proposing
+variations on the direction that already lost. Feeding the failure back
+did not produce a different idea. So the finish now stops after a round
+that improves nothing — which cost nothing on any of the eight and saves
+a model call and sixteen evaluations on four of them.
+
+**Rounds that keep paying keep going**: `amp_fan_smc` needed all three,
+0.489 → 0.058 → 0.001 → 0, one or two variables each, and would have
+stopped one short of feasible under a single round.
+
+Two circuits DE finished by itself, and the early exit spent nothing on
+them. The two circuit-skills gain misses (37 of 40 dB on a five-transistor
+OTA whose shipped default measures 34, 65 of 70 dB on the two-stage) may
+be targets the topology cannot reach in its box; nothing here says either
+way.
+
+Proportion again: eight circuits, one run each, DE's fixed seed. Enough
+to keep the algorithm and set its stopping rule; a claim about *how
+often* it closes the gap wants a second seed per circuit.
+
 ### An equality target with no tolerance can never be met
 
 `MetricScore.met` is `violation <= 0.0`; for a `'target'` metric the

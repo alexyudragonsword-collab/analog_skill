@@ -385,9 +385,11 @@ FINISH_EFFORT = None
 FINISH_EVALS = 16
 
 #: rounds of diagnose-then-search, each from the previous round's best.
-#: The search holds back FINISH_EVALS * FINISH_ROUNDS.  A round that cannot
-#: improve is reported to the model, which is the point of a second one:
-#: it can change its mind, where re-running the converged search cannot.
+#: The search holds back FINISH_EVALS * FINISH_ROUNDS.  The finish ends
+#: early after a round that improved nothing: on the eight validation
+#: circuits a round following a failed one failed too, five times of
+#: five, and stopping there cost nothing anywhere.  Rounds continue only
+#: while they keep paying — amp_fan_smc took three to reach cost 0.
 FINISH_ROUNDS = 3
 
 #: where along the model's direction to look first.  0 is the search's
@@ -496,10 +498,12 @@ def run_finish(circuit: str, variables: list[VarSpec], overrides,
     run_batch like any other evaluation.
 
     The model's proposal is treated as a *direction* from the current
-    best, not a point.  A round that improves nothing is told to the
-    model in the next prompt; a round that meets every target ends it.
-    Re-running the search instead would return the same converged point,
-    which is why the continuation is another question, not more DE.
+    best, not a point.  Earlier rounds are told to the model in the next
+    prompt so it does not repeat itself; a round that meets every target
+    ends the finish, and so does one that improves nothing (measured:
+    the round after a failed one failed too, every time).  Re-running
+    the search instead would return the same converged point, which is
+    why the continuation is another question, not more DE.
     """
     if chat is None:
         if not llm_client.configured():
@@ -565,7 +569,7 @@ def run_finish(circuit: str, variables: list[VarSpec], overrides,
                         else ''))
         history.append(f'  round {rnd}: changed {", ".join(moved)} '
                        f'({rationale[:200]}) -> {outcome}')
-        if after == 0.0:
+        if after == 0.0 or after >= before:
             break
     return '\n'.join(lines) if lines else 'nothing to finish'
 
