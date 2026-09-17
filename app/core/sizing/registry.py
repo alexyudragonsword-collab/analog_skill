@@ -106,11 +106,15 @@ _SKILL_CIRCUITS: dict[str, dict] = {
     # targets calibrated against measured defaults on ngspice-42:
     # ota5t 34.3 dB / 85 MHz / PM 77.2°; opamp2 64.3 dB / 13.7 MHz /
     # PM 80.7° / 1.72 mW; ldo 51.7 dB / 1.18 MHz / PM 58.6° / PSRR 57.3 dB
+    # gain targets on these two are what their boxes can reach, not
+    # aspirations: only widths and bias vary (channel length is fixed), so
+    # gm/gds is bounded, and DE at 600 / 400 evaluations tops out at 37.4
+    # and 65.7 dB.  The earlier 40 / 70 were unreachable by ~3-4 dB.
     'ota5t': dict(
         title='5T OTA — circuit-skills (PTM 180 nm)',
         fixed=('C_LOAD',), eval_seconds=2.0,
         metrics=[
-            MetricSpec('dc_gain_db', 'DC gain', 'dB', 40.0, 'max', 2.0),
+            MetricSpec('dc_gain_db', 'DC gain', 'dB', 36.0, 'max', 2.0),
             MetricSpec('ugb_hz', 'UGB', 'Hz', 100e6, 'max', 2.0),
             MetricSpec('phase_margin_deg', 'Phase margin', 'deg', 60.0,
                        'max', 1.5, ceiling=90.0),
@@ -119,7 +123,7 @@ _SKILL_CIRCUITS: dict[str, dict] = {
         title='Two-stage Miller op amp — circuit-skills (PTM 180 nm)',
         fixed=('CL',), eval_seconds=5.0,
         metrics=[
-            MetricSpec('dc_gain_db', 'DC gain', 'dB', 70.0, 'max', 2.0),
+            MetricSpec('dc_gain_db', 'DC gain', 'dB', 64.0, 'max', 2.0),
             MetricSpec('ugb_hz', 'UGB', 'Hz', 40e6, 'max', 2.0),
             MetricSpec('phase_margin_deg', 'Phase margin', 'deg', 60.0,
                        'max', 1.5, ceiling=90.0),

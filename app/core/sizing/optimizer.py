@@ -33,7 +33,8 @@ def optuna_available() -> bool:
 
 def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
              progress=None, should_cancel=None, overrides: dict | None = None,
-             algo: str = 'sobol_powell', workers: int = 1) -> SizingRun:
+             algo: str = 'sobol_powell', workers: int = 1,
+             seed: int = 0) -> SizingRun:
     """Bounded search, ≤ budget evaluations, optionally parallel.
 
     algo:
@@ -73,6 +74,10 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
     module-global parameters).
 
     overrides: {metric_key: (target, hard)} — see score().
+    seed: for the Sobol sample, DE's population and Optuna's sampler.  A
+    run is repeatable at a given seed; on this problem DE's endpoint
+    depends on it a great deal (five seeds at 60 evaluations spanned
+    0.66-3.31), so a second seed is the cheapest second opinion.
     progress(eval_no, best_cost, metrics) fires after every evaluation;
     should_cancel() → True stops dispatching (in-flight evals finish,
     best-so-far is kept).
@@ -194,7 +199,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             # Sobol sample around the (literature-derived) default sizing:
             # ±25% of each bound span, clipped to the box
             import warnings
-            sob = qmc.Sobol(len(names), scramble=True, seed=0)
+            sob = qmc.Sobol(len(names), scramble=True, seed=seed)
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 pts = sob.random(n_sobol - 1)
@@ -215,7 +220,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             lambda xn: run_batch([xn])[0],   # only used if scipy bypasses map
             bounds=[(0.0, 1.0)] * dims, x0=x0, init='sobol',
             popsize=popsize, maxiter=maxiter, polish=False, tol=0.0,
-            seed=0, updating='deferred',
+            seed=seed, updating='deferred',
             workers=lambda func, xs: run_batch(list(xs)),
             callback=lambda xk, convergence=0.0:
                 state['cancel'] or state['dispatched'] >= limit)
@@ -225,7 +230,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         optuna.logging.set_verbosity(optuna.logging.WARNING)
         study = optuna.create_study(
             direction='minimize',
-            sampler=optuna.samplers.TPESampler(seed=0))
+            sampler=optuna.samplers.TPESampler(seed=seed))
         study.enqueue_trial(
             {n: float(x) for n, x in zip(names, x0, strict=True)})
         while not state['cancel'] and state['dispatched'] < budget:

@@ -346,6 +346,24 @@ def test_optimize_cancel():
     assert run.cancelled and run.evals <= 1
 
 
+def test_optimize_seed_reaches_the_search(monkeypatch):
+    """seed=0 was hardcoded three times; the second seed is the cheapest
+    second opinion on a stochastic search, so it has to be a parameter."""
+    import scipy.optimize as so
+    seen = []
+
+    def fake_de(func, bounds, **kw):
+        seen.append(kw['seed'])
+        return None
+
+    monkeypatch.setattr(so, 'differential_evolution', fake_de)
+    variables = sizing.parse_variables('amp_hoilee_affc')
+    for s in (0, 7):
+        sizing.optimize('amp_hoilee_affc', variables, budget=10,
+                        algo='diff_evolution', seed=s)
+    assert seen == [0, 7]
+
+
 @needs_ngspice
 def test_de_llm_finish_leaves_the_finish_its_reserve(monkeypatch):
     """The search phase stops short so the finish has points to spend:

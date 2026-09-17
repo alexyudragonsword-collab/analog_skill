@@ -7,6 +7,21 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **Changed — the two circuit-skills gain targets are now what their
+  boxes can reach: 36 dB on the five-transistor OTA (was 40), 64 dB on
+  the two-stage (was 70).**  Only widths and bias vary in those boxes —
+  channel length is fixed — so gm/gds is bounded, and differential
+  evolution at 600 and 400 evaluations tops out at 37.4 and 65.7 dB, a
+  few tenths above what the finish reached at a fifth of the budget.  A
+  target no sizing in the box can meet turns every run into a miss; the
+  new values leave about 1.5 dB of slack under the measured ceiling.
+
+- **Added — `optimize(seed=)`.**  The Sobol sample, DE's population and
+  Optuna's sampler took a hardcoded 0.  On this problem DE's endpoint
+  depends on the seed a great deal (five seeds at 60 evaluations spanned
+  0.66–3.31), so a second seed is the cheapest second opinion on any
+  result, and the experiments below use it.  Not in the GUI yet.
+
 - **Changed — phase margin is a band, 60–90°.**  The floor below was the
   right correction to the equality and the wrong stopping point: the
   first design it passed sat at 156°, its dominant pole below the 0.1 Hz

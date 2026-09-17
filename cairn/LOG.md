@@ -2,6 +2,17 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-17 · Three open questions, in progress
+
+- Order chosen: seed parameter first (all three need other seeds; it was
+  hardcoded thrice), then the reference amplifier under the band and the
+  circuit-skills reachability in parallel, then seed 1 on every circuit.
+- Circuit-skills answered: DE at 600 / 400 evaluations reaches 37.4 and
+  65.7 dB against targets of 40 and 70; the boxes vary widths and bias
+  only. Targets lowered to 36 and 64 (CHANGELOG vNext).
+- `optimize(seed=)` added, 190 tests. Reference-amplifier seeds / hard
+  ceiling and the seed-1 sweep are running; results in the next entry.
+
 ## 2026-09-17 · Phase margin is a band; the finish gets rounds
 
 - Maintainer's three asks. (1) Phase margin 60–90: `MetricSpec.ceiling`,
