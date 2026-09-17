@@ -30,7 +30,9 @@ def _violation(ms: MetricSpec, m: float, target: float) -> float:
         return max(0.0, (m - target) / abs(target))
     if ms.direction == 'absmin':
         return max(0.0, (abs(m) - target) / abs(target))
-    return abs(m - target) / abs(target)         # 'target'
+    # 'target' — note it is met only at exact equality, so no spec in the
+    # registry uses it; it stays for overrides and custom circuits.
+    return abs(m - target) / abs(target)
 
 
 @dataclass

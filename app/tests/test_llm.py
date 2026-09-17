@@ -764,3 +764,118 @@ def test_the_loop_does_not_show_operating_points_by_default():
     assert llm_sizing.LOOP_OPERATING_POINTS is False
     # the capture itself stays available and unconditional
     assert callable(llm_sizing._operating_point_note)
+
+
+# ── the finish: one diagnosis, then a line search along it ───────────────────
+def _finish_harness(best_w, cost_of, budget):
+    """A one-variable circuit with a fake optimizer state, wired the way
+    sizing.optimize wires the real one (budget cap, best tracking)."""
+    from app.core.sizing.spec import VarSpec
+    variables = [VarSpec(name='W_IN', default=5.0, lo=0.0, hi=20.0,
+                         is_int=False)]
+    state = {'best': cost_of(best_w), 'best_x': {'W_IN': best_w},
+             'best_m': {'dcgain': 60.0}, 'cancel': False,
+             'dispatched': 0, 'cap': budget}
+    evaluated = []
+
+    def run_batch(points, with_metrics=False):
+        allowed = max(0, budget - state['dispatched'])
+        out = [float('inf')] * len(points)
+        for i, p in enumerate(points[:allowed]):
+            w = float(p[0]) * 20.0
+            evaluated.append(w)
+            out[i] = cost_of(w)
+            if out[i] < state['best']:
+                state['best'], state['best_x'] = out[i], {'W_IN': w}
+        state['dispatched'] += min(allowed, len(points))
+        return (out, [None] * len(points)) if with_metrics else out
+
+    return variables, state, run_batch, evaluated
+
+
+def test_finish_treats_the_proposal_as_a_direction_and_lands():
+    """Measured on the reference amplifier: the model picks the right
+    variables and the wrong amount, every time.  So the proposal is a
+    direction, and the app walks it.  Here the optimum is at 7.3, the
+    search stopped at 5, the model says 9 — and the finish has to land
+    within a tenth without spending more than its reserve."""
+    from app.core import llm_sizing
+    cost_of = lambda w: abs(w - 7.3)
+    variables, state, run_batch, evaluated = _finish_harness(
+        5.0, cost_of, llm_sizing.FINISH_EVALS)
+
+    def fake_chat(messages, **kw):
+        return json.dumps({'rationale': 'widen the input pair',
+                           'candidates': [{'W_IN': 9.0}]})
+
+    note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
+                                 state=state, run_batch=run_batch,
+                                 budget=llm_sizing.FINISH_EVALS, workers=4,
+                                 chat=fake_chat)
+    assert state['best'] < 0.1, (state, evaluated)
+    assert state['dispatched'] <= llm_sizing.FINISH_EVALS
+    assert len(evaluated) == len(set(round(w, 9) for w in evaluated)), \
+        'a point was paid for twice'
+    assert 'moved 1 of 1 variables (W_IN)' in note
+    assert 'cost 2.3000 ->' in note and 'widen the input pair' in note
+
+
+def test_finish_judges_change_against_what_the_model_saw():
+    """The model is shown four significant figures and echoes them back.
+    Compared with the exact values every echo is a change (the first
+    experiment reported 23 of 33 variables moved, real count 2-3); the
+    baseline for "what changed" is the prompt."""
+    from app.core import llm_sizing
+    variables, state, run_batch, evaluated = _finish_harness(
+        5.123456789, lambda w: 1.0, 10)
+    fake_chat = lambda messages, **kw: json.dumps(
+        {'rationale': '', 'candidates': [{'W_IN': 5.123}]})
+    note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
+                                 state=state, run_batch=run_batch,
+                                 budget=10, workers=1, chat=fake_chat)
+    assert 'proposed the current sizing' in note
+    assert evaluated == []
+
+
+def test_finish_spends_nothing_when_there_is_nothing_to_do():
+    from app.core import llm_sizing
+    variables, state, run_batch, evaluated = _finish_harness(
+        5.0, lambda w: 0.0, 10)
+    calls = []
+    note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
+                                 state=state, run_batch=run_batch,
+                                 budget=10, workers=1,
+                                 chat=lambda *a, **k: calls.append(1))
+    assert 'already met' in note and not calls and not evaluated
+
+    variables, state, run_batch, evaluated = _finish_harness(
+        5.0, lambda w: 1.0, 10)
+    note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
+                                 state=state, run_batch=run_batch,
+                                 budget=10, workers=1,
+                                 chat=lambda *a, **k: 'no json here')
+    assert 'no diagnosis' in note and not evaluated
+    assert state['best'] == 1.0                 # the search result survives
+
+
+def test_finish_asks_one_question_at_the_provider_default_effort():
+    """One call, its quality is the whole point: effort is the provider's
+    default (the loop runs at 'low'), the schema allows exactly one
+    candidate, and the prompt says the app will search along the answer —
+    so the model spends its thinking on which variables, not how much."""
+    from app.core import llm_sizing
+    variables, state, run_batch, _ = _finish_harness(5.0, lambda w: 1.0, 10)
+    seen = {}
+
+    def fake_chat(messages, **kw):
+        seen.update(kw, prompt=messages[-1]['content'])
+        return json.dumps({'rationale': 'r', 'candidates': [{'W_IN': 6.0}]})
+
+    llm_sizing.run_finish('amp_hoilee_affc', variables, None, state=state,
+                          run_batch=run_batch, budget=10, workers=1,
+                          chat=fake_chat)
+    assert seen['effort'] is llm_sizing.FINISH_EFFORT is None
+    assert seen['schema']['properties']['candidates']['maxItems'] == 1
+    assert 'search along it' in seen['prompt']
+    assert 'W_IN: 5' in seen['prompt']              # the point it starts from
+    assert 'ONE sizing' in seen['prompt']

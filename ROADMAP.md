@@ -31,11 +31,34 @@ like before touching anything.
 
 ## Open
 
-Nothing, as of 2026-09-13 — which is a statement about this list, not about
-the project. Everything that was here has either landed (see
-[`CHANGELOG.md`](./CHANGELOG.md)), been answered and moved to *Decided
-against*, or turned out to need the maintainer's own machine and sits above.
-The next item comes from *Ideas* below, or from a bug report.
+- Measure `de_llm_finish` beyond the one circuit and one DE point it was
+  built on. The result that justified it — three of six proposals land
+  within 0.2° of the phase-margin target with the other eight intact, from
+  a point DE could not leave — is one circuit, one starting point, six
+  proposals. Enough to choose what to build, not enough for a claim in the
+  README. What would settle it: the same finish from DE's endpoint on five
+  or six of the other AnalogGym amplifiers and both LDO families, judged
+  on the same question (does the miss close without breaking a met
+  target), with the raw-proposal and after-line-search costs both
+  recorded. About fifteen minutes of simulator time per circuit and one
+  model call each.
+- Decide whether phase margin needs a ceiling. The first design to meet
+  every target on `amp_hoilee_affc` has a phase margin of 156°: dominant
+  pole below the sweep's 0.1 Hz, DC gain 144 dB, the AFFC zero lifting the
+  phase to 170° just below a single 1.26 MHz crossing. Stable and within
+  spec, and heavily over-compensated in a way GBW (1.42 MHz against 1.2)
+  did not charge for. The old equality rule rejected such designs by
+  accident, along with every design at 61°. If over-compensation should
+  cost something, the honest form is a band — `'max'` 60 plus a soft
+  ceiling, or a settling-time metric that measures the real price — not a
+  return to equality. A designer's call, not a code one.
+- The finish addresses one miss at a time. When DE leaves two targets
+  short (seed 0 leaves power and, under the old rule, phase margin) the
+  prompt names both and the line search minimizes total cost along one
+  direction, which is the right thing only if the model's one proposal
+  serves both. A second round — re-diagnose from the line search's best,
+  with the remaining reserve — is the obvious extension and costs one more
+  model call; not built because no measured case needed it yet.
 
 ## Ideas, not commitments
 
@@ -102,6 +125,20 @@ No one has committed to these; they are recorded so the thought is not lost.
 
 Reopening these is fine, but start from the reasoning, not from zero.
 
+- **A model in the loop as the recommended way to size** (asked and
+  answered 2026-09-17, after a week of building exactly that). `llm` and
+  `llm_agent` stay in the menu and keep working. What the baseline showed:
+  at 60 evaluations the loop is the most *reliable* of the four searches
+  (1.23–2.83 across ten runs against DE's 0.66–3.31 across five seeds)
+  and the second best, and per minute of wall clock DE wins by twenty
+  times, because a round is a 25–100 s model call plus four 3.5 s
+  simulations. Improving the loop was never going to change that ratio.
+  What the model is demonstrably good at is naming *which* variables fix
+  a miss — six of six on the reference amplifier — and demonstrably bad at
+  is the amount, zero of six; those two facts are the whole design of
+  `de_llm_finish`. Reopen if a circuit turns up where DE stalls far from
+  feasibility and a one-shot diagnosis cannot name the fix — that is the
+  case where a model *inside* the search would earn its cost.
 - **A `keyring` dependency for the LLM API key** (asked and answered
   2026-09-13). The key is stored in plain text by `QSettings`, and
   `ANALOG_LLM_API_KEY` already covers the case that motivated changing it —

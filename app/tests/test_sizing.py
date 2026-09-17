@@ -133,6 +133,13 @@ def test_score_directions():
     worse = dict(perfect, dcgain=50)
     assert sizing.score(spec_key, worse) > 0
     assert sizing.score(spec_key, {}) > 10               # missing → penalty
+    # phase margin is a floor, not an equality: 78 deg is met, 50 is not.
+    # As an equality target it was met only at exactly 60.000, which no
+    # amplifier here ever reported — "all targets met" was unreachable.
+    assert sizing.score(spec_key, dict(perfect, phase_in_deg=78.3)) == 0.0
+    assert sizing.score(spec_key, dict(perfect, phase_in_deg=50.0)) > 0
+    assert all(d.met for d in sizing.score_detail(
+        spec_key, dict(perfect, phase_in_deg=59.86))) is False
 
 
 def test_score_overrides_and_hard():
@@ -332,6 +339,32 @@ def test_optimize_cancel():
                           should_cancel=lambda: True)
     # cancelled before the second evaluation; the initial one is kept
     assert run.cancelled and run.evals <= 1
+
+
+@needs_ngspice
+def test_de_llm_finish_leaves_the_finish_its_reserve(monkeypatch):
+    """The search phase stops short so the finish has points to spend:
+    with a budget below the reserve it gets half, and the finish sees the
+    whole budget as its cap.  A cancelled search skips the finish."""
+    from app.core import llm_sizing
+    seen = []
+
+    def fake_finish(circuit, variables, overrides, *, state, run_batch,
+                    budget, workers, chat=None):
+        seen.append((state['dispatched'], state['cap'], budget))
+        return 'fake finish'
+
+    monkeypatch.setattr(llm_sizing, 'run_finish', fake_finish)
+    variables = sizing.parse_variables('amp_hoilee_affc')
+    run = sizing.optimize('amp_hoilee_affc', variables, budget=8,
+                          algo='de_llm_finish', workers=4)
+    assert run.evals == 4                        # DE got half of a tiny budget
+    assert seen == [(4, 8, 8)]
+
+    seen.clear()
+    run = sizing.optimize('amp_hoilee_affc', variables, budget=8,
+                          algo='de_llm_finish', should_cancel=lambda: True)
+    assert run.cancelled and seen == []
 
 
 # ── P4: fast comparator proxy / bootstrap metrics / parallel / DE ────────────

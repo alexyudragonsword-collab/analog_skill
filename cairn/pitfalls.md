@@ -437,6 +437,12 @@ diagnosis, a line search for the number — not a model in the loop.
 Caveat in proportion: one circuit, one DE point, six proposals. Enough to
 choose the next thing to build, not enough to put a number in a README.
 
+Built the same day as `de_llm_finish` (`llm_sizing.run_finish`): DE to
+all but the last 16 evaluations, one call, a six-point scan along the
+proposal then three bisection rounds. The prompt tells the model the app
+will search along its answer — the one thing this measurement says it
+should spend its effort on.
+
 ### An equality target with no tolerance can never be met
 
 `MetricScore.met` is `violation <= 0.0`; for a `'target'` metric the
@@ -448,6 +454,11 @@ of "nothing reached feasibility" was partly a definition. The fix is a
 tolerance (or a direction: `≥ 60` with no penalty above, as the CM OTA
 already does at 55°), and it changes cost values, so it is a spec decision
 rather than a bug fix to slip in.
+
+**Resolved the same day, by the maintainer's call: `≥ 60`** on every
+amplifier, LDO and circuit-skills spec. Cost values measured before the
+change are under the old rule; the tables in this file say which. The
+`'target'` kind itself is unchanged and unused by the registry.
 
 ### ngspice `show` is column-oriented, and the column is the only key
 

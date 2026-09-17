@@ -2,6 +2,31 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-17 · `de_llm_finish` shipped; phase margin is a floor
+
+- Both changes the maintainer approved, in one commit. Phase margin on
+  every amp, LDO and circuit-skills spec is now `'max'` 60 (was `'target'`,
+  met only at exact equality — so "all targets met" had been unreachable
+  by definition). Cost values on those circuits moved; earlier tables are
+  under the old rule and say so.
+- New algorithm: DE to all but the last 16 evaluations, one model call
+  asked *what* would fix the misses (told the app will search along it),
+  a six-point scan at 0.25–2x the proposal plus three bisection rounds.
+  Any provider; `state['cap']` in the optimizer is how the search leaves
+  the finish its reserve. Five new tests, one on real ngspice.
+- Live run of the shipped path, budget 616, real CLI: DE 0.0276 (only
+  offset missed, 6%), model moved the three input-pair variables, scan
+  hit **cost 0 at 1.5x — all nine targets met**, 606 evals, 10.5 min.
+  First feasible sizing this project has produced — at PM 156°, which the
+  floor permits and the equality rule would have charged 2.4 for. Bode
+  checked: one crossing, dominant pole below 0.1 Hz, AFFC zero lifts the
+  phase near crossover. Ceiling-or-not is an open ROADMAP question.
+- Decided against, in ROADMAP: a model in the loop as the recommended
+  search. `llm` / `llm_agent` stay. Open: measure the finish on other
+  circuits; a second diagnosis round when two targets are short.
+- Pointers: CHANGELOG vNext (both entries), `cairn/pitfalls.md` (two
+  resolution notes appended), ROADMAP Open / Decided against.
+
 ## 2026-09-17 · The baseline nobody ran, and the last mile
 
 - Ran LLM vs classical for the first time, all on `amp_hoilee_affc` at 60

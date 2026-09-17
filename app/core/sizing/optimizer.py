@@ -1,9 +1,11 @@
 """The optimization loop: evaluate -> score -> propose, under a budget.
 
-Four algorithms share one driver (budget accounting, cancellation and
+Six algorithms share one driver (budget accounting, cancellation and
 parallel evaluation slots): the built-in Sobol+Powell search, SciPy
-differential evolution, Optuna TPE, and the LLM-guided loop in
-:mod:`app.core.llm_sizing`.
+differential evolution, Optuna TPE, the two LLM-driven loops in
+:mod:`app.core.llm_sizing`, and DE followed by one LLM diagnosis and a
+line search — the only one of the six that has produced a sizing meeting
+every target on the reference amplifier.
 """
 
 import time
@@ -48,6 +50,15 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
       'diff_evolution'  scipy differential_evolution with a thread-pool map
                         (population 4x dims per generation — needs larger
                         budgets), polish disabled.
+      'de_llm_finish'   'diff_evolution' for all but the last few
+                        evaluations, then one LLM call to name the fix
+                        for whatever is still missed, then a line search
+                        along the model's proposal with what is left
+                        (see llm_sizing.run_finish).  Any LLM provider.
+                        Measured: DE alone converges short of the phase
+                        margin target and stays there; the model picks
+                        the right variables and the wrong amounts; the
+                        line search supplies the amounts.
       'optuna'          TPE via batch ask/tell (if optuna is installed).
       'llm'             LLM-in-the-loop (needs an API key in Settings):
                         the model proposes candidates in physical units,
@@ -84,8 +95,12 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
     x0 = (np.array([v.default for v in variables], float) - lo) / span
 
     lock = threading.Lock()
+    # 'cap' is the ceiling a phase may dispatch up to (<= budget); the
+    # two-phase algorithm lowers it for the search so the finish is left
+    # something to spend.
     state = {'done': 0, 'dispatched': 0, 'best': None, 'best_x': None,
-             'best_m': {}, 'best_xn': x0, 'history': [], 'cancel': False}
+             'best_m': {}, 'best_xn': x0, 'history': [], 'cancel': False,
+             'cap': budget}
     slots = _queue.SimpleQueue()
     for i in range(workers):
         slots.put(i)
@@ -138,7 +153,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             if _cancelled():
                 state['cancel'] = True
             allowed = 0 if state['cancel'] else max(
-                0, budget - state['dispatched'])
+                0, min(budget, state['cap']) - state['dispatched'])
             todo = points[:allowed]
             state['dispatched'] += len(todo)
         out = [float('inf')] * len(points)
@@ -165,7 +180,8 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         with lock:
             if _cancelled():
                 state['cancel'] = True
-            if state['cancel'] or state['dispatched'] >= budget:
+            if (state['cancel']
+                    or state['dispatched'] >= min(budget, state['cap'])):
                 raise _Cancelled
             state['dispatched'] += 1
         return _safe_eval(xn)[0]      # Powell minimizes a scalar
@@ -189,11 +205,11 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                  options={'maxfev': max(budget - state['dispatched'], 1),
                           'xtol': 1e-3, 'ftol': 1e-4})
 
-    def run_de():
+    def run_de(limit: int = budget):
         from scipy.optimize import differential_evolution
         dims = len(names)
         popsize = 4                          # individuals = 4 x dims
-        maxiter = max(1, budget // (popsize * dims))
+        maxiter = max(1, limit // (popsize * dims))
         differential_evolution(
             lambda xn: run_batch([xn])[0],   # only used if scipy bypasses map
             bounds=[(0.0, 1.0)] * dims, x0=x0, init='sobol',
@@ -201,7 +217,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             seed=0, updating='deferred',
             workers=lambda func, xs: run_batch(list(xs)),
             callback=lambda xk, convergence=0.0:
-                state['cancel'] or state['dispatched'] >= budget)
+                state['cancel'] or state['dispatched'] >= limit)
 
     def run_optuna():
         import optuna
@@ -234,11 +250,27 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         if note:
             print(f'llm agent: {str(note)[:600]}')
 
+    def run_de_llm_finish():
+        from app.core import llm_sizing
+        # the reserve is a floor, not a share: the finish needs a fixed
+        # handful of points, and a tiny budget still has to leave it some
+        state['cap'] = max(budget - llm_sizing.FINISH_EVALS, budget // 2)
+        run_de(state['cap'])
+        state['cap'] = budget
+        if state['cancel'] or state['dispatched'] >= budget:
+            return
+        note = llm_sizing.run_finish(circuit, variables, overrides,
+                                     state=state, run_batch=run_batch,
+                                     budget=budget, workers=workers)
+        print(f'llm finish: {note}')
+
     try:
         if algo == 'optuna':
             run_optuna()
         elif algo == 'diff_evolution':
             run_de()
+        elif algo == 'de_llm_finish':
+            run_de_llm_finish()
         elif algo == 'llm':
             run_llm()
         elif algo == 'llm_agent':

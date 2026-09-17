@@ -373,7 +373,11 @@ def test_estimate_counts_the_ai_rounds_not_just_the_simulations(window,
     tab.algo_combo.setCurrentIndex(tab.algo_combo.findData('llm'))
     with_ai = tab._estimate.text()
 
+    tab.algo_combo.setCurrentIndex(tab.algo_combo.findData('de_llm_finish'))
+    one_call = tab._estimate.text()
+
     assert 'AI rounds' in with_ai and 'AI rounds' not in sims_only
     assert '38 AI rounds' in with_ai            # ceil(150 / 4)
+    assert '1 AI call' in one_call              # one diagnosis, not a loop
     minutes = lambda s: int(s.split('≈')[1].split('min')[0].strip())
     assert minutes(with_ai) > minutes(sims_only) * 10

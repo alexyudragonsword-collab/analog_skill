@@ -57,6 +57,9 @@ class SizingTab(QWidget, JobTabMixin):
                                 userData='sobol_powell')
         self.algo_combo.addItem('Differential evolution (global, '
                                 'large budgets)', userData='diff_evolution')
+        self.algo_combo.addItem('DE + AI finish (DE searches, AI names '
+                                'the fix, line search lands it)',
+                                userData='de_llm_finish')
         if sizing.optuna_available():
             self.algo_combo.addItem('Optuna TPE', userData='optuna')
         self.algo_combo.addItem('LLM-guided (AI — configure in Settings)',
@@ -243,6 +246,10 @@ class SizingTab(QWidget, JobTabMixin):
             # many simulations to ask for at a time — there are no rounds to
             # count, so say so rather than inventing a number
             note = '  (+ AI time, varies)'
+        elif self.algo_combo.currentData() == 'de_llm_finish':
+            from app.core.llm_sizing import FINISH_EFFORT
+            secs += llm_client.round_seconds(effort=FINISH_EFFORT)
+            note = '  (+ 1 AI call)'
         elif self.algo_combo.currentData() == 'llm':
             # The simulations are the small half here.  One round is one LLM
             # call plus min(workers, 4) evaluations, and the call can be a
@@ -301,7 +308,8 @@ class SizingTab(QWidget, JobTabMixin):
         key = self._key()
         budget = self.budget_spin.value()
         algo = self.algo_combo.currentData()
-        if algo == 'llm' and not llm_client.configured():
+        if (algo in ('llm', 'de_llm_finish')
+                and not llm_client.configured()):
             self._status.setText('<font color="red">LLM not configured — '
                                  'set model + API key in Settings.</font>')
             return

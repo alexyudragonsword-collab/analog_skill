@@ -7,6 +7,63 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **Added — `de_llm_finish`, the sixth sizing algorithm and the first
+  one to meet every target on the reference amplifier.**  No model in the
+  loop.  Differential evolution runs the search with all but the last
+  `FINISH_EVALS` (16) evaluations; the model is then asked **once** what
+  would fix whatever is still missed, told that the app will search along
+  its answer; and a line search — a six-point scan at 0.25x to 2x the
+  proposal, then three rounds of bisection around the best — spends the
+  reserve.  Works with any LLM provider, since it is one `chat()` call
+  with a one-candidate schema at the provider's default effort.
+
+  The measurement it rests on, all on `amp_hoilee_affc`:
+
+  | | cost | targets | wall |
+  |---|---|---|---|
+  | DE, 600 evaluations (seed 3) | 0.5076 | 8/9, PM 39.7° | 7.7 min |
+  | DE, 1200 evaluations | **0.5076** | same point — converged by ~530 | 15.5 min |
+  | + one LLM proposal, as written (6 tries) | 0.26–0.84 | 0 of 6 at PM 60 | +2.5 min |
+  | + line search along that proposal | **0.004** in 3 of 6 | PM 59.8–60.2°, 8 intact | +21 s |
+
+  Every proposal moved 2–3 compensation variables in the right direction
+  by the wrong amount; the three that also widened the AFFC transconductor
+  land, the three that touched only the capacitors stall with both at the
+  top of their range.  Showing the model the operating point did not
+  change the odds (2 of 3 with, 1 of 3 without), so the finish does not.
+  The Sizing tab's estimate counts it as one AI call.
+
+  Then the shipped path, as a user would run it — budget 616, four
+  workers, DE's fixed seed, the real CLI: DE reaches 0.0276 at evaluation
+  ~500 with only the input offset missed (105.5 µV against 100), the model
+  moves the three input-pair variables and nothing else, and the six-point
+  scan finds **cost 0.0000 — all nine targets met** — at 1.5x the
+  proposal.  606 evaluations, 10.5 minutes.
+
+  Look at that design before celebrating it: its phase margin is **156°**.
+  The AC sweep says why — a dominant pole below the 0.1 Hz sweep start
+  (the phase is already 150° at the first point, DC gain 144 dB), and the
+  AFFC feed-forward zero lifts the phase back to 170° just below the
+  single 1.26 MHz gain crossing.  Stable, one crossing, output at the
+  same 0.45 V as every other sizing, six of thirty devices out of
+  saturation against the usual seven.  Heavily over-compensated, and
+  exactly what a *floor* on phase margin permits; the equality rule would
+  have charged it 2.4.  Whether the spec wants a ceiling is in ROADMAP.
+  Six proposals on one circuit chose what to build; one circuit and two
+  runs do not put a number in the README (see ROADMAP).
+
+- **Changed — phase margin is a floor (≥ 60°), no longer an equality.**
+  Every amplifier, LDO and circuit-skills spec carried it as `'target'`,
+  whose violation is zero only at *exactly* 60.000° — so `met` was never
+  true and "all targets met", cost 0, and the feasibility question the
+  whole LLM effort was chasing were unreachable by definition on those
+  circuits.  A sizing at 59.86° read "8/9 met, off 0%".  Now `'max'`, as
+  the CM OTA already had it at 55°: overshoot is free (its cost is speed,
+  which GBW already charges for).  Cost values on those circuits change
+  accordingly; earlier numbers in this file and in `cairn/` were measured
+  under the old rule.  The `'target'` kind stays for overrides and custom
+  circuits, with its behaviour noted at the definition.
+
 - **The LLM search loop can carry the best sizing's operating point, and
   does not by default.**  It was switched on for a measured reason and
   switched off by two later ones, all three in this entry because the middle
