@@ -2,6 +2,31 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-17 · The baseline nobody ran, and the last mile
+
+- Ran LLM vs classical for the first time, all on `amp_hoilee_affc` at 60
+  evaluations: sobol_powell 3.306, optuna 3.247, DE 1.205 (five seeds
+  0.66–3.31, ~45 s each), LLM loop median 1.377 over ten runs (12–26 min).
+  The LLM is the most *reliable* at that budget, not the best, and per
+  minute DE wins outright.
+- Feasibility: DE seed 3 reaches 0.5076 at 600 evals, 8/9 met, phase
+  margin 39.7° short of 60. **At 1200 it is the same number** — the
+  population had converged by ~530. Running DE longer is not a path.
+- The last mile: from that DE point, six one-shot proposals (three with
+  the operating point, three without) each moved 2–3 compensation
+  variables, all in the right direction, all by the wrong amount. A
+  seven-simulation bisection along each proposal's direction lands
+  **3 of 6 at PM 59.8–60.2° with the other eight intact** (cost 0.004,
+  21 s) — success exactly when the proposal touched the AFFC gm width.
+  Operating point made no difference (2/3 vs 1/3). First near-feasible
+  design this project has produced; ~11 min end to end.
+- Found on the way: a `'target'` metric can never be reported met, since
+  `met` demands violation ≤ 0 and that is equality. Cost 0 is unreachable
+  by definition on every amp and LDO circuit. Not fixed — a spec decision.
+- Facts in `cairn/pitfalls.md` (four new sections). Direction — DE search
+  with an LLM-chosen line search as the finish — is the maintainer's call;
+  ROADMAP and CHANGELOG untouched until then.
+
 ## 2026-09-16 · Operating points in the loop: measured, then turned off
 
 - Ran it live as ROADMAP asked. Prompt plateaus ~83 kB at round 7, the extra

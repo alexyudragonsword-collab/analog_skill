@@ -351,6 +351,104 @@ n=5 was enough here because one-shot proposal quality has no compounding
 search randomness in it; the same five runs measured as search outcomes
 would have shown nothing at all.
 
+### Run the baseline before the fourth experiment on the treatment
+
+A week of A/B tests on the LLM-guided optimizer — effort, per-metric
+feedback, structured output, operating points — and not one of them asked
+whether the LLM path beats the three classical algorithms already in the
+app. The baseline costs ten minutes of simulator time and no model calls,
+and it reorders every other result. `amp_hoilee_affc`, 60 evaluations:
+
+| algorithm | best cost | spread | wall |
+|---|---|---|---|
+| sobol_powell | 3.306 | — | 112 s |
+| optuna | 3.247 | — | 51 s |
+| diff_evolution | 1.205 (seed 0) | 0.66–3.31 over five seeds | 45 s |
+| LLM loop | 1.377 median | 1.23–2.83 over ten runs | 12–26 min |
+
+The two model-based samplers do nothing at all in 33 dimensions with 60
+points. DE at that budget is a 60-point Sobol sample with one generation
+of selection — hence the 5x spread across seeds. The LLM loop is the most
+*reliable* of the four at this budget and the second best, and per minute
+of wall clock DE wins by a factor of twenty. All of the earlier questions
+("does the operating point help the loop?") were being asked about the
+wrong quantity: the loop was never the fastest way down, and no
+improvement to it was going to change that.
+
+The order of operations that would have avoided this: baseline first,
+then treatments, then treatments *of the winner*.
+
+### Running the optimizer longer is not a plan until you have checked
+
+DE seed 3 reaches 0.5076 at 600 evaluations, eight of nine targets met,
+phase margin 39.7° against 60. The obvious next step — run it to 1200 —
+returns **0.5076**. The history shows the last improvement at evaluation
+~530; the population had converged and every generation after it was a
+no-op. A converged DE looks exactly like a slow one from the outside; the
+history is the only thing that tells them apart, and it is recorded.
+
+### Compare the proposal against what the model was shown
+
+Six one-shot proposals from the same DE point each reported **23 of 33
+variables changed**, against a prompt that said "change as few as you
+can". The model was shown values formatted `.4g`; it echoed them back at
+four significant figures; the comparison ran against the full-precision
+originals, so every rounded value counted as a change. Against the values
+actually in the prompt, each proposal moved **two or three** — the two
+compensation capacitors and one of the feed-forward widths, exactly the
+"compensation and stability" variables the prompt asked for.
+
+The general form: a model can only return what it was given, so the
+baseline for "what did it change" is the prompt, not the state that
+produced the prompt. And a suspiciously constant number (23, every time)
+is a measurement artefact until shown otherwise.
+
+### One shot gets the knob right and the magnitude wrong
+
+The same six proposals, judged as asked — does phase margin reach 60°
+without breaking the eight met targets:
+
+| arm | raw proposal PM | after bisection along its direction |
+|---|---|---|
+| with-op t0 | 78.3 | **59.9**, 8/9 intact, cost 0.0035 |
+| with-op t1 | 49.7 | stalls at 50 with both caps at range top |
+| with-op t2 | 49.5 (gain broken) | stalls at 43 |
+| metrics-only t0 | 90.2 (offset broken) | **59.8**, 8/9 intact, cost 0.0043 |
+| metrics-only t1 | 48.9 | stalls at 50 |
+| metrics-only t2 | 88.0 (offset broken) | **60.2**, 8/9 intact, cost 0.0043 |
+
+Zero of six land. Six of six move PM the right way. Three of six overshoot
+by 20–30° and, walked back along their own direction with seven
+simulations (21 s), sit within 0.2° of the target with nothing else
+broken — the first near-feasible sizing this project has produced, from a
+point DE could not leave. The three that fail are the three that touched
+only the capacitors; the three that succeed are the three that also
+widened the AFFC transconductor (`MOSFET_60_2_W_gma_NMOS`), which is the
+textbook knob for this topology. The operating point did not change the
+odds (2 of 3 with it, 1 of 3 without).
+
+So the model's contribution is *which variables*, and its failure is *how
+far*. Those are cheap to separate: a one-dimensional search along the
+model's direction costs seven simulations, against 600 for the DE that got
+stuck and ~150 s for the model call that picked the direction. The shape
+of the thing that works is DE for the bulk, one model call for the
+diagnosis, a line search for the number — not a model in the loop.
+
+Caveat in proportion: one circuit, one DE point, six proposals. Enough to
+choose the next thing to build, not enough to put a number in a README.
+
+### An equality target with no tolerance can never be met
+
+`MetricScore.met` is `violation <= 0.0`; for a `'target'` metric the
+violation is `|m − target| / |target|`, which is zero only at exact
+equality. Every amplifier and LDO circuit carries phase margin as a
+`'target'`, so "9/9 met" and cost 0 are unreachable on them by
+construction — the sizing above at 59.86° reads "8/9 met, off 0%". A week
+of "nothing reached feasibility" was partly a definition. The fix is a
+tolerance (or a direction: `≥ 60` with no penalty above, as the CM OTA
+already does at 55°), and it changes cost values, so it is a spec decision
+rather than a bug fix to slip in.
+
 ### ngspice `show` is column-oriented, and the column is the only key
 
 `show m : id,vgs,gm,...` prints devices **three to a block**, one row per
