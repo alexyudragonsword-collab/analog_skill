@@ -18,6 +18,11 @@ This file records substantive progress in reverse-chronological order — newest
   (`amp_leung_nmcf`, PM 5°). The round after a failed round failed
   5/5 times, so the finish now stops on a failed round. Table in
   `cairn/pitfalls.md`.
+- Then the reference amplifier under the band: DE lands in the 156°
+  basin (cost 1.12), three rounds reach 151° — unsolved, and the one
+  counterexample to the stopping rule (5/6 now; correction appended, rule
+  kept). The ceiling removed a solution without supplying one; ROADMAP
+  says what would tell seed from circuit.
 - Pointers: CHANGELOG vNext (two new entries at the top), ROADMAP Open
   (ceiling question reframed), tests in `test_llm.py` (finish rounds)
   and `test_sizing.py` (band arithmetic).

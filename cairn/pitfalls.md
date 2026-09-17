@@ -494,6 +494,35 @@ Proportion again: eight circuits, one run each, DE's fixed seed. Enough
 to keep the algorithm and set its stopping rule; a claim about *how
 often* it closes the gap wants a second seed per circuit.
 
+**Correction, an hour later — five of six, not five of five.** The
+reference amplifier re-run under the 60–90° band (below) ran on the
+code from before the stopping rule, and its third round improved after
+two failed ones: 1.1242 → 1.0354, 8%, phase margin 156° → 151°, still
+61° outside the band. So the rule has one counterexample, and what the
+counterexample bought was small. The rule stays: five wasted calls
+against one 8% gain. Written down so the next person does not read
+"every time" and stop looking.
+
+### Under the band, the reference amplifier is unsolved
+
+`amp_hoilee_affc`, shipped path, 616 evaluations, real CLI, phase
+margin as a 60–90° band: DE's fixed seed converges into the same
+over-compensated basin as before — 155.8°, offset 3% over, cost 1.12 —
+and three finish rounds cannot bring the phase margin down. The model
+names the right knobs (the compensation capacitors, the AFFC
+transconductor, the feed-forward stage) and every line through them
+either leaves the phase where it is or breaks something met. The design
+the floor called feasible is the one the band charges 1.1 for, and no
+algorithm in the app currently reaches the band on this circuit from
+this seed.
+
+That is the price of the ceiling, stated plainly: it removed a solution
+without supplying one. It does not say the ceiling is wrong — a 156°
+amplifier with its dominant pole below 0.1 Hz is not what anyone asked
+for — but it does say the band is the harder problem, and the search
+that finds it will be a different search: a seed that does not land in
+that basin, or DE told about the ceiling early enough to leave it.
+
 ### An equality target with no tolerance can never be met
 
 `MetricScore.met` is `violation <= 0.0`; for a `'target'` metric the

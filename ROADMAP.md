@@ -50,6 +50,12 @@ like before touching anything.
   design (156°, dominant pole below 0.1 Hz) and one maintainer's call —
   not from a settling-time measurement, which is what the ceiling stands
   in for. A settling-time metric would replace the guess with the price.
+  And the price today is concrete: under the band `amp_hoilee_affc` is
+  unsolved — DE's fixed seed lands in the 156° basin and three finish
+  rounds get it to 151°. Two things would tell whether that is the seed
+  or the circuit: a second DE seed (`seed=0` is hardcoded in
+  `run_de`), and a run with the ceiling as a hard constraint so DE
+  leaves the basin early. Neither has been run.
 
 ## Ideas, not commitments
 

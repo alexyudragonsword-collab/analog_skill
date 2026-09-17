@@ -54,6 +54,16 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   finish (it cost nothing on any of the eight); `amp_fan_smc` needed all
   three rounds and got them.  Detail in `cairn/pitfalls.md`.
 
+  *Correction, same day:* the reference amplifier re-run under the band
+  (next paragraph) made that five of **six** — its third round improved
+  8% after two failed ones.  The rule stays; the record is corrected.
+
+  **The reference amplifier under the band is unsolved.**  Same shipped
+  path, 616 evaluations: DE converges into the 156° basin the floor had
+  called feasible (now cost 1.12, offset 3% over), and three rounds of
+  finish move the phase margin only to 151°.  The ceiling removed a
+  solution without supplying one; see ROADMAP for what would.
+
 - **Added — `de_llm_finish`, the sixth sizing algorithm and the first
   one to meet every target on the reference amplifier.**  No model in the
   loop.  Differential evolution runs the search with all but the last
