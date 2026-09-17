@@ -53,7 +53,7 @@ class SizingRun:
                 mark = '✓' if _violation(ms, m, target) <= 1e-9 else '✗'
                 val = f'{m:.4g}'
             lines.append(f'{ms.label:<22}{val:>14} {ms.unit:<6}'
-                         f'{mark} {ms.direction} {target:g}'
+                         f'{mark} {ms.rule} {target:g}'
                          + ('  [HARD]' if hard else ''))
         if self.verified is not None:
             vkey = SIZING[self.circuit].verify_key

@@ -216,7 +216,7 @@ class SizingTab(QWidget, JobTabMixin):
         metrics = sizing.SIZING[self._key()].metrics
         self._targets.setRowCount(len(metrics))
         for row, ms in enumerate(metrics):
-            lbl = QTableWidgetItem(f'{ms.label} [{ms.unit}] ({ms.direction})')
+            lbl = QTableWidgetItem(f'{ms.label} [{ms.unit}] ({ms.rule})')
             lbl.setFlags(lbl.flags() & ~Qt.ItemFlag.ItemIsEditable)
             lbl.setData(Qt.ItemDataRole.UserRole, ms.key)
             self._targets.setItem(row, 0, lbl)
@@ -247,9 +247,10 @@ class SizingTab(QWidget, JobTabMixin):
             # count, so say so rather than inventing a number
             note = '  (+ AI time, varies)'
         elif self.algo_combo.currentData() == 'de_llm_finish':
-            from app.core.llm_sizing import FINISH_EFFORT
-            secs += llm_client.round_seconds(effort=FINISH_EFFORT)
-            note = '  (+ 1 AI call)'
+            from app.core.llm_sizing import FINISH_EFFORT, FINISH_ROUNDS
+            secs += FINISH_ROUNDS * llm_client.round_seconds(
+                effort=FINISH_EFFORT)
+            note = f'  (+ up to {FINISH_ROUNDS} AI calls)'
         elif self.algo_combo.currentData() == 'llm':
             # The simulations are the small half here.  One round is one LLM
             # call plus min(workers, 4) evaluations, and the call can be a

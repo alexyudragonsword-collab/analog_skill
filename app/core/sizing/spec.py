@@ -40,6 +40,16 @@ class MetricSpec:
     direction: str        # 'max' | 'min' | 'target' | 'absmin' (|m| ≤ target)
     weight: float = 1.0
     hard: bool = False    # hard constraint: violations weigh 10x
+    # a 'max' metric with a ceiling is a band: met between target and
+    # ceiling, penalised on both sides.  The GUI edits the floor only.
+    ceiling: float | None = None
+
+    @property
+    def rule(self) -> str:
+        """The direction as the prompts, report and table print it."""
+        if self.ceiling is not None:
+            return f'{self.direction}, <= {self.ceiling:g}'
+        return self.direction
 
 
 @dataclass

@@ -25,7 +25,10 @@ _HARD_FACTOR = 10.0
 
 def _violation(ms: MetricSpec, m: float, target: float) -> float:
     if ms.direction == 'max':
-        return max(0.0, (target - m) / abs(target))
+        v = max(0.0, (target - m) / abs(target))
+        if ms.ceiling is not None:            # a band: over the top costs too
+            v = max(v, (m - ms.ceiling) / abs(ms.ceiling))
+        return v
     if ms.direction == 'min':
         return max(0.0, (m - target) / abs(target))
     if ms.direction == 'absmin':
@@ -55,7 +58,8 @@ def score_detail(circuit: str, metrics: dict,
                  overrides: dict | None = None) -> list[MetricScore]:
     """Per-metric breakdown of the cost, in the circuit's own metric order.
 
-    max:    penalize (target − m)/|target| when below target
+    max:    penalize (target − m)/|target| when below target; with a
+            ceiling, also (m − ceiling)/|ceiling| above it (a band)
     min:    penalize (m − target)/|target| when above target
     absmin: like min on |m|
     target: |m − target|/|target|  (e.g. phase margin 60°)

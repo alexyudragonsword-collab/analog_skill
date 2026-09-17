@@ -816,8 +816,56 @@ def test_finish_treats_the_proposal_as_a_direction_and_lands():
     assert state['dispatched'] <= llm_sizing.FINISH_EVALS
     assert len(evaluated) == len(set(round(w, 9) for w in evaluated)), \
         'a point was paid for twice'
-    assert 'moved 1 of 1 variables (W_IN)' in note
+    assert 'round 1: moved 1 of 1 variables (W_IN)' in note
     assert 'cost 2.3000 ->' in note and 'widen the input pair' in note
+
+
+def test_finish_tells_the_model_when_a_direction_did_not_help():
+    """A second round is a second opinion, not a repeat: the model is
+    shown what it proposed and that nothing along it improved, and asked
+    not to repeat it.  Re-running the converged search would return the
+    same point, which is why the continuation is another question."""
+    from app.core import llm_sizing
+    cost_of = lambda w: abs(w - 7.3)
+    budget = llm_sizing.finish_reserve()
+    variables, state, run_batch, evaluated = _finish_harness(
+        5.0, cost_of, budget)
+    prompts = []
+
+    def fake_chat(messages, **kw):
+        prompts.append(messages[-1]['content'])
+        w = 3.0 if len(prompts) == 1 else 9.0       # wrong way, then right
+        return json.dumps({'rationale': f'try {w}',
+                           'candidates': [{'W_IN': w}]})
+
+    note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
+                                 state=state, run_batch=run_batch,
+                                 budget=budget, workers=4, chat=fake_chat)
+    assert 'round 1' in prompts[1] and 'no point along it improved' in \
+        prompts[1] and 'Do not repeat' in prompts[1]
+    assert 'round 1' not in prompts[0]
+    assert state['best'] < 0.1
+    assert note.count('round ') >= 2 and 'no point along it improved' in note
+    assert state['dispatched'] <= budget
+    # nothing was spent walking uphill past the coarse scan
+    assert sum(1 for w in evaluated if w < 5.0) <= len(llm_sizing.FINISH_ALPHAS)
+
+
+def test_finish_stops_at_zero_and_leaves_the_rest_of_the_budget():
+    """Once every target is met there is nothing to ask."""
+    from app.core import llm_sizing
+    budget = llm_sizing.finish_reserve()
+    variables, state, run_batch, evaluated = _finish_harness(
+        5.0, lambda w: 0.0 if abs(w - 7.0) < 1e-9 else 1.0, budget)
+    calls = []
+    fake_chat = lambda messages, **kw: calls.append(1) or json.dumps(
+        {'rationale': '', 'candidates': [{'W_IN': 9.0}]})   # 0.5x hits 7
+    note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
+                                 state=state, run_batch=run_batch,
+                                 budget=budget, workers=4, chat=fake_chat)
+    assert state['best'] == 0.0 and len(calls) == 1
+    assert state['dispatched'] <= len(llm_sizing.FINISH_ALPHAS)
+    assert '-> 0.0000' in note
 
 
 def test_finish_judges_change_against_what_the_model_saw():

@@ -7,6 +7,34 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **Changed — phase margin is a band, 60–90°.**  The floor below was the
+  right correction to the equality and the wrong stopping point: the
+  first design it passed sat at 156°, its dominant pole below the 0.1 Hz
+  sweep start, over-compensated in a way no other metric charged for.
+  `MetricSpec` gains a `ceiling`; a `'max'` metric with one is penalised
+  on both sides, `(m − ceiling)/ceiling` above.  Every amplifier, LDO and
+  circuit-skills phase-margin spec carries `ceiling=90`; the GUI's target
+  column still edits the floor only.  The CM OTA keeps its `≥ 55` with
+  no ceiling, for the reason written next to it (single-pole, naturally
+  ~90°).  Prompts, report and the targets table print the band
+  (`max, <= 90`); the feedback line says `want 60..90`.  That 156°
+  design now costs 1.1.
+
+- **Changed — the finish runs up to three rounds, not one.**  Each round
+  diagnoses from the previous round's best and searches along the new
+  answer; the search phase holds back `FINISH_EVALS × FINISH_ROUNDS`
+  (48) and each round is capped at its 16.  A round that improves
+  nothing is reported to the model in the next prompt — the proposal,
+  its rationale, "no point along it improved" — with an instruction not
+  to repeat it, which is what makes a second round a second opinion.
+  Why not re-run DE between rounds: it had converged (600 and 1200
+  evaluations gave the same point), so re-running it returns the point
+  the finish started from; the continuation that can change anything is
+  another question.  Points are memoised across rounds — a later round
+  from a new best often lands on the earlier proposal — and a line search
+  whose best is its own start stops refining instead of bisecting
+  toward zero.  The Sizing tab estimates `up to 3 AI calls`.
+
 - **Added — `de_llm_finish`, the sixth sizing algorithm and the first
   one to meet every target on the reference amplifier.**  No model in the
   loop.  Differential evolution runs the search with all but the last

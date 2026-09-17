@@ -378,6 +378,6 @@ def test_estimate_counts_the_ai_rounds_not_just_the_simulations(window,
 
     assert 'AI rounds' in with_ai and 'AI rounds' not in sims_only
     assert '38 AI rounds' in with_ai            # ceil(150 / 4)
-    assert '1 AI call' in one_call              # one diagnosis, not a loop
+    assert 'up to 3 AI calls' in one_call       # a few diagnoses, not a loop
     minutes = lambda s: int(s.split('≈')[1].split('min')[0].strip())
     assert minutes(with_ai) > minutes(sims_only) * 10

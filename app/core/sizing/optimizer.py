@@ -51,10 +51,11 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                         (population 4x dims per generation — needs larger
                         budgets), polish disabled.
       'de_llm_finish'   'diff_evolution' for all but the last few
-                        evaluations, then one LLM call to name the fix
-                        for whatever is still missed, then a line search
-                        along the model's proposal with what is left
-                        (see llm_sizing.run_finish).  Any LLM provider.
+                        evaluations, then up to FINISH_ROUNDS rounds of:
+                        one LLM call to name the fix for whatever is
+                        still missed, and a line search along the
+                        model's proposal (see llm_sizing.run_finish).
+                        Any LLM provider.
                         Measured: DE alone converges short of the phase
                         margin target and stays there; the model picks
                         the right variables and the wrong amounts; the
@@ -254,7 +255,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         from app.core import llm_sizing
         # the reserve is a floor, not a share: the finish needs a fixed
         # handful of points, and a tiny budget still has to leave it some
-        state['cap'] = max(budget - llm_sizing.FINISH_EVALS, budget // 2)
+        state['cap'] = max(budget - llm_sizing.finish_reserve(), budget // 2)
         run_de(state['cap'])
         state['cap'] = budget
         if state['cancel'] or state['dispatched'] >= budget:

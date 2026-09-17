@@ -42,23 +42,11 @@ like before touching anything.
   target), with the raw-proposal and after-line-search costs both
   recorded. About fifteen minutes of simulator time per circuit and one
   model call each.
-- Decide whether phase margin needs a ceiling. The first design to meet
-  every target on `amp_hoilee_affc` has a phase margin of 156°: dominant
-  pole below the sweep's 0.1 Hz, DC gain 144 dB, the AFFC zero lifting the
-  phase to 170° just below a single 1.26 MHz crossing. Stable and within
-  spec, and heavily over-compensated in a way GBW (1.42 MHz against 1.2)
-  did not charge for. The old equality rule rejected such designs by
-  accident, along with every design at 61°. If over-compensation should
-  cost something, the honest form is a band — `'max'` 60 plus a soft
-  ceiling, or a settling-time metric that measures the real price — not a
-  return to equality. A designer's call, not a code one.
-- The finish addresses one miss at a time. When DE leaves two targets
-  short (seed 0 leaves power and, under the old rule, phase margin) the
-  prompt names both and the line search minimizes total cost along one
-  direction, which is the right thing only if the model's one proposal
-  serves both. A second round — re-diagnose from the line search's best,
-  with the remaining reserve — is the obvious extension and costs one more
-  model call; not built because no measured case needed it yet.
+- Whether 90° is the right ceiling. It was chosen as the point where
+  over-compensation starts costing what nothing else charges for, on one
+  design (156°, dominant pole below 0.1 Hz) and one maintainer's call —
+  not from a settling-time measurement, which is what the ceiling stands
+  in for. A settling-time metric would replace the guess with the price.
 
 ## Ideas, not commitments
 

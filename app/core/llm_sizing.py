@@ -37,7 +37,7 @@ def _metric_lines(spec, overrides) -> list[str]:
     for ms in spec.metrics:
         target, hard = ov.get(ms.key, (ms.target, ms.hard))
         out.append(f'  - {ms.key} ({ms.label}, {ms.unit}): '
-                   f'{ms.direction} {target:g}'
+                   f'{ms.rule} {target:g}'
                    + ('  [HARD constraint, 10x weight]' if hard else ''))
     return out
 
@@ -229,8 +229,10 @@ def metric_feedback(circuit: str, metrics: dict | None,
             continue
         want = {'max': '>=', 'min': '<=', 'absmin': '|x| <=',
                 'target': '='}[ms.direction]
+        goal = (f'{d.target:.4g}..{ms.ceiling:.4g}' if ms.ceiling is not None
+                else f'{want} {d.target:.4g}')
         parts.append(f'{ms.label} {d.value:.4g} {ms.unit} '
-                     f'(want {want} {d.target:.4g}, off {d.violation:.0%})')
+                     f'(want {goal}, off {d.violation:.0%})')
     more = f' +{len(missed) - limit} more' if len(missed) > limit else ''
     return f'{met}/{len(detail)} met; ' + '; '.join(parts) + more
 
@@ -373,14 +375,20 @@ def run_loop(circuit: str, variables: list[VarSpec], overrides,
 # ─────────────────────────────────────────────────────────────────────────────
 # The finish (sizing.optimize, algo='de_llm_finish')
 # ─────────────────────────────────────────────────────────────────────────────
-#: effort for the one diagnosis call.  None = the provider's default: this
-#: is a single call whose quality is the whole point, so the 2.5 minutes
-#: are not the place to save.
+#: effort for the diagnosis calls.  None = the provider's default: these
+#: are a handful of calls whose quality is the whole point, so the 2.5
+#: minutes each are not the place to save.
 FINISH_EFFORT = None
 
-#: evaluations held back from the search for the line search.  The coarse
-#: scan is len(FINISH_ALPHAS); each refinement round costs two more.
+#: evaluations one round's line search may spend.  The coarse scan is
+#: len(FINISH_ALPHAS); each refinement round costs up to two more.
 FINISH_EVALS = 16
+
+#: rounds of diagnose-then-search, each from the previous round's best.
+#: The search holds back FINISH_EVALS * FINISH_ROUNDS.  A round that cannot
+#: improve is reported to the model, which is the point of a second one:
+#: it can change its mind, where re-running the converged search cannot.
+FINISH_ROUNDS = 3
 
 #: where along the model's direction to look first.  0 is the search's
 #: best point, 1 is the proposal as written; the measured proposals
@@ -388,8 +396,13 @@ FINISH_EVALS = 16
 FINISH_ALPHAS = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
 
 
+def finish_reserve() -> int:
+    return FINISH_EVALS * FINISH_ROUNDS
+
+
 def finish_prompt(circuit: str, variables: list[VarSpec], overrides,
-                  values: dict, metrics: dict | None) -> str:
+                  values: dict, metrics: dict | None,
+                  history: list[str] = ()) -> str:
     """One question: what would fix what is still missed, from here.
 
     The prompt says what the app will do with the answer — search along
@@ -397,35 +410,96 @@ def finish_prompt(circuit: str, variables: list[VarSpec], overrides,
     on amounts it has no way to calibrate.  Measured on the reference
     amplifier: six proposals, six correct directions, zero correct
     amounts; the direction was what mattered.
+
+    `history` carries earlier rounds' proposals and what the line search
+    made of them, so a second round is a second opinion, not a repeat.
     """
     shown = ', '.join(f'{v.name}: {values[v.name]:.4g}' for v in variables)
-    return (describe_circuit(circuit, variables, overrides)
+    text = (describe_circuit(circuit, variables, overrides)
             + f'\n\nAn optimizer has reached this sizing:\n{{{shown}}}\n'
-            + f'It measures: {metric_feedback(circuit, metrics, overrides)}'
-            + '\n\nPropose ONE sizing that fixes the missed targets WITHOUT '
-              'breaking the ones that are met. Change as few variables as '
-              'you can, only ones that bear on the misses, and name them '
-              'and the reason in the rationale. Every variable must '
-              'appear, inside its range. Your proposal sets a direction '
-              'and the app will search along it, so getting the variables '
-              'right matters more than the amounts.')
+            + f'It measures: {metric_feedback(circuit, metrics, overrides)}')
+    if history:
+        text += ('\n\nEarlier proposals from this point, and what a search '
+                 'along each one found:\n' + '\n'.join(history)
+                 + '\nDo not repeat a direction that did not help.')
+    return text + (
+        '\n\nPropose ONE sizing that fixes the missed targets WITHOUT '
+        'breaking the ones that are met. Change as few variables as '
+        'you can, only ones that bear on the misses, and name them '
+        'and the reason in the rationale. Every variable must '
+        'appear, inside its range. Your proposal sets a direction '
+        'and the app will search along it, so getting the variables '
+        'right matters more than the amounts.')
+
+
+def _line_search(state: dict, run_batch, cap: int, xb, d,
+                 memo: list) -> dict:
+    """Costs along xb + alpha*d, alpha -> cost, spending at most `cap`
+    dispatches in total.  Coarse scan first, then bisection on both sides
+    of the best alpha; stops early at cost 0.
+
+    `memo` is every (point, cost) this finish has paid for: a later round
+    from a new best can land on one again (the proposal itself, often),
+    and clipping at the box folds distinct alphas onto one point."""
+    seen = {0.0: state['best']}
+
+    def at(alpha):
+        return np.clip(xb + alpha * d, 0.0, 1.0)
+
+    def scan(cands):
+        pts, keep = [xb], []
+        for a in cands:
+            if a in seen or any(np.allclose(at(a), q) for q in pts):
+                continue
+            known = next((c for q, c in memo if np.allclose(at(a), q)),
+                         None)
+            if known is not None:
+                seen[a] = known
+                continue
+            pts.append(at(a))
+            keep.append(a)
+        if not keep or state['cancel']:
+            return
+        costs = run_batch([at(a) for a in keep])
+        for a, c in zip(keep, costs, strict=True):
+            if np.isfinite(c):                # the cap ran out → inf
+                seen[a] = c
+                memo.append((at(a), c))
+
+    scan(list(FINISH_ALPHAS))
+    for _ in range(3):
+        if state['dispatched'] >= cap or min(seen.values()) == 0.0:
+            break
+        order = sorted(seen)
+        i = min(range(len(order)), key=lambda k: seen[order[k]])
+        if i == 0:              # nothing along it beat the start: no refining
+            break
+        mids = []
+        if i > 0:
+            mids.append((order[i - 1] + order[i]) / 2)
+        if i + 1 < len(order):
+            mids.append((order[i] + order[i + 1]) / 2)
+        else:                                 # best is the far end: extend
+            mids.append(order[i] * 1.5)
+        scan(mids)
+    return seen
 
 
 def run_finish(circuit: str, variables: list[VarSpec], overrides,
                state: dict, run_batch, budget: int, workers: int,
                chat=None) -> str:
-    """The last mile: one diagnosis, then a line search along it.
+    """The last mile: diagnose, search along the diagnosis, repeat.
 
     Called by sizing.optimize after the search phase with whatever the
-    budget has left.  Returns a one-line account for the log; the best
-    point, if the line search finds one, lands in `state` through
+    budget has left.  Returns an account for the log, one line per round;
+    the best point, if a line search finds one, lands in `state` through
     run_batch like any other evaluation.
 
     The model's proposal is treated as a *direction* from the current
-    best, not a point: the coarse scan looks at FINISH_ALPHAS of the way
-    along it (past the proposal too), then each round bisects on both
-    sides of the best alpha found.  Seven to sixteen simulations, which
-    is what one round of the loop costs in model time alone.
+    best, not a point.  A round that improves nothing is told to the
+    model in the next prompt; a round that meets every target ends it.
+    Re-running the search instead would return the same converged point,
+    which is why the continuation is another question, not more DE.
     """
     if chat is None:
         if not llm_client.configured():
@@ -439,77 +513,61 @@ def run_finish(circuit: str, variables: list[VarSpec], overrides,
     lo = np.array([v.lo for v in variables], float)
     hi = np.array([v.hi for v in variables], float)
     span = np.where(hi > lo, hi - lo, 1.0)
-    best_x, before = dict(state['best_x']), state['best']
-    xb = np.clip((np.array([best_x[n] for n in names]) - lo) / span, 0, 1)
+    history, lines, memo = [], [], []
 
-    try:
-        reply = chat([{'role': 'user', 'content': finish_prompt(
-            circuit, variables, overrides, best_x, state['best_m'])}],
-            system=_SYSTEM, schema=candidates_schema(names, lo, hi, 1),
-            effort=FINISH_EFFORT)
-        xp = _parse_candidates(reply, names, lo, hi, 1)[0]
-    except llm_client.LLMError as exc:
-        return f'no diagnosis ({exc}); keeping the search result'
-    doc = llm_client.extract_json(reply)
-    rationale = (doc.get('rationale', '') if isinstance(doc, dict) else '')
-
-    # what the model changed, judged against the 4-significant-figure
-    # values it was shown — against the exact ones every echoed value
-    # would count as a change
-    shown = np.array([float(f'{best_x[n]:.4g}') for n in names])
-    prop = xp * span + lo
-    moved = [n for n, a, b in zip(names, shown, prop, strict=True)
-             if abs(b - a) > 1e-6 * max(abs(a), abs(b), 1e-30)]
-    if not moved:
-        return 'the model proposed the current sizing; nothing to search'
-    d = xp - xb
-
-    def at(alpha):
-        return np.clip(xb + alpha * d, 0.0, 1.0)
-
-    seen = {0.0: before}
-
-    def scan(cands):
-        # clipping at the box can fold two alphas onto one point (or back
-        # onto the start); paying twice for one point is the waste to skip
-        pts, keep = [xb], []
-        for a in cands:
-            if a in seen or any(np.allclose(at(a), q) for q in pts):
-                continue
-            pts.append(at(a))
-            keep.append(a)
-        if not keep or state['cancel']:
-            return
-        cands = keep
-        costs = run_batch([at(a) for a in cands])
-        for a, c in zip(cands, costs, strict=True):
-            if np.isfinite(c):                # the budget ran out → inf
-                seen[a] = c
-
-    scan(list(FINISH_ALPHAS))
-    for _ in range(3):
-        if state['dispatched'] >= budget or min(seen.values()) == 0.0:
+    for rnd in range(1, FINISH_ROUNDS + 1):
+        if state['cancel'] or state['dispatched'] >= budget:
             break
-        order = sorted(seen)
-        i = min(range(len(order)), key=lambda k: seen[order[k]])
-        mids = []
-        if i > 0:
-            mids.append((order[i - 1] + order[i]) / 2)
-        if i + 1 < len(order):
-            mids.append((order[i] + order[i + 1]) / 2)
-        else:                                 # best is the far end: extend
-            mids.append(order[i] * 1.5)
-        scan(mids)
-    a_best = min(seen, key=seen.get)
-    after = seen[a_best]
-    summary = (f'model moved {len(moved)} of {len(names)} variables '
-               f'({", ".join(moved[:6])}{", ..." if len(moved) > 6 else ""})'
-               f'; line search over {len(seen) - 1} points: '
-               f'cost {before:.4f} -> {after:.4f} at {a_best:.3g}x the '
-               f'proposal')
-    if rationale:
-        summary += f'. Rationale: {rationale[:300]}'
-    return summary
+        best_x, before = dict(state['best_x']), state['best']
+        xb = np.clip((np.array([best_x[n] for n in names]) - lo) / span,
+                     0, 1)
+        try:
+            reply = chat([{'role': 'user', 'content': finish_prompt(
+                circuit, variables, overrides, best_x, state['best_m'],
+                history)}],
+                system=_SYSTEM, schema=candidates_schema(names, lo, hi, 1),
+                effort=FINISH_EFFORT)
+            xp = _parse_candidates(reply, names, lo, hi, 1)[0]
+        except llm_client.LLMError as exc:
+            lines.append(f'round {rnd}: no diagnosis ({exc})')
+            break
+        doc = llm_client.extract_json(reply)
+        rationale = (doc.get('rationale', '') if isinstance(doc, dict)
+                     else '')
+        # what the model changed, judged against the 4-significant-figure
+        # values it was shown — against the exact ones every echoed value
+        # would count as a change
+        shown = np.array([float(f'{best_x[n]:.4g}') for n in names])
+        prop = xp * span + lo
+        moved = [n for n, a, b in zip(names, shown, prop, strict=True)
+                 if abs(b - a) > 1e-6 * max(abs(a), abs(b), 1e-30)]
+        if not moved:
+            lines.append(f'round {rnd}: the model proposed the current '
+                         'sizing; stopping')
+            break
+        # this round's share of the reserve, never past the budget
+        state['cap'] = min(budget, state['dispatched'] + FINISH_EVALS)
+        seen = _line_search(state, run_batch, state['cap'], xb, xp - xb,
+                            memo)
+        state['cap'] = budget
+        a_best = min(seen, key=seen.get)
+        after = seen[a_best]
+        what = (f'moved {len(moved)} of {len(names)} variables '
+                f'({", ".join(moved[:6])}{", ..." if len(moved) > 6 else ""})')
+        if after < before:
+            outcome = (f'cost {before:.4f} -> {after:.4f} at {a_best:.3g}x '
+                       f'the proposal ({len(seen) - 1} points)')
+        else:
+            outcome = (f'no point along it improved on {before:.4f} '
+                       f'({len(seen) - 1} points)')
+        lines.append(f'round {rnd}: {what}; {outcome}'
+                     + (f'. Rationale: {rationale[:300]}' if rationale
+                        else ''))
+        history.append(f'  round {rnd}: changed {", ".join(moved)} '
+                       f'({rationale[:200]}) -> {outcome}')
+        if after == 0.0:
+            break
+    return '\n'.join(lines) if lines else 'nothing to finish'
 
 
 # ─────────────────────────────────────────────────────────────────────────────

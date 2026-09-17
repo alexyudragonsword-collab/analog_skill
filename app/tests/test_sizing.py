@@ -138,6 +138,11 @@ def test_score_directions():
     # amplifier here ever reported — "all targets met" was unreachable.
     assert sizing.score(spec_key, dict(perfect, phase_in_deg=78.3)) == 0.0
     assert sizing.score(spec_key, dict(perfect, phase_in_deg=50.0)) > 0
+    # ...and a band, not a floor: the first design to meet every target
+    # under the floor sat at 156 deg with its dominant pole below 0.1 Hz
+    assert sizing.score(spec_key, dict(perfect, phase_in_deg=90.0)) == 0.0
+    over = sizing.score(spec_key, dict(perfect, phase_in_deg=156.0))
+    assert over == pytest.approx((156 - 90) / 90 * 1.5)
     assert all(d.met for d in sizing.score_detail(
         spec_key, dict(perfect, phase_in_deg=59.86))) is False
 

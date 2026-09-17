@@ -2,6 +2,23 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-17 · Phase margin is a band; the finish gets rounds
+
+- Maintainer's three asks. (1) Phase margin 60–90: `MetricSpec.ceiling`,
+  a `'max'` metric with one is penalised on both sides; every 60° spec
+  carries `ceiling=90`, the CM OTA's ≥ 55 is left alone. The 156° design
+  now costs 1.1. (2) The finish runs up to three diagnose-and-search
+  rounds, each from the previous best, with earlier proposals and their
+  outcome fed back and "do not repeat" — not more DE, which had
+  converged and would hand back the same point. Points memoised across
+  rounds; a line search that cannot beat its start stops refining.
+  (3) Validation on eight circuits of four kinds (four more amps, the
+  CM OTA, an LDO, two circuit-skills) — running; results in the next
+  entry.
+- Pointers: CHANGELOG vNext (two new entries at the top), ROADMAP Open
+  (ceiling question reframed), tests in `test_llm.py` (finish rounds)
+  and `test_sizing.py` (band arithmetic).
+
 ## 2026-09-17 · `de_llm_finish` shipped; phase margin is a floor
 
 - Both changes the maintainer approved, in one commit. Phase margin on

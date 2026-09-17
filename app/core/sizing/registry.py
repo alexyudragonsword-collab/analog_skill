@@ -16,11 +16,13 @@ def _amp_metrics() -> list:
     return [
         MetricSpec('dcgain', 'DC gain', 'dB', 100.0, 'max', 2.0),
         MetricSpec('gain_bandwidth_product', 'GBW', 'Hz', 1.2e6, 'max', 2.0),
-        # >= 60, not == 60: an equality target is never *met* (violation
-        # is zero only at exact equality) and was the reason no amplifier
-        # here could ever report all targets met.  Overshoot costs speed,
-        # which GBW already charges for.
-        MetricSpec('phase_in_deg', 'Phase margin', 'deg', 60.0, 'max', 1.5),
+        # a band, 60-90: an equality target is never *met* (violation is
+        # zero only at exact equality) and was the reason no amplifier here
+        # could ever report all targets met; a bare floor admitted a 156
+        # degree design with its dominant pole below 0.1 Hz.  90 is where
+        # over-compensation starts costing what nothing else charges for.
+        MetricSpec('phase_in_deg', 'Phase margin', 'deg', 60.0, 'max', 1.5,
+                   ceiling=90.0),
         MetricSpec('dcpsrp', 'PSRR+ (dc)', 'dB', -60.0, 'min', 1.0),
         MetricSpec('dcpsrn', 'PSRR- (dc)', 'dB', -60.0, 'min', 1.0),
         MetricSpec('cmrrdc', 'CMRR (dc)', 'dB', -60.0, 'min', 1.0),
@@ -57,9 +59,9 @@ def _cm_ota_metrics() -> list:
 def _ldo_metrics_spec() -> list:
     return [
         MetricSpec('pm_maxload', 'Phase margin (55 mA)', 'deg', 60.0,
-                   'max', 1.5),
+                   'max', 1.5, ceiling=90.0),
         MetricSpec('pm_minload', 'Phase margin (5 mA)', 'deg', 60.0,
-                   'max', 1.5),
+                   'max', 1.5, ceiling=90.0),
         MetricSpec('gbw_maxload', 'Loop GBW (55 mA)', 'Hz', 2e6, 'max', 1.5),
         MetricSpec('lnr', 'Line regulation', 'V/V', 0.01, 'absmin', 1.0),
         MetricSpec('lr', 'Load regulation', 'V/A', 0.1, 'absmin', 1.0),
@@ -111,7 +113,7 @@ _SKILL_CIRCUITS: dict[str, dict] = {
             MetricSpec('dc_gain_db', 'DC gain', 'dB', 40.0, 'max', 2.0),
             MetricSpec('ugb_hz', 'UGB', 'Hz', 100e6, 'max', 2.0),
             MetricSpec('phase_margin_deg', 'Phase margin', 'deg', 60.0,
-                       'max', 1.5),
+                       'max', 1.5, ceiling=90.0),
         ]),
     'opamp2': dict(
         title='Two-stage Miller op amp — circuit-skills (PTM 180 nm)',
@@ -120,7 +122,7 @@ _SKILL_CIRCUITS: dict[str, dict] = {
             MetricSpec('dc_gain_db', 'DC gain', 'dB', 70.0, 'max', 2.0),
             MetricSpec('ugb_hz', 'UGB', 'Hz', 40e6, 'max', 2.0),
             MetricSpec('phase_margin_deg', 'Phase margin', 'deg', 60.0,
-                       'max', 1.5),
+                       'max', 1.5, ceiling=90.0),
             MetricSpec('power_w', 'Power', 'W', 2e-3, 'min', 1.0),
         ]),
     'ldo': dict(
@@ -130,7 +132,7 @@ _SKILL_CIRCUITS: dict[str, dict] = {
             MetricSpec('dc_gain_db', 'Loop DC gain', 'dB', 55.0, 'max', 1.5),
             MetricSpec('gbw_hz', 'Loop GBW', 'Hz', 2e6, 'max', 1.5),
             MetricSpec('phase_margin_deg', 'Phase margin', 'deg', 60.0,
-                       'max', 1.5),
+                       'max', 1.5, ceiling=90.0),
             # circuit-skills LDO reports PSRR as positive rejection dB
             MetricSpec('psrr_dc_db', 'PSRR (dc)', 'dB', 60.0, 'max', 1.0),
         ]),
