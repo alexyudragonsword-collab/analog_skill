@@ -737,6 +737,31 @@ budget, without a model. The finish's remaining place is behind CMA-ES
 on what CMA-ES leaves close — `amp_leung_nmcf` and `amp_ramos_pfc` at
 seed 1, the LDO at seed 0 — which is a wiring change, not a new idea.
 
+**Wired and run on exactly those three** (`cmaes_llm_finish`, 600
+evaluations: CMA-ES to 552, the finish's 48):
+
+| circuit | CMA-ES alone @600 | CMA-ES @552 | + finish | rounds |
+|---|---|---|---|---|
+| amp_leung_nmcf s1 | 1.0338 | 1.0338 | 1.0338 | 1, nothing (PM 30°, three misses) |
+| amp_ramos_pfc s1 | 0.4471 | 0.4471 | **0.2836** | 1 helped (input pair M, cap, bias), 2 nothing |
+| ldo_basic s0 | 0.8685 | 0.7390 | 0.7390 | 1, nothing (GBW 37% short) |
+
+One of three helped, none closed. The same shape as behind DE: it
+moves what is close (`amp_ramos_pfc`, two misses, 27% and 1%) and has
+nothing for what is far (phase margin 30° with three misses; GBW 37%
+short). The default `cmaes_llm_finish` stands on that — the finish
+costs nothing when it finds nothing beyond one model call and six
+evaluations — but the claim it carries is "sometimes the last 40%",
+not "closes it".
+
+A discrepancy, recorded rather than explained: the two amplifiers'
+CMA-ES trajectories reproduced the standalone runs to the digit; the
+LDO's did not (4.32 against 2.65 at evaluation 100, same seed, same
+code) and ended better at 552 than the standalone run did at 600. The
+amplifiers say the search is deterministic; the LDO says something in
+its evaluation is not — a simulation that failed once under load is
+the likely candidate, not verified.
+
 ### SciPy batches a constraint only in vectorized mode
 
 `differential_evolution(constraints=...)` documents that a constraint

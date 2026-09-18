@@ -2,6 +2,14 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-19 · The CMA-ES finish on its three cases
+
+- Maintainer asked for it. `amp_ramos_pfc` s1 0.4471 → 0.2836 (one
+  round); `amp_leung_nmcf` s1 and `ldo_basic` s0 unchanged. One of
+  three helped, none closed — the finish's usual shape. Default stands.
+- LDO's CMA-ES trajectory did not reproduce between runs; amplifiers'
+  did exactly. Recorded as a discrepancy, ROADMAP has the check.
+
 ## 2026-09-19 · CMA-ES is the default; portfolio removed
 
 - Maintainer's three decisions, one commit: default `cmaes` (with the

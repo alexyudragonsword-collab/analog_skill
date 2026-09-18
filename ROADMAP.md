@@ -31,11 +31,12 @@ like before touching anything.
 
 ## Open
 
-- Measure `cmaes_llm_finish` where CMA-ES alone stops short
-  (`amp_leung_nmcf` and `amp_ramos_pfc` at seed 1, `ldo_basic` at seed
-  0). It is the default when a model is configured, on the strength of
-  the finish's record behind DE; the finish behind CMA-ES has not been
-  run yet.
+- Why the LDO's CMA-ES trajectory did not reproduce between two runs
+  at the same seed while both amplifiers' did to the digit
+  (`cairn/pitfalls.md`, the CMA-ES section). If an LDO evaluation can
+  fail under load and return inf, every search on it is a little
+  random and a "seed" means less there; two more runs of `ldo_basic
+  cmaes` at seed 0 with the ngspice logs kept would settle it.
 - CMA-ES's IPOP restarts are untested on this problem: at 600
   evaluations no run stalled, so none restarted. A larger budget on
   the circuits it leaves open would say whether the restart or the

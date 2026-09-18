@@ -17,9 +17,11 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 - **Added — `cmaes_llm_finish`.**  CMA-ES for all but the finish's
   reserve, then the same diagnose-and-search rounds as `de_llm_finish`.
-  The finish's case — the search stopped close — is where CMA-ES stops
-  on `amp_leung_nmcf`, `amp_ramos_pfc` and the LDO at one seed or the
-  other.
+  Run on the three places CMA-ES alone stops short: it takes
+  `amp_ramos_pfc` (seed 1) from 0.4471 to 0.2836 in one round and finds
+  nothing on `amp_leung_nmcf` (seed 1) or the LDO (seed 0) — the same
+  shape as behind DE, a last-mile step for what is close, nothing for
+  what is far.  Detail in `cairn/pitfalls.md`.
 
 - **Removed — `de_portfolio`**, added earlier in this same unreleased
   section.  Measured at 1200 evaluations it lost on three of the four
