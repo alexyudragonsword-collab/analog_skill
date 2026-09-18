@@ -374,6 +374,11 @@ FINISH_EVALS = 16
 #: while they keep paying — amp_fan_smc took three to reach cost 0.
 FINISH_ROUNDS = 3
 
+#: whether a round that improved nothing ends the finish.  On by the
+#: 5-of-6 measurement above; off is for experiments that want every
+#: round asked regardless.
+FINISH_STOP_ON_STALL = True
+
 #: where along the model's direction to look first.  0 is the search's
 #: best point, 1 is the proposal as written; the measured proposals
 #: overshot by 2-4x or fell short, never landed, so both sides are covered.
@@ -551,7 +556,7 @@ def run_finish(circuit: str, variables: list[VarSpec], overrides,
                         else ''))
         history.append(f'  round {rnd}: changed {", ".join(moved)} '
                        f'({rationale[:200]}) -> {outcome}')
-        if after == 0.0 or after >= before:
+        if after == 0.0 or (FINISH_STOP_ON_STALL and after >= before):
             break
     return '\n'.join(lines) if lines else 'nothing to finish'
 

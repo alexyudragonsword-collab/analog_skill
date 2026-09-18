@@ -851,7 +851,7 @@ def test_finish_rounds_continue_from_the_new_best_with_history():
     assert state['dispatched'] <= budget
 
 
-def test_finish_ends_after_a_round_that_improved_nothing():
+def test_finish_ends_after_a_round_that_improved_nothing(monkeypatch):
     """Measured on eight circuits: the round after a failed round failed
     too, five times of five.  So a failed round ends the finish, and the
     model is not asked again; the remaining reserve goes unspent."""
@@ -870,6 +870,16 @@ def test_finish_ends_after_a_round_that_improved_nothing():
     assert state['best'] == 2.3                   # the search result survives
     # the coarse scan and nothing more: no refining toward the start
     assert len(evaluated) <= len(llm_sizing.FINISH_ALPHAS)
+
+    # an experiment can ask for every round regardless
+    monkeypatch.setattr(llm_sizing, 'FINISH_STOP_ON_STALL', False)
+    variables, state, run_batch, evaluated = _finish_harness(
+        5.0, lambda w: abs(w - 7.3), budget)
+    calls.clear()
+    note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
+                                 state=state, run_batch=run_batch,
+                                 budget=budget, workers=4, chat=fake_chat)
+    assert len(calls) == llm_sizing.FINISH_ROUNDS
 
 
 def test_finish_stops_at_zero_and_leaves_the_rest_of_the_budget():

@@ -164,8 +164,9 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   whose best is its own start stops refining instead of bisecting
   toward zero.  The Sizing tab estimates `up to 3 AI calls`.
 
-  **And it stops after a round that improves nothing.**  Validated on
-  eight circuits of four kinds, shipped path, real CLI:
+  **And it stops after a round that improves nothing** (a module switch,
+  `FINISH_STOP_ON_STALL`, lets an experiment ask every round regardless).
+  Validated on eight circuits of four kinds, shipped path, real CLI:
 
   | circuit | DE at its cap | after the finish | rounds | wall |
   |---|---|---|---|---|
