@@ -12,8 +12,11 @@ This file records substantive progress in reverse-chronological order — newest
   `llm_sizing` so tab and prompt share one sentence); *Try next* button;
   Seed box; run record carries algo/seed/budget/notes and the report
   prints the finish's account; defaults DE(+finish) and 600.
-- Layer 3 — continuing a DE run from its saved population instead of
-  replaying the first half — is the next commit.
+- Layer 3, next commit: DE's last population and costs on the run
+  record (physical units), `optimize(resume=)` seeds from it and serves
+  known points from a memo so the budget is all new evaluations; *Try
+  next*'s budget step continues rather than restarts; *Continue* in the
+  Runs dialog. `sizing.DE_ALGOS` names the algorithms this applies to.
 - Pointers: CHANGELOG vNext (two entries at the top), ROADMAP Open
   (thresholds item replaces the seed-box item), tests in `test_sizing.py`
   (`next_step`, record fields) and `test_ui.py` (seed, Try next).

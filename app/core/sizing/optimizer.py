@@ -14,7 +14,7 @@ import numpy as np
 
 from app.core.sizing.evaluation import evaluate
 from app.core.sizing.registry import SIZING
-from app.core.sizing.report import SizingRun
+from app.core.sizing.report import DE_ALGOS, SizingRun
 from app.core.sizing.scoring import score
 from app.core.sizing.spec import VarSpec
 
@@ -34,7 +34,7 @@ def optuna_available() -> bool:
 def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
              progress=None, should_cancel=None, overrides: dict | None = None,
              algo: str = 'sobol_powell', workers: int = 1,
-             seed: int = 0) -> SizingRun:
+             seed: int = 0, resume: SizingRun | None = None) -> SizingRun:
     """Bounded search, ≤ budget evaluations, optionally parallel.
 
     algo:
@@ -81,6 +81,14 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
     progress(eval_no, best_cost, metrics) fires after every evaluation;
     should_cancel() → True stops dispatching (in-flight evals finish,
     best-so-far is kept).
+
+    resume: a DE-based run to carry on from.  Its last population seeds
+    this search and its members' costs are served from memory, so the
+    `budget` here is all new evaluations — re-running at twice the budget
+    replays the first half, which is what this exists to avoid.  The run
+    must be the same circuit and variables and one of DE_ALGOS; the
+    previous best is this run's starting point.  Raises ValueError
+    otherwise.
     """
     import queue as _queue
     import threading
@@ -106,7 +114,31 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
     # something to spend.
     state = {'done': 0, 'dispatched': 0, 'best': None, 'best_x': None,
              'best_m': {}, 'best_xn': x0, 'history': [], 'cancel': False,
-             'cap': budget, 'notes': ''}
+             'cap': budget, 'notes': '', 'population': None,
+             'pop_costs': None}
+    # known costs, normalized point -> cost: a continued run's inherited
+    # population.  Hits cost nothing and count nothing.
+    memo: dict[tuple, float] = {}
+    init_pop = 'sobol'
+    if resume is not None:
+        if algo not in DE_ALGOS:
+            raise ValueError(f'{algo} has no population to continue')
+        if (not resume.continuable or resume.circuit != circuit
+                or list(resume.best_values) != names):
+            raise ValueError('this run cannot be continued: it has no '
+                             'population, or the circuit or variables '
+                             'differ')
+        rows = (np.array(resume.population, float) - lo) / span
+        init_pop = np.clip(rows, 0.0, 1.0)
+        for row, c in zip(init_pop, resume.population_costs, strict=True):
+            if c is not None and np.isfinite(c):
+                memo[tuple(np.round(row, 12))] = float(c)
+        state['best'] = resume.best_cost
+        state['best_x'], state['best_m'] = (dict(resume.best_values),
+                                            dict(resume.best_metrics))
+        state['best_xn'] = np.clip((np.array(
+            [resume.best_values[n] for n in names]) - lo) / span, 0, 1)
+        state['history'].append((0, resume.best_cost))
     slots = _queue.SimpleQueue()
     for i in range(workers):
         slots.put(i)
@@ -155,28 +187,35 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         every other algorithm only ever wanted the scalar.
         """
         points = [np.asarray(p, float) for p in points]
+        out = [float('inf')] * len(points)
+        mets: list[dict | None] = [None] * len(points)
+        fresh = []                              # indices still to simulate
+        for i, p in enumerate(points):
+            known = memo.get(tuple(np.round(p, 12))) if memo else None
+            if known is None:
+                fresh.append(i)
+            else:
+                out[i] = known
         with lock:
             if _cancelled():
                 state['cancel'] = True
             allowed = 0 if state['cancel'] else max(
                 0, min(budget, state['cap']) - state['dispatched'])
-            todo = points[:allowed]
+            todo = fresh[:allowed]
             state['dispatched'] += len(todo)
-        out = [float('inf')] * len(points)
-        mets: list[dict | None] = [None] * len(points)
         if todo:
             if workers == 1:
-                for i, pt in enumerate(todo):
+                for k, i in enumerate(todo):
                     if _cancelled():
                         with lock:
                             state['cancel'] = True
-                            state['dispatched'] -= len(todo) - i   # refund
+                            state['dispatched'] -= len(todo) - k   # refund
                         break
-                    out[i], mets[i] = _safe_eval(pt)
+                    out[i], mets[i] = _safe_eval(points[i])
             else:
                 with ThreadPoolExecutor(max_workers=workers) as ex:
-                    futs = {ex.submit(_safe_eval, pt): i
-                            for i, pt in enumerate(todo)}
+                    futs = {ex.submit(_safe_eval, points[i]): i
+                            for i in todo}
                     for f in as_completed(futs):
                         out[futs[f]], mets[futs[f]] = f.result()
         return (out, mets) if with_metrics else out
@@ -216,14 +255,23 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         dims = len(names)
         popsize = 4                          # individuals = 4 x dims
         maxiter = max(1, limit // (popsize * dims))
-        differential_evolution(
+        res = differential_evolution(
             lambda xn: run_batch([xn])[0],   # only used if scipy bypasses map
-            bounds=[(0.0, 1.0)] * dims, x0=x0, init='sobol',
+            bounds=[(0.0, 1.0)] * dims,
+            x0=None if resume is not None else x0, init=init_pop,
             popsize=popsize, maxiter=maxiter, polish=False, tol=0.0,
             seed=seed, updating='deferred',
             workers=lambda func, xs: run_batch(list(xs)),
             callback=lambda xk, convergence=0.0:
                 state['cancel'] or state['dispatched'] >= limit)
+        # the last generation, in physical units, is what a continued run
+        # starts from; scipy hands it back whether the loop ran out of
+        # iterations, budget or was cancelled
+        pop = np.clip(np.asarray(res.population, float), 0, 1) * span + lo
+        pop = np.where(is_int, np.round(pop), pop)
+        state['population'] = pop.tolist()
+        state['pop_costs'] = [float(c) if np.isfinite(c) else None
+                              for c in res.population_energies]
 
     def run_optuna():
         import optuna
@@ -306,4 +354,5 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                      evals=state['done'], cancelled=state['cancel'],
                      elapsed=time.time() - t0, overrides=overrides,
                      verified=verified, algo=algo, seed=seed, budget=budget,
-                     notes=state['notes'])
+                     notes=state['notes'], population=state['population'],
+                     population_costs=state['pop_costs'])

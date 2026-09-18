@@ -20,6 +20,10 @@ from app.core.sizing.scoring import _violation
 from app.core.sizing.spec import _fmt_num
 
 
+#: the algorithms whose search is a DE population, and can be continued
+DE_ALGOS = ('diff_evolution', 'de_llm_finish')
+
+
 @dataclass
 class SizingRun:
     circuit: str
@@ -39,6 +43,17 @@ class SizingRun:
     seed: int = 0
     budget: int = 0
     notes: str = ''               # the finish's account, round by round
+    # DE's last population, physical units, rows in best_values' key
+    # order, with each row's cost — what "continue this run" starts from.
+    # Physical rather than normalized so an edited bound cannot silently
+    # shift it; None for the algorithms that have no population.
+    population: list | None = None
+    population_costs: list | None = None
+    continued_from: str = ''      # the saved run this one carried on
+
+    @property
+    def continuable(self) -> bool:
+        return bool(self.population) and self.algo in DE_ALGOS
 
     def report(self) -> str:
         spec = SIZING[self.circuit]
@@ -47,7 +62,9 @@ class SizingRun:
                  f'evaluations: {self.evals}'
                  + ('  (cancelled)' if self.cancelled else '')
                  + f'   elapsed: {self.elapsed:.0f}s'
-                 + (f'   {self.algo}, seed {self.seed}' if self.algo else ''),
+                 + (f'   {self.algo}, seed {self.seed}' if self.algo else '')
+                 + (f'   continued from {self.continued_from}'
+                    if self.continued_from else ''),
                  f'cost: {self.initial_cost:.4f}  ->  {self.best_cost:.4f}'
                  f'   (FoM {-self.best_cost:.4f})', '',
                  f'{"metric":<22}{"value":>14}   target']

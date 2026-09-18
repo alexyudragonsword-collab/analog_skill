@@ -8,7 +8,7 @@ from pathlib import Path
 
 from app.core.sizing.assets import _user_data_root
 from app.core.sizing.registry import SIZING
-from app.core.sizing.report import SizingRun
+from app.core.sizing.report import DE_ALGOS, SizingRun
 from app.core.sizing.scoring import feedback_line, score_detail
 
 
@@ -61,7 +61,9 @@ def run_info(path: Path) -> dict:
             'evals': r['evals'], 'best_cost': r['best_cost'],
             'cancelled': r.get('cancelled', False),
             'algo': r.get('algo', ''), 'seed': r.get('seed', 0),
-            'budget': r.get('budget', 0)}
+            'budget': r.get('budget', 0),
+            'continuable': bool(r.get('population'))
+            and r.get('algo', '') in DE_ALGOS}
 
 
 def list_runs() -> list[Path]:
@@ -90,13 +92,17 @@ def next_step(run: SizingRun, infos: list[dict],
 
     `infos` are run_info() dicts for saved runs (any circuit; filtered
     here).  Returns {'missed': str, 'text': str, 'action': None | 'finish'
-    | 'seed' | 'budget', 'algo': str, 'seed': int, 'budget': int}; the
-    settings are what to run next, the text is for the status line.
+    | 'seed' | 'budget', 'algo': str, 'seed': int, 'budget': int,
+    'resume': bool}; the settings are what to run next, the text is for
+    the status line.  'resume' means: continue *this* run from its
+    population for `budget` more evaluations rather than start over —
+    a DE run that kept its population never replays its first half.
     These are suggestions from a small sample, and the text says so.
     """
     missed = feedback_line(run.circuit, run.best_metrics, run.overrides)
     out = {'missed': missed, 'action': None, 'algo': run.algo,
-           'seed': run.seed, 'budget': run.budget or run.evals}
+           'seed': run.seed, 'budget': run.budget or run.evals,
+           'resume': False}
     if run.best_cost == 0.0:
         return {**out, 'text': missed + '.'}
     if run.cancelled:
@@ -121,6 +127,12 @@ def next_step(run: SizingRun, infos: list[dict],
                 'seeds disagree on every circuit the search does not '
                 f'finish ({len(seeds)} of {SEEDS_BEFORE_MORE_BUDGET} tried).'}
     best = min(same, key=lambda i: i['best_cost'], default=None)
+    if run.continuable and not (best and best['best_cost'] < run.best_cost):
+        return {**out, 'action': 'budget', 'resume': True,
+                'text': missed + f'. {len(seeds)} seeds tried; continue '
+                f'this run for {out["budget"]} more evaluations from its '
+                'population — on one circuit more budget was what moved '
+                'it.'}
     seed = best['seed'] if best and best['best_cost'] < run.best_cost \
         else run.seed
     return {**out, 'action': 'budget', 'seed': seed,

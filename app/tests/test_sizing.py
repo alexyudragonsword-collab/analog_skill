@@ -349,12 +349,14 @@ def test_optimize_cancel():
 def test_optimize_seed_reaches_the_search(monkeypatch):
     """seed=0 was hardcoded three times; the second seed is the cheapest
     second opinion on a stochastic search, so it has to be a parameter."""
+    import numpy as np
     import scipy.optimize as so
     seen = []
 
     def fake_de(func, bounds, **kw):
         seen.append(kw['seed'])
-        return None
+        return so.OptimizeResult(population=np.zeros((1, len(bounds))),
+                                 population_energies=np.array([1.0]))
 
     monkeypatch.setattr(so, 'differential_evolution', fake_de)
     variables = sizing.parse_variables('amp_hoilee_affc')
@@ -362,6 +364,41 @@ def test_optimize_seed_reaches_the_search(monkeypatch):
         sizing.optimize('amp_hoilee_affc', variables, budget=10,
                         algo='diff_evolution', seed=s)
     assert seen == [0, 7]
+
+
+@needs_ngspice
+def test_continue_a_de_run_from_its_population():
+    """Re-running at twice the budget replays the first half.  A DE run
+    keeps its last population; continuing from it serves those points
+    from memory, so every evaluation in the budget is a new one, and the
+    previous best is the starting point of the new curve."""
+    variables = sizing.parse_variables('studio_cm_ota')   # 15 dims: 60/gen
+    first = sizing.optimize('studio_cm_ota', variables, budget=8,
+                            algo='diff_evolution', workers=4)
+    # scipy's Sobol init rounds the population up to a power of two
+    assert first.continuable and len(first.population) >= 60
+    assert sum(c is not None for c in first.population_costs) == 8
+    assert all(len(r) == 15 for r in first.population)
+
+    more = sizing.optimize('studio_cm_ota', variables, budget=8,
+                           algo='diff_evolution', workers=4, resume=first)
+    assert more.evals == 8                     # none of the 8 known re-run
+    assert more.history[0] == (0, first.best_cost)
+    assert more.initial_cost == first.best_cost
+    assert more.best_cost <= first.best_cost
+    assert more.continuable and len(more.population) == len(first.population)
+
+    with pytest.raises(ValueError):
+        sizing.optimize('studio_cm_ota', variables, budget=8,
+                        algo='sobol_powell', resume=first)
+    other = sizing.parse_variables('amp_hoilee_affc')
+    with pytest.raises(ValueError):
+        sizing.optimize('amp_hoilee_affc', other, budget=8,
+                        algo='diff_evolution', resume=first)
+    first.population = None
+    with pytest.raises(ValueError):
+        sizing.optimize('studio_cm_ota', variables, budget=8,
+                        algo='diff_evolution', resume=first)
 
 
 @needs_ngspice
@@ -496,6 +533,17 @@ def test_runs_dialog_and_warm_start(tmp_path, monkeypatch):
         tab = SizingTab(worker)
         dlg = RunsDialog(tab)
         assert dlg._list.rowCount() == 2
+        # Continue is offered only for a run that kept a DE population
+        dlg._list.selectRow(0)
+        assert not dlg.continue_btn.isEnabled()
+        kept = _fake_run(cost=0.9)
+        kept.algo, kept.population, kept.population_costs = (
+            'diff_evolution', [[2.5e-6]], [0.9])
+        sizing.save_run(kept)
+        dlg._refresh()
+        row = next(r for r, i in enumerate(dlg._infos) if i['continuable'])
+        dlg._list.selectRow(row)
+        assert dlg.continue_btn.isEnabled()
         n = tab.apply_best_to_table(_fake_run())
         assert n == 1                          # CURRENT_0_BIAS exists
         assert tab.circuit_combo.currentData() == 'amp_hoilee_affc'
@@ -966,6 +1014,15 @@ def test_next_step_follows_the_measured_order():
     stopped = _run_with(dict(_PERFECT, dcgain=60.0), cancelled=True)
     assert sizing.next_step(stopped, [])['action'] is None
 
+    # a run that kept its population is continued, not restarted at 2x
+    far.population, far.population_costs = [[1.0] * 33] * 4, [1.0] * 4
+    nxt = sizing.next_step(far, [_info(0, 2.0), _info(1, 2.0), _info(2, 2.0)])
+    assert nxt['action'] == 'budget' and nxt['resume'] is True
+    assert nxt['budget'] == 600 and nxt['seed'] == 0
+    # ...unless another seed did better, which is then the one to extend
+    nxt = sizing.next_step(far, [_info(0, 2.0), _info(1, 0.5), _info(2, 2.0)])
+    assert nxt['resume'] is False and nxt['seed'] == 1
+
 
 def test_run_record_carries_its_search_and_loads_without_it(tmp_path):
     """algo / seed / budget / notes are what Try-next reads; a run saved
@@ -982,6 +1039,11 @@ def test_run_record_carries_its_search_and_loads_without_it(tmp_path):
     info = sizing.run_info(p)
     assert (info['algo'], info['seed'], info['budget']) == (
         'de_llm_finish', 3, 616)
+    assert info['continuable'] is False        # no population saved
+    run.population, run.population_costs = [[1.0, 2.0]], [0.5]
+    p2 = sizing.save_run(run, tmp_path / 'pop.json')
+    assert sizing.load_run(p2).population == [[1.0, 2.0]]
+    assert sizing.run_info(p2)['continuable'] is True
 
     doc = json.loads(p.read_text())
     for k in ('algo', 'seed', 'budget', 'notes'):

@@ -7,6 +7,24 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **Added — a DE run keeps its last population and can be continued.**
+  Re-running at twice the budget replays the first half exactly (same
+  seed, same generations); `amp_leung_nmcf` at 1200 spent its first 552
+  evaluations reproducing the 600-budget run.  Now `optimize()` records
+  DE's final population in physical units with each member's cost on
+  the run record, and `optimize(resume=run)` seeds the next search from
+  it, serving those members from memory — every evaluation in the new
+  budget is a new one, the previous best is the new curve's starting
+  point, and the report says which run it carried on.  Physical units
+  rather than normalized so an edited bound cannot shift the population
+  silently; a changed bound simply means those points get re-simulated.
+  Same circuit, same variables, DE-based algorithm only, else
+  `ValueError`.  In the tab: *Try next*'s "more budget" step continues
+  the run just finished instead of restarting at 2x (unless another seed
+  did better, which is then the one to extend), and the Runs dialog has
+  a *Continue* button for any saved run that kept a population.  *Use
+  best as init* stays, for Sobol+Powell, where the init is the search.
+
 - **Added — the Sizing tab now says what is still short and what to try
   next, and can do it in one click.**  After a run the status line names
   the missed targets in the same words the model is given ("Phase margin

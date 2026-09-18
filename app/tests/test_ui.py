@@ -403,7 +403,8 @@ def test_sizing_seed_reaches_the_search_and_try_next_applies_the_step(
     monkeypatch.setattr(tab, 'submit_job', lambda slot, job: jobs.append(job))
     seen = {}
     monkeypatch.setattr(sizing, 'optimize',
-                        lambda key, variables, **kw: seen.update(kw) or None)
+                        lambda key, variables, **kw: seen.update(kw)
+                        or fake_run())
     tab.seed_spin.setValue(5)
     tab._run()
     jobs[-1].fn()

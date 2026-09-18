@@ -32,7 +32,8 @@ like before touching anything.
 ## Open
 
 - Whether *Try next*'s thresholds are right: three seeds before more
-  budget, "close" as two misses none over 10%, budget doubling. They
+  budget, "close" as two misses none over 10%, budget doubling (or the
+  same budget again when the run can be continued). They
   encode sixteen runs at two seeds and one at twice the budget
   (`cairn/pitfalls.md`); the button says "try", not "will". Each user
   run at a new seed or budget is a data point for tightening them, and

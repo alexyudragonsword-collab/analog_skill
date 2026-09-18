@@ -318,7 +318,9 @@ class SizingTab(QWidget, JobTabMixin):
         return overrides
 
     # ── run / cancel ──────────────────────────────────────────────────────
-    def _run(self):
+    def _run(self, resume: sizing.SizingRun | None = None):
+        """Start an optimization; with `resume`, carry that run on from
+        its DE population for `budget` more evaluations."""
         if self.has_job('opt'):
             return
         try:
@@ -338,21 +340,30 @@ class SizingTab(QWidget, JobTabMixin):
             return
         workers = (1 if sizing.SIZING[key].kind == 'skill'
                    else self.workers_spin.value())
+        if resume is not None and (resume.circuit != key
+                                   or not resume.continuable):
+            self._status.setText('<font color="red">That run cannot be '
+                                 'continued here.</font>')
+            return
         self._cancel.clear()
+        origin = getattr(resume, '_saved_as', '') if resume else ''
 
         def job():
             def progress(n, best, _metrics):
                 if n % 5 == 0 or n == 1:
                     print(f'sizing {key}: eval {n}/{budget}  '
                           f'best cost {best:.4f}')
-            return sizing.optimize(key, variables, budget=budget,
-                                   progress=progress,
-                                   should_cancel=self._cancel.is_set,
-                                   overrides=overrides, algo=algo,
-                                   workers=workers, seed=seed)
+            run = sizing.optimize(key, variables, budget=budget,
+                                  progress=progress,
+                                  should_cancel=self._cancel.is_set,
+                                  overrides=overrides, algo=algo,
+                                  workers=workers, seed=seed, resume=resume)
+            run.continued_from = origin
+            return run
 
+        what = 'continue' if resume is not None else 'sizing'
         self.submit_job('opt', Job(kind='sizing', fn=job,
-                                   label=f'sizing: {key} ({budget} evals)'))
+                                   label=f'{what}: {key} ({budget} evals)'))
         self.run_btn.setEnabled(False)
         self.next_btn.setEnabled(False)
         self.cancel_btn.setEnabled(True)
@@ -410,7 +421,9 @@ class SizingTab(QWidget, JobTabMixin):
         self.cancel_btn.setEnabled(False)
         saved, infos = '', []
         try:
-            saved = f'  Saved as {sizing.save_run(run).name}.'
+            path = sizing.save_run(run)
+            run._saved_as = path.name        # what a continuation cites
+            saved = f'  Saved as {path.name}.'
             for p in sizing.list_runs():
                 try:
                     infos.append(sizing.run_info(p))
@@ -442,7 +455,7 @@ class SizingTab(QWidget, JobTabMixin):
         idx = self.algo_combo.findData(nxt['algo'])
         if idx >= 0:
             self.algo_combo.setCurrentIndex(idx)
-        self._run()
+        self._run(resume=self._last_run if nxt.get('resume') else None)
 
     def _show_run(self, run: sizing.SizingRun):
         """Display a run's report + convergence curve (GUI thread)."""
@@ -756,6 +769,12 @@ class RunsDialog(QDialog):
         self.warm_btn.setToolTip("Write the selected run's best sizing into "
                                  'the init column (warm start).')
         self.warm_btn.clicked.connect(self._warm_start)
+        self.continue_btn = QPushButton('Continue')
+        self.continue_btn.setToolTip(
+            "Carry the selected DE run on from its last population for the "
+            "tab's budget of new evaluations. Re-running at a larger budget "
+            'replays the first half; this does not.')
+        self.continue_btn.clicked.connect(self._continue)
         self.delete_btn = QPushButton('Delete')
         self.delete_btn.clicked.connect(self._delete)
         close_btn = QPushButton('Close')
@@ -763,7 +782,7 @@ class RunsDialog(QDialog):
 
         btns = QHBoxLayout()
         for b in (self.load_btn, self.compare_btn, self.warm_btn,
-                  self.delete_btn):
+                  self.continue_btn, self.delete_btn):
             btns.addWidget(b)
         btns.addStretch(1)
         btns.addWidget(close_btn)
@@ -800,6 +819,9 @@ class RunsDialog(QDialog):
         n = len(self._selected())
         self.load_btn.setEnabled(n == 1)
         self.warm_btn.setEnabled(n == 1)
+        sel = self._selected()
+        self.continue_btn.setEnabled(
+            n == 1 and bool(sel[0].get('continuable')))
         self.compare_btn.setEnabled(n >= 2)
         self.delete_btn.setEnabled(n >= 1)
 
@@ -836,6 +858,23 @@ class RunsDialog(QDialog):
         png = sizing.render_comparison(runs)   # GUI thread (mpl policy)
         self._tab._viewer.show_pngs([png])
         self.accept()
+
+    def _continue(self):
+        run = self._load_one()
+        if run is None:
+            return
+        run._saved_as = self._selected()[0]['path'].name
+        tab = self._tab
+        idx = tab.circuit_combo.findData(run.circuit)
+        if idx < 0:
+            return
+        tab.circuit_combo.setCurrentIndex(idx)
+        tab.seed_spin.setValue(run.seed)
+        algo = tab.algo_combo.findData(run.algo)
+        if algo >= 0:
+            tab.algo_combo.setCurrentIndex(algo)
+        self.accept()
+        tab._run(resume=run)
 
     def _warm_start(self):
         run = self._load_one()
