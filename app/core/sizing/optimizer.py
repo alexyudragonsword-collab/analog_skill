@@ -72,14 +72,17 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                         budget, then bounded Powell from its best point
                         with the rest (serial).  The finish's line search
                         without the model: a local polish DE never does.
-      'de_constrained'  DE with every metric as a constraint (SciPy's
-                        feasibility rules: infeasible points compete on
-                        total violation, feasible ones on an objective)
-                        and the objective the summed margin inside the
-                        targets — so it keeps improving after the first
-                        feasible point instead of stopping there.  Each
-                        generation is one parallel batch; the objective
-                        reads the metrics the constraint call cached.
+      'de_constrained'  DE with every metric as a constraint under
+                        SciPy's feasibility rules (Lampinen): an
+                        infeasible trial replaces its parent only if it
+                        is no worse on *every* metric — a trade that
+                        fixes one target by breaking another is refused,
+                        where the summed cost would take it — feasible
+                        points compete on the summed margin inside the
+                        targets, so the search keeps widening margins
+                        after the first feasible point.  Each generation
+                        is one parallel batch; the objective reads the
+                        metrics the constraint call cached.
       'de_portfolio'    PORTFOLIO_SEEDS independent DE populations for
                         the first half of the budget, then the best of
                         them continued with the second half.  Needs

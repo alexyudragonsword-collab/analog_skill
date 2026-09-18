@@ -23,10 +23,15 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
     budget, bounded Powell from its best point with the rest.  The
     finish's line search without a model choosing the line.
   - **DE, constrained** (`de_constrained`): every metric a constraint
-    under SciPy's feasibility rules, the objective the summed margin
+    under SciPy's feasibility rules — Lampinen's: an infeasible trial
+    replaces its parent only if it is no worse on *every* metric, so a
+    trade that fixes one target by breaking another is refused where the
+    summed cost would take it — and the objective the summed margin
     inside the targets (`scoring.slack`, each margin capped at 50%), so
     the search keeps widening margins after the first feasible point
-    instead of stopping there.  One parallel batch per generation: the
+    instead of stopping there.  This is a different search before
+    feasibility, not only after it; the first description here said
+    otherwise and was corrected on reading SciPy's `_accept_trial`.  One parallel batch per generation: the
     constraint call sees the whole trial population and the objective
     reads what it cached — which requires SciPy's `vectorized` mode;
     without it the constraint is called one member at a time and the
