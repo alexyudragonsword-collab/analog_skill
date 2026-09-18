@@ -2,6 +2,22 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-18 · Three open questions, answered as far as the night allowed
+
+- Reference amplifier under the band: circuit, not seed. Seeds 0/1/2
+  land in three basins (PM 151°, PM 25°, offset 271 µV), none feasible,
+  best 0.86 at seed 2; the band as a hard constraint sends DE to gain
+  54 dB. Table in `cairn/pitfalls.md`; ROADMAP keeps it open with the
+  two remaining candidates.
+- Second seed on all eight circuits: 16 runs, DE alone finishes 4, the
+  finish closes 2 (`amp_fan_smc` s0, `ldo_basic` s1), improves 7, does
+  nothing in 3. Seeds disagree on every unfinished circuit, both ways
+  (`amp_peng_tcfc` 0.58 → 0 by seed alone). Under today's targets 9/16
+  end feasible. Conclusion recorded: the seed is worth more than a
+  finish round; ROADMAP asks for a seed spin box.
+- Circuit-skills targets lowered (previous entry). No code tonight
+  beyond `optimize(seed=)`; records only in this commit.
+
 ## 2026-09-17 · Three open questions, in progress
 
 - Order chosen: seed parameter first (all three need other seeds; it was

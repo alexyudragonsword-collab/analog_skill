@@ -31,31 +31,30 @@ like before touching anything.
 
 ## Open
 
-- `de_llm_finish` is measured on eight circuits, one run each (table in
-  `cairn/pitfalls.md`): DE alone finishes two, the finish closes one more
-  and improves three, and does nothing on one. What is still open is a
-  second seed per circuit before any *rate* is quoted, and what to do
-  where DE stalls far from feasible — `amp_leung_nmcf` at phase margin
-  5° with three targets short — since that is the one case a one-shot
-  diagnosis had nothing for, and the case *Decided against* names as the
-  reopening condition for a model inside the search.
-- Whether the two circuit-skills gain targets are reachable at all
-  (40 dB on the five-transistor OTA, 70 dB on the two-stage; the shipped
-  defaults measure 34 and 64). The finish got to 37 and 65 and the
-  model's rationales describe the remaining gap as set by the topology.
-  A DE run at a much larger budget would say whether the box contains the
-  target; if not, the target is the thing to change.
-- Whether 90° is the right ceiling. It was chosen as the point where
-  over-compensation starts costing what nothing else charges for, on one
-  design (156°, dominant pole below 0.1 Hz) and one maintainer's call —
-  not from a settling-time measurement, which is what the ceiling stands
-  in for. A settling-time metric would replace the guess with the price.
-  And the price today is concrete: under the band `amp_hoilee_affc` is
-  unsolved — DE's fixed seed lands in the 156° basin and three finish
-  rounds get it to 151°. Two things would tell whether that is the seed
-  or the circuit: a second DE seed (`seed=0` is hardcoded in
-  `run_de`), and a run with the ceiling as a hard constraint so DE
-  leaves the basin early. Neither has been run.
+- Expose `optimize(seed=)` in the Sizing tab. Sixteen runs over eight
+  circuits at two seeds (`cairn/pitfalls.md`, "A second seed on every
+  circuit") disagree between seeds on every circuit DE does not finish
+  outright, in both directions; a user holding an unfinished result
+  should be able to try another seed before anything cleverer, and today
+  cannot without editing code. A spin box next to the budget, default 0.
+- `amp_hoilee_affc` under the 60–90° band is unsolved, and it is the
+  circuit, not the seed: three seeds land in three different basins
+  (over-compensated, under-compensated, offset far out), none feasible,
+  and making the band a hard constraint sends DE somewhere worse. The
+  best endpoint is seed 2 at 0.86 with only the offset short (271 µV vs
+  100) and the finish already having cut a third off it. The model's
+  rationale for stopping there — the input pair sets the offset and also
+  the metrics that are met — is plausible and unverified. Open because
+  nothing obvious is left to try at 616 evaluations; a much larger DE
+  budget at seed 2, or a settling-time metric replacing the 90° guess,
+  are the two candidates.
+- Where DE stalls far from feasible — `amp_leung_nmcf` at seed 0, phase
+  margin 5° — the finish has nothing to offer, and that is the case
+  *Decided against* names as the reopening condition for a model inside
+  the search. At seed 1 the same circuit lands closer (1.26) and the
+  finish helps (1.08). Whether a rescue is worth building or the seed is
+  the answer is exactly the question the spin box above lets a user
+  answer for themselves.
 
 ## Ideas, not commitments
 

@@ -523,6 +523,60 @@ for — but it does say the band is the harder problem, and the search
 that finds it will be a different search: a seed that does not land in
 that basin, or DE told about the ceiling early enough to leave it.
 
+**Both tried, the same night.** Shipped path, 616 evaluations each:
+
+| run | DE at 568 | after the finish | what is left |
+|---|---|---|---|
+| seed 0 | 1.1242 | 1.0354 | PM 151°, offset 3% over |
+| seed 1 | 1.0904 | 1.0904 | PM 25°, offset 45% over |
+| seed 2 | 1.2546 | **0.8566** | offset 271 µV vs 100, everything else met |
+| seed 0, band as a hard constraint | 1.5489 | 1.5489 | PM met; gain 54 dB, tempco, offset, PSRR− |
+
+Three seeds, three basins, none feasible: over-compensated, under-
+compensated, and inside the band with the offset far out. The hard
+constraint is the instructive failure — DE obeys the 10x term and
+abandons gain to do it, ending worse on the plain cost than any seed
+without it. So it is the circuit and the band, not the seed; and
+"tell DE about the ceiling harder" is the wrong lever. Seed 2 is the
+most promising endpoint (one miss, the finish already cut it by a
+third), and the reason it stopped there is in the model's own words:
+the offset knob is the input pair, and the input pair is also what
+sets the metrics that are met. What would move it is not obvious and
+is not claimed.
+
+### A second seed on every circuit
+
+The eight-circuit table above at seed 1, same shipped path, targets as
+they were that night (the two circuit-skills gain targets have since
+been lowered; the last column says which rows that flips):
+
+| circuit | seed 0: DE → finish | seed 1: DE → finish | under today's targets |
+|---|---|---|---|
+| amp_leung_nmcf | 1.4999 → 1.4999 | 1.2637 → 1.0786 | — |
+| amp_peng_tcfc | 0.6695 → 0.5817 | **0 by DE alone** | — |
+| amp_ramos_pfc | 1.3094 → 0.7784 | 1.1263 → 0.9043 | — |
+| amp_fan_smc | 0.4891 → **0** | 0.3759 → 0.0669 | — |
+| studio_cm_ota | 0 by DE | 0 by DE | — |
+| ldo_basic | 0 by DE | 0.9751 → **0** | — |
+| skill_ota5t | 0.1731 → 0.1492 | 0.1600 → 0.1600 | both feasible (36.8, 37.0 dB ≥ 36) |
+| skill_opamp2 | 0.2215 → 0.1326 | 0.1933 → 0.1933 | seed 0 feasible (65.4 ≥ 64); seed 1 PM 58° |
+
+Sixteen runs. DE alone finishes four; the finish closes two more,
+improves seven, and does nothing in three. Under today's targets nine
+of sixteen end feasible. The rows disagree between seeds on every
+circuit DE does not finish outright — `amp_peng_tcfc` goes from 0.58 to
+0 by changing nothing but the seed, `amp_fan_smc` the other way — which
+is the 33%-spread lesson again at 600 evaluations instead of 60: the
+*seed* is worth more than any single finish round, and a user with an
+unfinished result should try another seed before trying anything
+cleverer. That is an argument for exposing `seed` in the GUI, recorded
+in ROADMAP, not built tonight.
+
+What the finish is for, on this evidence: the last few percent when DE
+stops close (`ldo_basic` 0.98 → 0 in eight evaluations; `amp_fan_smc`
+0.49 → 0), and a 15–40% cut when it stops mid-way. Not a rescue when it
+stops far away.
+
 ### An equality target with no tolerance can never be met
 
 `MetricScore.met` is `violation <= 0.0`; for a `'target'` metric the
