@@ -1,11 +1,11 @@
 """The optimization loop: evaluate -> score -> propose, under a budget.
 
 Ten algorithms share one driver (budget accounting, cancellation and
-parallel evaluation slots): the built-in Sobol+Powell search, SciPy
-differential evolution and four things built on it (a Powell polish, a
-constrained formulation, a seed portfolio, and the LLM finish), CMA-ES
-with restarts, Optuna TPE, and the two LLM-driven loops in
-:mod:`app.core.llm_sizing`.
+parallel evaluation slots): CMA-ES with restarts — the measured default
+— alone and with the LLM finish, the built-in Sobol+Powell search,
+SciPy differential evolution and three things built on it (a Powell
+polish, a constrained formulation, and the LLM finish), Optuna TPE,
+and the two LLM-driven loops in :mod:`app.core.llm_sizing`.
 """
 
 import time
@@ -38,9 +38,6 @@ def cmaes_available() -> bool:
     except ImportError:
         return False
 
-
-#: seeds a portfolio runs before continuing the best of them
-PORTFOLIO_SEEDS = 3
 
 #: share of the budget de_powell keeps for the polish.  Powell in 30
 #: dimensions spends ~4 evaluations per dimension per pass; a quarter of
@@ -83,17 +80,20 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                         after the first feasible point.  Each generation
                         is one parallel batch; the objective reads the
                         metrics the constraint call cached.
-      'de_portfolio'    PORTFOLIO_SEEDS independent DE populations for
-                        the first half of the budget, then the best of
-                        them continued with the second half.  Needs
-                        seven generations of budget (4 x dims each);
-                        below that it is plain DE and the notes say so.
-                        Built on the measured fact that seeds disagree
-                        on every circuit DE does not finish outright.
       'cmaes'           CMA-ES (pycma) with IPOP restarts: when a run
                         stalls, restart with twice the population from a
                         fresh point until the budget is spent.  Batches
                         of max(workers, 4 + 3 ln dims) per generation.
+                        The measured default: feasible on 12 of 18
+                        circuit-seed rows against DE's 6, best or tied
+                        on 16 (cairn/pitfalls.md).  A seed portfolio
+                        was built and measured alongside and removed:
+                        it lost three of the four circuits it could run
+                        on, two generations being too few to judge a
+                        seed by.
+      'cmaes_llm_finish' 'cmaes' for all but the finish's reserve, then
+                        llm_sizing.run_finish — the finish behind the
+                        search that leaves the fewest gaps.
       'de_llm_finish'   'diff_evolution' for all but the last few
                         evaluations, then up to FINISH_ROUNDS rounds of:
                         one LLM call to name the fix for whatever is
@@ -407,56 +407,21 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         else:
             state['notes'] = 'constrained: no feasible point found'
 
-    def run_de_portfolio():
-        # half the budget split across the seeds, whole generations each,
-        # at least two (an initial sample alone says nothing about a seed)
-        per = (budget // 2 // PORTFOLIO_SEEDS) // generation * generation
-        if per < 2 * generation:
-            state['notes'] = (f'portfolio needs {4 * PORTFOLIO_SEEDS * generation} '
-                              f'evaluations ({PORTFOLIO_SEEDS} seeds x 2 '
-                              f'generations of {generation}, then as much '
-                              f'again to continue); ran plain DE with {budget}')
-            run_de()
-            return
-        tried = []
-        for k in range(PORTFOLIO_SEEDS):
-            if state['cancel']:
-                return
-            state['cap'] = state['dispatched'] + per
-            res = run_de(state['cap'], seed_=seed + k, init='sobol',
-                         evals=per)
-            finite = np.isfinite(res.population_energies)
-            best = float(res.population_energies[finite].min()) \
-                if finite.any() else float('inf')
-            tried.append((best, seed + k, res))
-        state['cap'] = budget
-        best, chosen, res = min(tried, key=lambda t: t[0])
-        for row, c in zip(res.population, res.population_energies,
-                          strict=True):
-            if np.isfinite(c):
-                memo[tuple(np.round(row, 12))] = float(c)
-        state['notes'] = ('portfolio: ' + ', '.join(
-            f'seed {s} {b:.4f}' for b, s, _ in tried)
-            + f' after {per} evaluations each; continued seed {chosen}')
-        if not state['cancel'] and state['dispatched'] < budget:
-            run_de(budget, seed_=chosen, init=np.asarray(res.population),
-                   evals=budget - state['dispatched'])
-
-    def run_cmaes():
+    def run_cmaes(limit: int = budget):
         import cma
         rng = np.random.default_rng(seed)
         lam = max(workers, 4 + int(3 * np.log(dims)))
         start, restarts, lines = x0, 0, []
-        while not state['cancel'] and state['dispatched'] < budget:
+        while not state['cancel'] and state['dispatched'] < limit:
             es = cma.CMAEvolutionStrategy(start, 0.25, {
                 'bounds': [0.0, 1.0], 'popsize': lam,
                 'seed': seed + restarts + 1,
-                'maxfevals': budget - state['dispatched'],
+                'maxfevals': limit - state['dispatched'],
                 'tolfun': 1e-6, 'tolx': 1e-4,
                 'verbose': -9, 'verb_disp': 0, 'verb_log': 0})
             at = state['dispatched']
             while (not es.stop() and not state['cancel']
-                   and state['dispatched'] < budget):
+                   and state['dispatched'] < limit):
                 X = es.ask()
                 costs = run_batch(X)
                 es.tell(X, [c if np.isfinite(c) else 1e12 for c in costs])
@@ -471,6 +436,19 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             lam *= 2
             start = rng.uniform(0.0, 1.0, dims)
         state['notes'] = '\n'.join(lines)
+
+    def run_cmaes_llm_finish():
+        from app.core import llm_sizing
+        state['cap'] = max(budget - llm_sizing.finish_reserve(), budget // 2)
+        run_cmaes(state['cap'])
+        state['cap'] = budget
+        if state['cancel'] or state['dispatched'] >= budget:
+            return
+        note = llm_sizing.run_finish(circuit, variables, overrides,
+                                     state=state, run_batch=run_batch,
+                                     budget=budget, workers=workers)
+        state['notes'] += '\nllm finish: ' + note
+        print(f'llm finish: {note}')
 
     def run_optuna():
         import optuna
@@ -530,10 +508,10 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             run_de_powell()
         elif algo == 'de_constrained':
             run_de_constrained()
-        elif algo == 'de_portfolio':
-            run_de_portfolio()
         elif algo == 'cmaes':
             run_cmaes()
+        elif algo == 'cmaes_llm_finish':
+            run_cmaes_llm_finish()
         elif algo == 'llm':
             run_llm()
         elif algo == 'llm_agent':

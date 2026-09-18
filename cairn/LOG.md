@@ -2,6 +2,16 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-19 · CMA-ES is the default; portfolio removed
+
+- Maintainer's three decisions, one commit: default `cmaes` (with the
+  finish when a model is configured, DE without the package);
+  `cmaes_llm_finish` added, `run_cmaes` takes a limit for it; `Try
+  next` names the CMA-ES finish when it exists; `de_portfolio` removed
+  with its constant, test and menu entry. CHANGELOG vNext carries a
+  Removed bullet next to the earlier Added one rather than rewriting it.
+- Open in ROADMAP: the CMA-ES finish is unmeasured; restarts untested.
+
 ## 2026-09-19 · Seed 1 and the 1200 tier agree: CMA-ES
 
 - Full protocol in: 9 circuits x 2 seeds x 4 searches at 600, plus DE

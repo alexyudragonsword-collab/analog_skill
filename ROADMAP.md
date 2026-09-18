@@ -31,23 +31,11 @@ like before touching anything.
 
 ## Open
 
-- Decide the default now that the measurement is in (`cairn/pitfalls.md`,
-  "CMA-ES: the first search that beats DE"): CMA-ES is feasible on 12 of
-  18 rows against DE's 6 and best or tied on 16, at both seeds. The
-  case for making it the default when `cma` is installed is the table;
-  the case for a `cmaes_llm_finish` entry is that its remaining misses
-  (`amp_leung_nmcf`, `amp_ramos_pfc` at seed 1, the LDO at seed 0) are
-  the "close but not closed" endpoints the finish was built for. Both
-  are a maintainer's call. `Try next`'s "finish" suggestion currently
-  names `de_llm_finish`; it should name the CMA-ES form once that
-  exists.
-- Whether `de_portfolio` stays in the menu. It loses on three of the
-  four circuits it can run on at 1200 and falls back to plain DE below
-  twelve generations of budget. Two generations per seed is too little
-  to judge a seed by; the design that would work — a full DE run per
-  seed, then continue the best — is what a user does by hand with the
-  Seed box and *Continue*, and the button says so more honestly than a
-  menu entry that usually runs plain DE.
+- Measure `cmaes_llm_finish` where CMA-ES alone stops short
+  (`amp_leung_nmcf` and `amp_ramos_pfc` at seed 1, `ldo_basic` at seed
+  0). It is the default when a model is configured, on the strength of
+  the finish's record behind DE; the finish behind CMA-ES has not been
+  run yet.
 - CMA-ES's IPOP restarts are untested on this problem: at 600
   evaluations no run stalled, so none restarted. A larger budget on
   the circuits it leaves open would say whether the restart or the

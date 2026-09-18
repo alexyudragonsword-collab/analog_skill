@@ -8,6 +8,7 @@ from pathlib import Path
 
 from app.core.sizing.assets import _user_data_root
 from app.core.sizing.registry import SIZING
+from app.core.sizing.optimizer import cmaes_available
 from app.core.sizing.report import DE_ALGOS, SizingRun
 from app.core.sizing.scoring import feedback_line, score_detail
 
@@ -111,9 +112,10 @@ def next_step(run: SizingRun, infos: list[dict],
                                       run.overrides) if not d.met]
     close = (len(detail) <= CLOSE_MISSES
              and all(d.violation <= CLOSE_VIOLATION for d in detail))
-    if close and finish_available and run.algo != 'de_llm_finish':
-        return {**out, 'action': 'finish', 'algo': 'de_llm_finish',
-                'text': missed + '. Close — try DE + AI finish at the same '
+    finish = 'cmaes_llm_finish' if cmaes_available() else 'de_llm_finish'
+    if close and finish_available and not run.algo.endswith('llm_finish'):
+        return {**out, 'action': 'finish', 'algo': finish,
+                'text': missed + '. Close — try the AI finish at the same '
                 'seed and budget; that is the step measured to turn close '
                 'into done.'}
     same = [i for i in infos

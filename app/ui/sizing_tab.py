@@ -53,6 +53,12 @@ class SizingTab(QWidget, JobTabMixin):
         self._targets.setMaximumHeight(220)
 
         self.algo_combo = QComboBox()
+        if sizing.cmaes_available():
+            self.algo_combo.addItem('CMA-ES with restarts (pycma)',
+                                    userData='cmaes')
+            self.algo_combo.addItem('CMA-ES + AI finish (CMA-ES searches, '
+                                    'AI names the fix, line search lands it)',
+                                    userData='cmaes_llm_finish')
         self.algo_combo.addItem('Sobol + Powell (built-in)',
                                 userData='sobol_powell')
         self.algo_combo.addItem('Differential evolution (global, '
@@ -65,23 +71,22 @@ class SizingTab(QWidget, JobTabMixin):
         self.algo_combo.addItem('DE, constrained (targets as constraints, '
                                 'then widen the margins)',
                                 userData='de_constrained')
-        self.algo_combo.addItem(
-            f'DE portfolio ({sizing.PORTFOLIO_SEEDS} seeds, continue the '
-            'best; needs a large budget)', userData='de_portfolio')
-        if sizing.cmaes_available():
-            self.algo_combo.addItem('CMA-ES with restarts (pycma)',
-                                    userData='cmaes')
         if sizing.optuna_available():
             self.algo_combo.addItem('Optuna TPE', userData='optuna')
         self.algo_combo.addItem('LLM-guided (AI — configure in Settings)',
                                 userData='llm')
         self.algo_combo.addItem('LLM agent (AI drives, Claude Code only)',
                                 userData='llm_agent')
-        # the default is the measured winner: DE, with the finish when a
-        # model is configured.  Sobol+Powell stays in the list; at 60
-        # evaluations in 33 dimensions it does nothing at all.
-        self.algo_combo.setCurrentIndex(self.algo_combo.findData(
-            'de_llm_finish' if llm_client.configured() else 'diff_evolution'))
+        # the default is the measured winner — CMA-ES, feasible on 12 of
+        # 18 circuit-seed rows against DE's 6 — with the finish when a
+        # model is configured, and DE when the cma package is absent.
+        # Sobol+Powell stays in the list; at 60 evaluations in 33
+        # dimensions it does nothing at all.
+        base = 'cmaes' if sizing.cmaes_available() else 'diff_evolution'
+        if llm_client.configured():
+            base = base.replace('cmaes', 'cmaes_llm_finish').replace(
+                'diff_evolution', 'de_llm_finish')
+        self.algo_combo.setCurrentIndex(self.algo_combo.findData(base))
         self.algo_combo.currentIndexChanged.connect(self._update_estimate)
 
         self.budget_spin = QSpinBox()
@@ -278,7 +283,8 @@ class SizingTab(QWidget, JobTabMixin):
             # many simulations to ask for at a time — there are no rounds to
             # count, so say so rather than inventing a number
             note = '  (+ AI time, varies)'
-        elif self.algo_combo.currentData() == 'de_llm_finish':
+        elif self.algo_combo.currentData() in ('de_llm_finish',
+                                               'cmaes_llm_finish'):
             from app.core.llm_sizing import FINISH_EFFORT, FINISH_ROUNDS
             secs += FINISH_ROUNDS * llm_client.round_seconds(
                 effort=FINISH_EFFORT)
@@ -344,7 +350,7 @@ class SizingTab(QWidget, JobTabMixin):
         budget = self.budget_spin.value()
         seed = self.seed_spin.value()
         algo = self.algo_combo.currentData()
-        if (algo in ('llm', 'de_llm_finish')
+        if (algo in ('llm', 'de_llm_finish', 'cmaes_llm_finish')
                 and not llm_client.configured()):
             self._status.setText('<font color="red">LLM not configured — '
                                  'set model + API key in Settings.</font>')

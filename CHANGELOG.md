@@ -7,6 +7,29 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **Changed — CMA-ES is the default search** when the `cma` package is
+  present, with the AI finish behind it when a model is configured
+  (`cmaes_llm_finish`, new); DE and DE + finish remain the defaults
+  without the package.  The table behind the change is in
+  `cairn/pitfalls.md`: nine circuits, two seeds, CMA-ES feasible on 12
+  of 18 rows against DE's 6, best or tied on 16.  *Try next*'s "finish"
+  suggestion names the CMA-ES form when it exists.
+
+- **Added — `cmaes_llm_finish`.**  CMA-ES for all but the finish's
+  reserve, then the same diagnose-and-search rounds as `de_llm_finish`.
+  The finish's case — the search stopped close — is where CMA-ES stops
+  on `amp_leung_nmcf`, `amp_ramos_pfc` and the LDO at one seed or the
+  other.
+
+- **Removed — `de_portfolio`**, added earlier in this same unreleased
+  section.  Measured at 1200 evaluations it lost on three of the four
+  circuits it could run on and fell back to plain DE on the fifth: two
+  generations per seed is too few to judge a seed by, and the
+  evaluations spent on the discarded seeds are exactly what the
+  continued one lacked.  What it was reaching for — try seeds, continue
+  the best — is what the Seed box and *Continue* already let a user do,
+  one full run per seed, which is the version that works.
+
 - **Added — four more searches, each in the Sizing tab's algorithm menu,
   and one new dependency.**  Chosen for the shape of this problem
   (20–56 continuous variables, a piecewise cost that is flat in most

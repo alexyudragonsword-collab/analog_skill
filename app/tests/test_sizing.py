@@ -983,7 +983,7 @@ def _info(seed, cost, budget=600, circuit='amp_hoilee_affc'):
             'best_cost': cost, 'budget': budget}
 
 
-def test_next_step_follows_the_measured_order():
+def test_next_step_follows_the_measured_order(monkeypatch):
     """finish when close and not yet tried; another seed while fewer than
     three have been; then twice the budget at the best seed.  The order
     is the one sixteen runs at two seeds supported, not a preference."""
@@ -992,8 +992,17 @@ def test_next_step_follows_the_measured_order():
 
     close = _run_with(dict(_PERFECT, phase_in_deg=58.0))   # one miss, 3%
     nxt = sizing.next_step(close, [])
-    assert nxt['action'] == 'finish' and nxt['algo'] == 'de_llm_finish'
+    assert nxt['action'] == 'finish' and nxt['algo'].endswith('llm_finish')
     assert nxt['seed'] == 0 and nxt['budget'] == 600
+    # the finish is offered behind the measured default when it exists
+    monkeypatch.setattr(sizing.runs, 'cmaes_available', lambda: True)
+    assert sizing.next_step(close, [])['algo'] == 'cmaes_llm_finish'
+    monkeypatch.setattr(sizing.runs, 'cmaes_available', lambda: False)
+    assert sizing.next_step(close, [])['algo'] == 'de_llm_finish'
+    # ...and not again after a finish of either kind
+    assert sizing.next_step(_run_with(dict(_PERFECT, phase_in_deg=58.0),
+                                      algo='cmaes_llm_finish'),
+                            [])['action'] == 'seed'
     assert 'Phase margin 58' in nxt['text']
 
     # no model configured: the finish is not on offer, seeds come first
@@ -1095,16 +1104,27 @@ def test_de_powell_polishes_where_de_stopped(monkeypatch):
     assert run.continuable                        # DE population kept
 
 
-def test_de_portfolio_runs_seeds_then_continues_the_best(monkeypatch):
-    variables = _fake_bowl(monkeypatch)           # generation = 8
-    small = sizing.optimize('skill_bootstrap', variables, budget=40,
-                            algo='de_portfolio', workers=1)
-    assert 'ran plain DE' in small.notes and small.evals <= 40
+def test_cmaes_llm_finish_leaves_the_finish_its_reserve(monkeypatch):
+    """The measured default with the finish behind it: CMA-ES stops at
+    the reserve, the finish sees the whole budget as its cap."""
+    pytest.importorskip('cma')
+    from app.core import llm_sizing
+    variables = _fake_bowl(monkeypatch)
+    seen = []
+
+    def fake_finish(circuit, variables, overrides, *, state, run_batch,
+                    budget, workers, chat=None):
+        seen.append((state['dispatched'], state['cap'], budget))
+        return 'fake finish'
+
+    monkeypatch.setattr(llm_sizing, 'run_finish', fake_finish)
     run = sizing.optimize('skill_bootstrap', variables, budget=100,
-                          algo='de_portfolio', workers=1)
-    assert run.evals <= 100
-    assert run.notes.startswith('portfolio: seed 0') and 'continued seed' in run.notes
-    assert run.notes.count('seed') == sizing.PORTFOLIO_SEEDS + 1
+                          algo='cmaes_llm_finish', workers=1)
+    assert len(seen) == 1
+    at, cap, budget = seen[0]
+    assert at <= 100 - llm_sizing.finish_reserve() and cap == budget == 100
+    assert run.evals == at and 'llm finish: fake finish' in run.notes
+    assert 'run 0: popsize' in run.notes
 
 
 def test_signed_margin_and_slack():

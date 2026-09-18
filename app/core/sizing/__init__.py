@@ -48,7 +48,7 @@ from app.core.sizing.evaluation import (
     _run_dir, capture_waves, evaluate, netlist_texts,
 )
 from app.core.sizing.optimizer import (
-    PORTFOLIO_SEEDS, cmaes_available, optimize, optuna_available,
+    cmaes_available, optimize, optuna_available,
 )
 from app.core.sizing.plots import (
     render_comparison, render_convergence, render_wave_comparison,

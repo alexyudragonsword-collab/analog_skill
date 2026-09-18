@@ -383,6 +383,25 @@ def test_estimate_counts_the_ai_rounds_not_just_the_simulations(window,
     assert minutes(with_ai) > minutes(sims_only) * 10
 
 
+def test_sizing_default_algorithm_is_the_measured_one(monkeypatch):
+    """CMA-ES when the package is there, with the finish when a model is
+    configured; DE otherwise.  The table behind it is in
+    cairn/pitfalls.md — the default is not a preference."""
+    pytest.importorskip('cma')
+    from app.core import llm_client
+    from app.core.worker import SimWorker
+    from app.ui.sizing_tab import SizingTab
+    worker = SimWorker()
+    try:
+        monkeypatch.setattr(llm_client, 'configured', lambda cfg=None: False)
+        assert SizingTab(worker).algo_combo.currentData() == 'cmaes'
+        monkeypatch.setattr(llm_client, 'configured', lambda cfg=None: True)
+        assert SizingTab(worker).algo_combo.currentData() == \
+            'cmaes_llm_finish'
+    finally:
+        worker.stop()
+
+
 def test_sizing_seed_reaches_the_search_and_try_next_applies_the_step(
         window, tmp_path, monkeypatch, fake_run):
     """The seed box is what makes the measured order — seed, budget,
@@ -398,6 +417,7 @@ def test_sizing_seed_reaches_the_search_and_try_next_applies_the_step(
     # the module shares one window; an earlier test may have left the
     # AI algorithm selected, which the not-configured guard would refuse
     tab.algo_combo.setCurrentIndex(tab.algo_combo.findData('diff_evolution'))
+    assert tab.algo_combo.findData('de_portfolio') < 0     # removed
 
     jobs = []
     monkeypatch.setattr(tab, 'submit_job', lambda slot, job: jobs.append(job))
