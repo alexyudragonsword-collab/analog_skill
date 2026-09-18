@@ -31,6 +31,12 @@ like before touching anything.
 
 ## Open
 
+- Measure the four new searches — CMA-ES with restarts, DE + Powell,
+  constrained DE, DE portfolio — against DE on the eight-circuit protocol
+  (600 evaluations, seeds 0 and 1; the portfolio at 1200, where it is
+  defined), judged on feasible count and cost at budget, and put the
+  table next to DE's in `cairn/pitfalls.md`. Until then the menu offers
+  them as options, not recommendations; the default stays DE (+ finish).
 - Whether *Try next*'s thresholds are right: three seeds before more
   budget, "close" as two misses none over 10%, budget doubling (or the
   same budget again when the run can be continued). They

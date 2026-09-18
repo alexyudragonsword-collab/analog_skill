@@ -35,7 +35,7 @@ python -m pytest app/tests/ -v
 python -m ruff check .
 ```
 
-**Tests.** ~195 of them, about 2 minutes, because most of them run real
+**Tests.** ~200 of them, about 2 minutes, because most of them run real
 ngspice rather than mocking it. Tests that need the simulator skip themselves
 when it is absent (`needs_ngspice`), so a run without ngspice is still worth
 something but proves much less.

@@ -20,8 +20,10 @@ from app.core.sizing.scoring import _violation
 from app.core.sizing.spec import _fmt_num
 
 
-#: the algorithms whose search is a DE population, and can be continued
-DE_ALGOS = ('diff_evolution', 'de_llm_finish')
+#: the algorithms whose search is a DE population, and can be continued.
+#: de_constrained is left out: its inherited members would need their
+#: metrics, not just their costs, and the memo carries costs.
+DE_ALGOS = ('diff_evolution', 'de_llm_finish', 'de_powell')
 
 
 @dataclass

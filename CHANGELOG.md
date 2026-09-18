@@ -7,6 +7,36 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **Added — four more searches, each in the Sizing tab's algorithm menu,
+  and one new dependency.**  Chosen for the shape of this problem
+  (20–56 continuous variables, a piecewise cost that is flat in most
+  directions once most targets are met, several basins per circuit) and
+  the evidence so far (seeds disagree; DE converges by ~530; the finish
+  turns close into done).
+  - **CMA-ES with restarts** (`cmaes`, needs `cma`, pure Python, now in
+    `requirements.txt` and forced into the frozen builds).  Covariance
+    adaptation for the ill-conditioning DE ignores; IPOP restarts — a
+    stalled run restarts with twice the population from a fresh point —
+    for the basins.  Batches of max(workers, 4 + 3 ln dims).  Hidden from
+    the menu when the package is absent, like Optuna.
+  - **DE + Powell polish** (`de_powell`): DE for three quarters of the
+    budget, bounded Powell from its best point with the rest.  The
+    finish's line search without a model choosing the line.
+  - **DE, constrained** (`de_constrained`): every metric a constraint
+    under SciPy's feasibility rules, the objective the summed margin
+    inside the targets (`scoring.slack`, each margin capped at 50%), so
+    the search keeps widening margins after the first feasible point
+    instead of stopping there.  One parallel batch per generation: the
+    constraint call sees the whole trial population and the objective
+    reads what it cached.
+  - **DE portfolio** (`de_portfolio`): three seeds for half the budget,
+    then the best population continued with the other half.  Needs
+    twelve generations of budget (4 × dims each); below that it runs
+    plain DE and says so in the notes.
+  All four record their account in the run's notes.  Not yet measured
+  against DE on the eight-circuit protocol; that run is next and ROADMAP
+  carries it.
+
 - **Added — a DE run keeps its last population and can be continued.**
   Re-running at twice the budget replays the first half exactly (same
   seed, same generations); `amp_leung_nmcf` at 1200 spent its first 552

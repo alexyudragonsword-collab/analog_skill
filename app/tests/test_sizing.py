@@ -1053,3 +1053,84 @@ def test_run_record_carries_its_search_and_loads_without_it(tmp_path):
     back = sizing.load_run(old)
     assert (back.algo, back.seed, back.budget, back.notes) == ('', 0, 0, '')
     assert 'search notes' not in back.report()
+
+
+# ── the four searches added after the seed sweep, on a fake objective ───────
+def _fake_bowl(monkeypatch):
+    """skill_bootstrap has two variables; make its cost a bowl with the
+    optimum at (W.sw 30, FCLK 100 MHz), so a search's result is judged
+    against a known answer and no ngspice runs."""
+    def fake(circuit, values, **kw):
+        w = (values['W.sw'] - 30.0) / 38.0
+        f = (values['FCLK'] - 1e8) / 1.875e8
+        return {'q': 4 * w * w + f * f}
+    monkeypatch.setattr(sizing.optimizer, 'evaluate', fake)
+    monkeypatch.setattr(sizing.optimizer, 'score',
+                        lambda circuit, m, ov=None: m['q'])
+    return sizing.parse_variables('skill_bootstrap')
+
+
+def test_cmaes_converges_and_restarts(monkeypatch):
+    pytest.importorskip('cma')
+    variables = _fake_bowl(monkeypatch)
+    run = sizing.optimize('skill_bootstrap', variables, budget=400,
+                          algo='cmaes', workers=1)
+    assert run.best_cost < 1e-4, run.best_cost
+    assert run.evals <= 400 and run.algo == 'cmaes'
+    # the bowl is solved long before 400 evaluations: a stalled run must
+    # have restarted with a larger population rather than sat idle
+    assert 'run 1: popsize 12' in run.notes      # doubled on restart
+    assert 'run 0: popsize 6' in run.notes and 'stopped on tol' in run.notes
+    assert run.population is None                # not a DE population
+
+
+def test_de_powell_polishes_where_de_stopped(monkeypatch):
+    variables = _fake_bowl(monkeypatch)
+    run = sizing.optimize('skill_bootstrap', variables, budget=80,
+                          algo='de_powell', workers=1)
+    assert run.evals <= 80 and 'powell polish' in run.notes
+    plain = sizing.optimize('skill_bootstrap', variables, budget=80,
+                            algo='diff_evolution', workers=1)
+    assert run.best_cost <= plain.best_cost      # the polish never hurts
+    assert run.continuable                        # DE population kept
+
+
+def test_de_portfolio_runs_seeds_then_continues_the_best(monkeypatch):
+    variables = _fake_bowl(monkeypatch)           # generation = 8
+    small = sizing.optimize('skill_bootstrap', variables, budget=40,
+                            algo='de_portfolio', workers=1)
+    assert 'ran plain DE' in small.notes and small.evals <= 40
+    run = sizing.optimize('skill_bootstrap', variables, budget=100,
+                          algo='de_portfolio', workers=1)
+    assert run.evals <= 100
+    assert run.notes.startswith('portfolio: seed 0') and 'continued seed' in run.notes
+    assert run.notes.count('seed') == sizing.PORTFOLIO_SEEDS + 1
+
+
+def test_signed_margin_and_slack():
+    from app.core.sizing.spec import MetricSpec
+    band = MetricSpec('pm', 'PM', 'deg', 60.0, 'max', 1.0, ceiling=90.0)
+    assert sizing.signed_margin(band, 75.0, 60.0) == pytest.approx(
+        min(15 / 60, 15 / 90))
+    assert sizing.signed_margin(band, 50.0, 60.0) < 0
+    assert sizing.signed_margin(band, 100.0, 60.0) < 0
+    lo = MetricSpec('p', 'P', 'W', 1e-3, 'min', 1.0)
+    assert sizing.signed_margin(lo, 0.5e-3, 1e-3) == pytest.approx(0.5)
+    ab = MetricSpec('v', 'V', 'V', 1e-4, 'absmin', 1.0)
+    assert sizing.signed_margin(ab, -0.5e-4, 1e-4) == pytest.approx(0.5)
+    # a huge margin on one metric is capped: it cannot buy slack elsewhere
+    perfect = dict(_PERFECT, dcgain=1000.0)
+    assert sizing.slack('amp_hoilee_affc', perfect) <= 9 * 0.5
+    assert sizing.slack('amp_hoilee_affc', None) < 0
+
+
+@needs_ngspice
+def test_de_constrained_micro_run():
+    """Every metric a constraint, one parallel batch per generation, the
+    objective read from what the constraint call cached: the budget is
+    spent once, not twice."""
+    variables = sizing.parse_variables('studio_cm_ota')
+    run = sizing.optimize('studio_cm_ota', variables, budget=8,
+                          algo='de_constrained', workers=4)
+    assert run.evals == 8 and run.notes.startswith('constrained:')
+    assert run.best_cost < float('inf')

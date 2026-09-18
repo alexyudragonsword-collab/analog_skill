@@ -60,6 +60,17 @@ class SizingTab(QWidget, JobTabMixin):
         self.algo_combo.addItem('DE + AI finish (DE searches, AI names '
                                 'the fix, line search lands it)',
                                 userData='de_llm_finish')
+        self.algo_combo.addItem('DE + Powell polish (local finish, no AI)',
+                                userData='de_powell')
+        self.algo_combo.addItem('DE, constrained (targets as constraints, '
+                                'then widen the margins)',
+                                userData='de_constrained')
+        self.algo_combo.addItem(
+            f'DE portfolio ({sizing.PORTFOLIO_SEEDS} seeds, continue the '
+            'best; needs a large budget)', userData='de_portfolio')
+        if sizing.cmaes_available():
+            self.algo_combo.addItem('CMA-ES with restarts (pycma)',
+                                    userData='cmaes')
         if sizing.optuna_available():
             self.algo_combo.addItem('Optuna TPE', userData='optuna')
         self.algo_combo.addItem('LLM-guided (AI — configure in Settings)',

@@ -47,7 +47,9 @@ from app.core.sizing.evaluation import (
     operating_points,
     _run_dir, capture_waves, evaluate, netlist_texts,
 )
-from app.core.sizing.optimizer import optimize, optuna_available
+from app.core.sizing.optimizer import (
+    PORTFOLIO_SEEDS, cmaes_available, optimize, optuna_available,
+)
 from app.core.sizing.plots import (
     render_comparison, render_convergence, render_wave_comparison,
 )
@@ -58,7 +60,7 @@ from app.core.sizing.runs import (
     save_run,
 )
 from app.core.sizing.scoring import (
-    MetricScore, feedback_line, score, score_detail,
+    MetricScore, feedback_line, score, score_detail, signed_margin, slack,
 )
 from app.core.sizing.spec import MetricSpec, SizingSpec, VarSpec
 from app.core.sizing.user_circuits import (

@@ -134,6 +134,7 @@ jobs:
             --include-module=matplotlib.backends.backend_qtagg `
             --include-module=scipy.stats `
             --include-module=scipy.signal `
+            --include-package=cma `
             --nofollow-import-to=optuna `
             --nofollow-import-to=sqlalchemy `
             --nofollow-import-to=greenlet `
@@ -303,6 +304,7 @@ jobs:
             --include-module=matplotlib.backends.backend_qtagg `
             --include-module=scipy.stats `
             --include-module=scipy.signal `
+            --include-package=cma `
             --nofollow-import-to=optuna `
             --nofollow-import-to=sqlalchemy `
             --nofollow-import-to=greenlet `
@@ -453,6 +455,7 @@ jobs:
             --include-module=matplotlib.backends.backend_qtagg \
             --include-module=scipy.stats \
             --include-module=scipy.signal \
+            --include-package=cma \
             --nofollow-import-to=optuna \
             --nofollow-import-to=sqlalchemy \
             --nofollow-import-to=greenlet \

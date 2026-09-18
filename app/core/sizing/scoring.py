@@ -82,6 +82,47 @@ def score_detail(circuit: str, metrics: dict,
     return out
 
 
+def signed_margin(ms: MetricSpec, m: float, target: float) -> float:
+    """How far inside its target a metric sits, relative; negative when it
+    is outside.  The constrained search maximizes the sum of these once
+    every target is met, so it keeps going after feasibility instead of
+    stopping at the first point that clears the bar."""
+    if ms.direction == 'max':
+        v = (m - target) / abs(target)
+        if ms.ceiling is not None:
+            v = min(v, (ms.ceiling - m) / abs(ms.ceiling))
+        return v
+    if ms.direction == 'min':
+        return (target - m) / abs(target)
+    if ms.direction == 'absmin':
+        return (target - abs(m)) / abs(target)
+    return -abs(m - target) / abs(target)
+
+
+#: a margin beyond this counts for nothing more — one metric with ten
+#: times its target must not buy slack for the rest
+MARGIN_CAP = 0.5
+
+
+def slack(circuit: str, metrics: dict | None,
+          overrides: dict | None = None) -> float:
+    """Sum of capped signed margins; only meaningful when every target is
+    met (the cost is the measure until then).  Missing metrics count as
+    nothing."""
+    if not metrics:
+        return -_MISSING_PENALTY
+    overrides = overrides or {}
+    total = 0.0
+    for ms in SIZING[circuit].metrics:
+        target, _hard = overrides.get(ms.key, (ms.target, ms.hard))
+        m = metrics.get(ms.key)
+        if m is None or not np.isfinite(m):
+            total -= _MISSING_PENALTY
+            continue
+        total += min(signed_margin(ms, float(m), target), MARGIN_CAP)
+    return total
+
+
 def feedback_line(circuit: str, metrics: dict | None,
                   overrides: dict | None = None, limit: int = 5) -> str:
     """One line saying which targets a sizing missed, and by how much.

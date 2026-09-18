@@ -70,6 +70,9 @@ a = Analysis(
         'scipy.signal',
         'matplotlib.backends.backend_qtagg',
         'matplotlib.backends.backend_agg',
+        # imported inside optimize() so the Sizing tab loads without it;
+        # PyInstaller does not see a function-level import
+        'cma',
     ],
     hookspath=[],
     runtime_hooks=[],

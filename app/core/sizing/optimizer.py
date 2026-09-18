@@ -1,11 +1,11 @@
 """The optimization loop: evaluate -> score -> propose, under a budget.
 
-Six algorithms share one driver (budget accounting, cancellation and
+Ten algorithms share one driver (budget accounting, cancellation and
 parallel evaluation slots): the built-in Sobol+Powell search, SciPy
-differential evolution, Optuna TPE, the two LLM-driven loops in
-:mod:`app.core.llm_sizing`, and DE followed by one LLM diagnosis and a
-line search — the only one of the six that has produced a sizing meeting
-every target on the reference amplifier.
+differential evolution and four things built on it (a Powell polish, a
+constrained formulation, a seed portfolio, and the LLM finish), CMA-ES
+with restarts, Optuna TPE, and the two LLM-driven loops in
+:mod:`app.core.llm_sizing`.
 """
 
 import time
@@ -15,7 +15,7 @@ import numpy as np
 from app.core.sizing.evaluation import evaluate
 from app.core.sizing.registry import SIZING
 from app.core.sizing.report import DE_ALGOS, SizingRun
-from app.core.sizing.scoring import score
+from app.core.sizing.scoring import _MISSING_PENALTY, score, score_detail, slack
 from app.core.sizing.spec import VarSpec
 
 
@@ -29,6 +29,23 @@ def optuna_available() -> bool:
         return True
     except ImportError:
         return False
+
+
+def cmaes_available() -> bool:
+    try:
+        import cma                                        # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+#: seeds a portfolio runs before continuing the best of them
+PORTFOLIO_SEEDS = 3
+
+#: share of the budget de_powell keeps for the polish.  Powell in 30
+#: dimensions spends ~4 evaluations per dimension per pass; a quarter of
+#: 600 is about one pass, serial.
+POLISH_SHARE = 0.25
 
 
 def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
@@ -51,6 +68,29 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
       'diff_evolution'  scipy differential_evolution with a thread-pool map
                         (population 4x dims per generation — needs larger
                         budgets), polish disabled.
+      'de_powell'       'diff_evolution' for 1 - POLISH_SHARE of the
+                        budget, then bounded Powell from its best point
+                        with the rest (serial).  The finish's line search
+                        without the model: a local polish DE never does.
+      'de_constrained'  DE with every metric as a constraint (SciPy's
+                        feasibility rules: infeasible points compete on
+                        total violation, feasible ones on an objective)
+                        and the objective the summed margin inside the
+                        targets — so it keeps improving after the first
+                        feasible point instead of stopping there.  Each
+                        generation is one parallel batch; the objective
+                        reads the metrics the constraint call cached.
+      'de_portfolio'    PORTFOLIO_SEEDS independent DE populations for
+                        the first half of the budget, then the best of
+                        them continued with the second half.  Needs
+                        seven generations of budget (4 x dims each);
+                        below that it is plain DE and the notes say so.
+                        Built on the measured fact that seeds disagree
+                        on every circuit DE does not finish outright.
+      'cmaes'           CMA-ES (pycma) with IPOP restarts: when a run
+                        stalls, restart with twice the population from a
+                        fresh point until the budget is spent.  Batches
+                        of max(workers, 4 + 3 ln dims) per generation.
       'de_llm_finish'   'diff_evolution' for all but the last few
                         evaluations, then up to FINISH_ROUNDS rounds of:
                         one LLM call to name the fix for whatever is
@@ -250,28 +290,174 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                  options={'maxfev': max(budget - state['dispatched'], 1),
                           'xtol': 1e-3, 'ftol': 1e-4})
 
-    def run_de(limit: int = budget):
-        from scipy.optimize import differential_evolution
-        dims = len(names)
-        popsize = 4                          # individuals = 4 x dims
-        maxiter = max(1, limit // (popsize * dims))
-        res = differential_evolution(
-            lambda xn: run_batch([xn])[0],   # only used if scipy bypasses map
-            bounds=[(0.0, 1.0)] * dims,
-            x0=None if resume is not None else x0, init=init_pop,
-            popsize=popsize, maxiter=maxiter, polish=False, tol=0.0,
-            seed=seed, updating='deferred',
-            workers=lambda func, xs: run_batch(list(xs)),
-            callback=lambda xk, convergence=0.0:
-                state['cancel'] or state['dispatched'] >= limit)
-        # the last generation, in physical units, is what a continued run
-        # starts from; scipy hands it back whether the loop ran out of
-        # iterations, budget or was cancelled
+    dims = len(names)
+    generation = 4 * dims                    # DE individuals per generation
+
+    def keep_population(res):
+        """The last generation, in physical units, is what a continued
+        run starts from; scipy hands it back whether the loop ran out of
+        iterations, budget or was cancelled."""
         pop = np.clip(np.asarray(res.population, float), 0, 1) * span + lo
         pop = np.where(is_int, np.round(pop), pop)
         state['population'] = pop.tolist()
         state['pop_costs'] = [float(c) if np.isfinite(c) else None
                               for c in res.population_energies]
+
+    def run_de(limit: int = budget, seed_: int = seed, init=None,
+               evals: int | None = None, objective_fn=None,
+               constraints=()):
+        """One DE search up to `limit` dispatched evaluations.  `init` is a
+        population to start from (else the resumed run's, else Sobol);
+        `evals` sizes the generation count when `limit` includes earlier
+        phases.  Returns scipy's result, population included."""
+        from scipy.optimize import differential_evolution
+        init = init_pop if init is None else init
+        maxiter = max(1, (evals if evals is not None else limit)
+                      // generation)
+        res = differential_evolution(
+            objective_fn or (lambda xn: run_batch([xn])[0]),
+            bounds=[(0.0, 1.0)] * dims,
+            x0=x0 if isinstance(init, str) else None, init=init,
+            popsize=4, maxiter=maxiter, polish=False, tol=0.0,
+            seed=seed_, updating='deferred', constraints=constraints,
+            workers=lambda func, xs: run_batch(list(xs)),
+            callback=lambda xk, convergence=0.0:
+                state['cancel'] or state['dispatched'] >= limit)
+        keep_population(res)
+        return res
+
+    def run_de_powell():
+        state['cap'] = max(int(budget * (1 - POLISH_SHARE)), budget // 2)
+        run_de(state['cap'])
+        state['cap'] = budget
+        if state['cancel'] or state['dispatched'] >= budget:
+            return
+        before, at = state['best'], state['dispatched']
+        minimize(objective, state['best_xn'], method='Powell',
+                 bounds=[(0.0, 1.0)] * dims,
+                 options={'maxfev': max(budget - state['dispatched'], 1),
+                          'xtol': 1e-3, 'ftol': 1e-4})
+        state['notes'] = (f'powell polish: {state["dispatched"] - at} '
+                          f'evaluations, cost {before:.4f} -> '
+                          f'{state["best"]:.4f}')
+
+    def run_de_constrained():
+        from scipy.optimize import NonlinearConstraint
+        # the constraint call sees the whole trial population at once, so
+        # it is where the parallel batch runs; the objective, which scipy
+        # asks only for the feasible members, reads what that call cached
+        cache: dict[tuple, tuple] = {}
+        n_con = len(spec.metrics)
+
+        def key(xn):
+            return tuple(np.round(np.asarray(xn, float), 12))
+
+        def violations(xT):
+            X = np.atleast_2d(np.asarray(xT, float).T)          # (S, N)
+            todo = [x for x in X if key(x) not in cache]
+            if todo:
+                costs, mets = run_batch(todo, with_metrics=True)
+                for x, c, m in zip(todo, costs, mets, strict=True):
+                    cache[key(x)] = (c, m)
+            rows = []
+            for x in X:
+                c, m = cache[key(x)]
+                if m is None or not np.isfinite(c):
+                    rows.append([_MISSING_PENALTY] * n_con)
+                else:
+                    rows.append([d.contribution for d in
+                                 score_detail(circuit, m, overrides)])
+            return np.asarray(rows).T                            # (M, S)
+
+        def objective_fn(xn):
+            hit = cache.get(key(xn))
+            if hit is None:                  # scipy bypassed the batch
+                costs, mets = run_batch([xn], with_metrics=True)
+                hit = cache[key(xn)] = (costs[0], mets[0])
+            c, m = hit
+            return 1e12 if m is None else -slack(circuit, m, overrides)
+
+        res = run_de(objective_fn=objective_fn, constraints=(
+            NonlinearConstraint(violations, -np.inf, 0.0),))
+        # scipy's answer is the best *feasible* member by objective; the
+        # driver tracked the least-violating one, which among feasible
+        # points is whichever came first.  Prefer scipy's when it is
+        # feasible, so the report shows the widest margins, not the first.
+        hit = cache.get(key(res.x))
+        if hit and hit[1] is not None and hit[0] == 0.0:
+            with lock:
+                state['best'], state['best_m'] = 0.0, hit[1]
+                state['best_x'] = to_values(res.x)
+                state['best_xn'] = np.asarray(res.x, float)
+            state['notes'] = (f'constrained: feasible, margin sum '
+                              f'{slack(circuit, hit[1], overrides):.3f}')
+        else:
+            state['notes'] = 'constrained: no feasible point found'
+
+    def run_de_portfolio():
+        # half the budget split across the seeds, whole generations each,
+        # at least two (an initial sample alone says nothing about a seed)
+        per = (budget // 2 // PORTFOLIO_SEEDS) // generation * generation
+        if per < 2 * generation:
+            state['notes'] = (f'portfolio needs {4 * PORTFOLIO_SEEDS * generation} '
+                              f'evaluations ({PORTFOLIO_SEEDS} seeds x 2 '
+                              f'generations of {generation}, then as much '
+                              f'again to continue); ran plain DE with {budget}')
+            run_de()
+            return
+        tried = []
+        for k in range(PORTFOLIO_SEEDS):
+            if state['cancel']:
+                return
+            state['cap'] = state['dispatched'] + per
+            res = run_de(state['cap'], seed_=seed + k, init='sobol',
+                         evals=per)
+            finite = np.isfinite(res.population_energies)
+            best = float(res.population_energies[finite].min()) \
+                if finite.any() else float('inf')
+            tried.append((best, seed + k, res))
+        state['cap'] = budget
+        best, chosen, res = min(tried, key=lambda t: t[0])
+        for row, c in zip(res.population, res.population_energies,
+                          strict=True):
+            if np.isfinite(c):
+                memo[tuple(np.round(row, 12))] = float(c)
+        state['notes'] = ('portfolio: ' + ', '.join(
+            f'seed {s} {b:.4f}' for b, s, _ in tried)
+            + f' after {per} evaluations each; continued seed {chosen}')
+        if not state['cancel'] and state['dispatched'] < budget:
+            run_de(budget, seed_=chosen, init=np.asarray(res.population),
+                   evals=budget - state['dispatched'])
+
+    def run_cmaes():
+        import cma
+        rng = np.random.default_rng(seed)
+        lam = max(workers, 4 + int(3 * np.log(dims)))
+        start, restarts, lines = x0, 0, []
+        while not state['cancel'] and state['dispatched'] < budget:
+            es = cma.CMAEvolutionStrategy(start, 0.25, {
+                'bounds': [0.0, 1.0], 'popsize': lam,
+                'seed': seed + restarts + 1,
+                'maxfevals': budget - state['dispatched'],
+                'tolfun': 1e-6, 'tolx': 1e-4,
+                'verbose': -9, 'verb_disp': 0, 'verb_log': 0})
+            at = state['dispatched']
+            while (not es.stop() and not state['cancel']
+                   and state['dispatched'] < budget):
+                X = es.ask()
+                costs = run_batch(X)
+                es.tell(X, [c if np.isfinite(c) else 1e12 for c in costs])
+            lines.append(f'run {restarts}: popsize {lam}, '
+                         f'{state["dispatched"] - at} evaluations, best '
+                         f'{es.best.f:.4f}, stopped on '
+                         f'{", ".join(es.stop()) or "budget"}')
+            # IPOP: a stalled run restarts with twice the population from
+            # a fresh point; the larger population is what makes the next
+            # basin reachable, the fresh point is what makes it different
+            restarts += 1
+            lam *= 2
+            start = rng.uniform(0.0, 1.0, dims)
+        state['notes'] = '\n'.join(lines)
 
     def run_optuna():
         import optuna
@@ -327,6 +513,14 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             run_de()
         elif algo == 'de_llm_finish':
             run_de_llm_finish()
+        elif algo == 'de_powell':
+            run_de_powell()
+        elif algo == 'de_constrained':
+            run_de_constrained()
+        elif algo == 'de_portfolio':
+            run_de_portfolio()
+        elif algo == 'cmaes':
+            run_cmaes()
         elif algo == 'llm':
             run_llm()
         elif algo == 'llm_agent':

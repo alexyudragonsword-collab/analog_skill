@@ -51,7 +51,7 @@ A PySide6 desktop workbench for analog IC design, driving ngspice locally — gm
 ```bash
 python -m app.main                      # run (QT_QPA_PLATFORM=offscreen if headless)
 python -m app.main --smoke              # build every tab, exit 0
-python -m pytest app/tests/ -v          # ~195 tests, ~2 min, real ngspice
+python -m pytest app/tests/ -v          # ~200 tests, ~2 min, real ngspice
 python -m ruff check .                  # must be clean; config in ruff.toml
 python tools/gen_sizing_schematics.py   # redraw the 20 Sizing schematics
 ```

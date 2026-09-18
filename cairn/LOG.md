@@ -2,6 +2,21 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-18 · Four more searches, in the menu
+
+- Maintainer asked which algorithms to try and then to build them all
+  with GUI entries. Built: CMA-ES with IPOP restarts (`cma`, new runtime
+  dependency, in `app.spec` hiddenimports and the three Nuitka jobs),
+  DE + Powell polish, constrained DE (metrics as SciPy constraints,
+  objective = capped margin sum via `scoring.slack`), DE portfolio (3
+  seeds then continue the best; needs 12 generations of budget). All in
+  `optimizer.py`, each writing its account to `notes`. Fake-objective
+  tests on the 2-variable bootstrap circuit for three, a micro ngspice
+  run for the constrained one.
+- Not built: gm/ID-derived initial populations — needs per-circuit
+  design equations the app does not have. Said so to the maintainer.
+- Measurement on the eight-circuit protocol starts next; ROADMAP Open.
+
 ## 2026-09-18 · The measured order, in the GUI
 
 - Maintainer asked how "seed, then budget, then finish" shows up in the
