@@ -33,6 +33,12 @@ class SizingRun:
     elapsed: float
     overrides: dict | None = None
     verified: dict | None = None  # full re-evaluation of the best point
+    # the search that produced it — what "try the next thing" reads.
+    # Defaults keep runs saved before these existed loadable.
+    algo: str = ''
+    seed: int = 0
+    budget: int = 0
+    notes: str = ''               # the finish's account, round by round
 
     def report(self) -> str:
         spec = SIZING[self.circuit]
@@ -40,7 +46,8 @@ class SizingRun:
         lines = [spec.title, '',
                  f'evaluations: {self.evals}'
                  + ('  (cancelled)' if self.cancelled else '')
-                 + f'   elapsed: {self.elapsed:.0f}s',
+                 + f'   elapsed: {self.elapsed:.0f}s'
+                 + (f'   {self.algo}, seed {self.seed}' if self.algo else ''),
                  f'cost: {self.initial_cost:.4f}  ->  {self.best_cost:.4f}'
                  f'   (FoM {-self.best_cost:.4f})', '',
                  f'{"metric":<22}{"value":>14}   target']
@@ -68,6 +75,12 @@ class SizingRun:
         lines += ['', 'best design variables:']
         for k, v in self.best_values.items():
             lines.append(f'  {k} = {_fmt_num(v)}')
+        if self.notes:
+            # which variables the model moved and what the line search
+            # found is the part of a finish a designer reads; the cost
+            # curve only says that something happened
+            lines += ['', 'search notes:'] + [
+                '  ' + ln for ln in self.notes.splitlines()]
         return '\n'.join(lines)
 
     def params_text(self) -> str:

@@ -54,9 +54,12 @@ from app.core.sizing.plots import (
 from app.core.sizing.registry import SIZING
 from app.core.sizing.report import SizingRun, change_summary
 from app.core.sizing.runs import (
-    RUN_SCHEMA, list_runs, load_run, run_info, runs_dir, save_run,
+    RUN_SCHEMA, list_runs, load_run, next_step, run_info, runs_dir,
+    save_run,
 )
-from app.core.sizing.scoring import MetricScore, score, score_detail
+from app.core.sizing.scoring import (
+    MetricScore, feedback_line, score, score_detail,
+)
 from app.core.sizing.spec import MetricSpec, SizingSpec, VarSpec
 from app.core.sizing.user_circuits import (
     import_user_circuit, load_user_circuits, remove_user_circuit,

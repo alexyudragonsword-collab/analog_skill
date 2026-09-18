@@ -66,12 +66,25 @@ class SizingTab(QWidget, JobTabMixin):
                                 userData='llm')
         self.algo_combo.addItem('LLM agent (AI drives, Claude Code only)',
                                 userData='llm_agent')
+        # the default is the measured winner: DE, with the finish when a
+        # model is configured.  Sobol+Powell stays in the list; at 60
+        # evaluations in 33 dimensions it does nothing at all.
+        self.algo_combo.setCurrentIndex(self.algo_combo.findData(
+            'de_llm_finish' if llm_client.configured() else 'diff_evolution'))
         self.algo_combo.currentIndexChanged.connect(self._update_estimate)
 
         self.budget_spin = QSpinBox()
         self.budget_spin.setRange(10, 5000)
-        self.budget_spin.setValue(150)
+        # 600: where DE converges on the amplifiers (the finish keeps 48 of
+        # it).  150 left DE one generation; the estimate says the cost.
+        self.budget_spin.setValue(600)
         self.budget_spin.valueChanged.connect(self._update_estimate)
+        self.seed_spin = QSpinBox()
+        self.seed_spin.setRange(0, 9999)
+        self.seed_spin.setToolTip(
+            'Search seed. A different seed is the cheapest second opinion: '
+            'on every circuit the search did not finish, two seeds ended in '
+            'different places, in both directions.')
         import os
         self.workers_spin = QSpinBox()
         self.workers_spin.setRange(1, 16)
@@ -94,6 +107,12 @@ class SizingTab(QWidget, JobTabMixin):
         self.runs_btn.setToolTip('Saved optimization runs: load, compare '
                                  'convergence, warm-start from a best point.')
         self.runs_btn.clicked.connect(self._open_runs)
+        self.next_btn = QPushButton('Try next')
+        self.next_btn.setEnabled(False)
+        self.next_btn.setToolTip('Apply the suggested next step (seed, '
+                                 'budget or algorithm) and run it.')
+        self.next_btn.clicked.connect(self._try_next)
+        self._next: dict | None = None
         self.advise_btn = QPushButton('AI advise…')
         self.advise_btn.setToolTip('Ask the configured LLM for suggested '
                                    'bounds / starting point / budget.')
@@ -152,6 +171,7 @@ class SizingTab(QWidget, JobTabMixin):
         sf.addRow('Circuit', self.circuit_combo)
         sf.addRow('Algorithm', self.algo_combo)
         sf.addRow('Budget (evals)', self.budget_spin)
+        sf.addRow('Seed', self.seed_spin)
         sf.addRow('Parallel evals', self.workers_spin)
         sf.addRow('', self._estimate)
 
@@ -166,6 +186,7 @@ class SizingTab(QWidget, JobTabMixin):
         btn_row = QHBoxLayout()
         btn_row.addWidget(self.run_btn)
         btn_row.addWidget(self.cancel_btn)
+        btn_row.addWidget(self.next_btn)
         btn_row.addWidget(self.export_btn)
         btn_row.addWidget(self.runs_btn)
         ai_row = QHBoxLayout()
@@ -308,6 +329,7 @@ class SizingTab(QWidget, JobTabMixin):
             return
         key = self._key()
         budget = self.budget_spin.value()
+        seed = self.seed_spin.value()
         algo = self.algo_combo.currentData()
         if (algo in ('llm', 'de_llm_finish')
                 and not llm_client.configured()):
@@ -327,11 +349,12 @@ class SizingTab(QWidget, JobTabMixin):
                                    progress=progress,
                                    should_cancel=self._cancel.is_set,
                                    overrides=overrides, algo=algo,
-                                   workers=workers)
+                                   workers=workers, seed=seed)
 
         self.submit_job('opt', Job(kind='sizing', fn=job,
                                    label=f'sizing: {key} ({budget} evals)'))
         self.run_btn.setEnabled(False)
+        self.next_btn.setEnabled(False)
         self.cancel_btn.setEnabled(True)
         self._status.setText(f'Optimizing ({budget} evaluations)… '
                              'progress in the log panel below.')
@@ -385,16 +408,41 @@ class SizingTab(QWidget, JobTabMixin):
         run: sizing.SizingRun = result
         self.run_btn.setEnabled(True)
         self.cancel_btn.setEnabled(False)
-        note = ' (cancelled — best-so-far kept)' if run.cancelled else ''
-        saved = ''
+        saved, infos = '', []
         try:
             saved = f'  Saved as {sizing.save_run(run).name}.'
+            for p in sizing.list_runs():
+                try:
+                    infos.append(sizing.run_info(p))
+                except Exception:               # noqa: BLE001
+                    continue
         except OSError:
             pass
+        # "Done: 1.50 -> 1.50" said nothing a user could act on.  Say
+        # which targets are still short and, from the measured order —
+        # finish when close, another seed, then more budget — what to try.
+        self._next = sizing.next_step(run, infos,
+                                      finish_available=llm_client.configured())
+        self.next_btn.setEnabled(self._next['action'] is not None)
         self._status.setText(
-            f'Done{note}: cost {run.initial_cost:.3f} → {run.best_cost:.3f} '
-            f'in {run.evals} evaluations.{saved}')
+            f'Done: cost {run.initial_cost:.3f} → {run.best_cost:.3f} '
+            f'in {run.evals} evaluations.{saved}  '
+            + self._next['text'])
         self._show_run(run)
+
+    def _try_next(self):
+        """Apply the suggested settings and run.  Everything else — the
+        circuit, bounds, targets, workers — stays as it is."""
+        nxt = self._next
+        if not nxt or nxt['action'] is None or self.has_job('opt'):
+            return
+        self.seed_spin.setValue(nxt['seed'])
+        self.budget_spin.setValue(min(self.budget_spin.maximum(),
+                                      nxt['budget']))
+        idx = self.algo_combo.findData(nxt['algo'])
+        if idx >= 0:
+            self.algo_combo.setCurrentIndex(idx)
+        self._run()
 
     def _show_run(self, run: sizing.SizingRun):
         """Display a run's report + convergence curve (GUI thread)."""

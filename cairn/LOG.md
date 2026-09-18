@@ -2,6 +2,22 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-18 · The measured order, in the GUI
+
+- Maintainer asked how "seed, then budget, then finish" shows up in the
+  app; proposed three layers, told to build them. Layers 1–2 in this
+  commit: `sizing.next_step()` (finish if close, seed while < 3 tried,
+  then 2x budget at the best seed) reading the saved runs; the status
+  line names the misses via `scoring.feedback_line` (moved down from
+  `llm_sizing` so tab and prompt share one sentence); *Try next* button;
+  Seed box; run record carries algo/seed/budget/notes and the report
+  prints the finish's account; defaults DE(+finish) and 600.
+- Layer 3 — continuing a DE run from its saved population instead of
+  replaying the first half — is the next commit.
+- Pointers: CHANGELOG vNext (two entries at the top), ROADMAP Open
+  (thresholds item replaces the seed-box item), tests in `test_sizing.py`
+  (`next_step`, record fields) and `test_ui.py` (seed, Try next).
+
 ## 2026-09-18 · `amp_leung_nmcf` solved: seed 2, budget 1200
 
 - Maintainer asked for it. DE at 552 was 2.06 (worst of three seeds),

@@ -82,6 +82,40 @@ def score_detail(circuit: str, metrics: dict,
     return out
 
 
+def feedback_line(circuit: str, metrics: dict | None,
+                  overrides: dict | None = None, limit: int = 5) -> str:
+    """One line saying which targets a sizing missed, and by how much.
+
+    Shared by the LLM prompts and the Sizing tab's status line: the same
+    sentence a designer would want — "DC gain 62 dB, want >= 100, off
+    38%" — not the scalar it folds into.  The worst `limit` contributors
+    are named; the met ones are counted, since their slack is the thing
+    a fix trades away.
+    """
+    if not metrics:
+        return 'simulation produced no metrics'
+    detail = score_detail(circuit, metrics, overrides)
+    missed = sorted((d for d in detail if not d.met),
+                    key=lambda d: -d.contribution)
+    met = len(detail) - len(missed)
+    if not missed:
+        return f'all {met} targets met'
+    parts = []
+    for d in missed[:limit]:
+        ms = d.spec
+        if d.value is None:
+            parts.append(f'{ms.label} MISSING')
+            continue
+        want = {'max': '>=', 'min': '<=', 'absmin': '|x| <=',
+                'target': '='}[ms.direction]
+        goal = (f'{d.target:.4g}..{ms.ceiling:.4g}' if ms.ceiling is not None
+                else f'{want} {d.target:.4g}')
+        parts.append(f'{ms.label} {d.value:.4g} {ms.unit} '
+                     f'(want {goal}, off {d.violation:.0%})')
+    more = f' +{len(missed) - limit} more' if len(missed) > limit else ''
+    return f'{met}/{len(detail)} met; ' + '; '.join(parts) + more
+
+
 def score(circuit: str, metrics: dict, overrides: dict | None = None) -> float:
     """Weighted violation cost against the target specs (0 = all met).
 

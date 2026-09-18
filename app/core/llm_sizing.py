@@ -20,7 +20,7 @@ import numpy as np
 from app import paths
 from app.core import llm_client
 from app.core.mcp_eval_server import TOOL_NAME as MCP_TOOL
-from app.core.sizing import SIZING, VarSpec, score_detail
+from app.core.sizing import SIZING, VarSpec, feedback_line
 
 #: cap on netlist text sent to the model (keeps prompts ~2k tokens)
 NETLIST_CHARS = 6000
@@ -212,29 +212,11 @@ def metric_feedback(circuit: str, metrics: dict | None,
     where to push next, and the metrics that are already met say only that
     there is slack there.  That slack matters too, so the count of met
     targets is reported rather than each one.
+
+    The sentence itself is scoring.feedback_line — the Sizing tab prints
+    the same one — so the model and the user read identical words.
     """
-    if not metrics:
-        return 'simulation produced no metrics'
-    detail = score_detail(circuit, metrics, overrides)
-    missed = sorted((d for d in detail if not d.met),
-                    key=lambda d: -d.contribution)
-    met = len(detail) - len(missed)
-    if not missed:
-        return f'all {met} targets met'
-    parts = []
-    for d in missed[:limit]:
-        ms = d.spec
-        if d.value is None:
-            parts.append(f'{ms.label} MISSING')
-            continue
-        want = {'max': '>=', 'min': '<=', 'absmin': '|x| <=',
-                'target': '='}[ms.direction]
-        goal = (f'{d.target:.4g}..{ms.ceiling:.4g}' if ms.ceiling is not None
-                else f'{want} {d.target:.4g}')
-        parts.append(f'{ms.label} {d.value:.4g} {ms.unit} '
-                     f'(want {goal}, off {d.violation:.0%})')
-    more = f' +{len(missed) - limit} more' if len(missed) > limit else ''
-    return f'{met}/{len(detail)} met; ' + '; '.join(parts) + more
+    return feedback_line(circuit, metrics, overrides, limit)
 
 
 #: Whether each round's feedback carries the best sizing's operating point.

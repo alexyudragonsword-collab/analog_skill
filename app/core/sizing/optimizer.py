@@ -106,7 +106,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
     # something to spend.
     state = {'done': 0, 'dispatched': 0, 'best': None, 'best_x': None,
              'best_m': {}, 'best_xn': x0, 'history': [], 'cancel': False,
-             'cap': budget}
+             'cap': budget, 'notes': ''}
     slots = _queue.SimpleQueue()
     for i in range(workers):
         slots.put(i)
@@ -254,6 +254,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                                          state=state, run_batch=run_batch,
                                          budget=budget, workers=workers)
         if note:
+            state['notes'] = str(note)
             print(f'llm agent: {str(note)[:600]}')
 
     def run_de_llm_finish():
@@ -268,6 +269,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         note = llm_sizing.run_finish(circuit, variables, overrides,
                                      state=state, run_batch=run_batch,
                                      budget=budget, workers=workers)
+        state['notes'] = note
         print(f'llm finish: {note}')
 
     try:
@@ -303,4 +305,5 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                      initial_cost=initial_cost, history=state['history'],
                      evals=state['done'], cancelled=state['cancel'],
                      elapsed=time.time() - t0, overrides=overrides,
-                     verified=verified)
+                     verified=verified, algo=algo, seed=seed, budget=budget,
+                     notes=state['notes'])

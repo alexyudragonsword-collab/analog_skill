@@ -381,3 +381,46 @@ def test_estimate_counts_the_ai_rounds_not_just_the_simulations(window,
     assert 'up to 3 AI calls' in one_call       # a few diagnoses, not a loop
     minutes = lambda s: int(s.split('≈')[1].split('min')[0].strip())
     assert minutes(with_ai) > minutes(sims_only) * 10
+
+
+def test_sizing_seed_reaches_the_search_and_try_next_applies_the_step(
+        window, tmp_path, monkeypatch, fake_run):
+    """The seed box is what makes the measured order — seed, budget,
+    finish — something a user can follow without editing code; Try-next
+    is the order itself, one click per step."""
+    from app.core import llm_client, sizing
+    monkeypatch.setattr(sizing.runs, 'runs_dir', lambda: tmp_path)
+    monkeypatch.setattr(llm_client, 'configured', lambda cfg=None: False)
+    tab = window.sizing_tab
+    tab.circuit_combo.setCurrentIndex(
+        tab.circuit_combo.findData('amp_hoilee_affc'))
+    assert tab.seed_spin.value() == 0
+    # the module shares one window; an earlier test may have left the
+    # AI algorithm selected, which the not-configured guard would refuse
+    tab.algo_combo.setCurrentIndex(tab.algo_combo.findData('diff_evolution'))
+
+    jobs = []
+    monkeypatch.setattr(tab, 'submit_job', lambda slot, job: jobs.append(job))
+    seen = {}
+    monkeypatch.setattr(sizing, 'optimize',
+                        lambda key, variables, **kw: seen.update(kw) or None)
+    tab.seed_spin.setValue(5)
+    tab._run()
+    jobs[-1].fn()
+    assert seen['seed'] == 5 and seen['budget'] == tab.budget_spin.value()
+
+    # a run that ends far from feasible: the status names the misses and
+    # the button offers the next seed
+    run = fake_run(cost=1.5)
+    run.algo, run.seed, run.budget = 'diff_evolution', 5, 600
+    tab.on_job_finished('opt', run)
+    assert tab.next_btn.isEnabled()
+    assert 'MISSING' in tab._status.text() or 'want' in tab._status.text()
+    assert 'Try seed' in tab._status.text()
+    assert 'search notes' not in tab._report.toPlainText()
+
+    monkeypatch.setattr(tab, 'has_job', lambda slot: False)
+    n = len(jobs)
+    tab.next_btn.click()
+    assert len(jobs) == n + 1 and tab.seed_spin.value() != 5
+    assert not tab.next_btn.isEnabled()          # until that run reports

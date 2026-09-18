@@ -912,3 +912,82 @@ def test_device_variable_map_reads_the_netlist_not_a_guess():
     shared = [d for d, v in vmap.items()
               if v['W'] == 'MOSFET_0_8_W_BIASCM_PMOS']
     assert len(shared) > 1, 'a mirror bank shares one variable'
+
+
+# ── what to try next, from the measured order ────────────────────────────────
+_PERFECT = {'dcgain': 120, 'gain_bandwidth_product': 2e6, 'phase_in_deg': 70,
+            'dcpsrp': -80, 'dcpsrn': -80, 'cmrrdc': -80, 'power': 0.1e-3,
+            'vos25': 1e-6, 'tc': 1e-6}
+
+
+def _run_with(metrics, algo='diff_evolution', seed=0, budget=600,
+              cancelled=False):
+    key = 'amp_hoilee_affc'
+    cost = sizing.score(key, metrics)
+    return sizing.SizingRun(
+        circuit=key, best_values={}, best_metrics=metrics, best_cost=cost,
+        initial_cost=3.0, history=[(1, 3.0), (budget, cost)], evals=budget,
+        cancelled=cancelled, elapsed=1.0, algo=algo, seed=seed, budget=budget)
+
+
+def _info(seed, cost, budget=600, circuit='amp_hoilee_affc'):
+    return {'circuit': circuit, 'cancelled': False, 'seed': seed,
+            'best_cost': cost, 'budget': budget}
+
+
+def test_next_step_follows_the_measured_order():
+    """finish when close and not yet tried; another seed while fewer than
+    three have been; then twice the budget at the best seed.  The order
+    is the one sixteen runs at two seeds supported, not a preference."""
+    done = sizing.next_step(_run_with(_PERFECT), [])
+    assert done['action'] is None and done['text'].startswith('all 9')
+
+    close = _run_with(dict(_PERFECT, phase_in_deg=58.0))   # one miss, 3%
+    nxt = sizing.next_step(close, [])
+    assert nxt['action'] == 'finish' and nxt['algo'] == 'de_llm_finish'
+    assert nxt['seed'] == 0 and nxt['budget'] == 600
+    assert 'Phase margin 58' in nxt['text']
+
+    # no model configured: the finish is not on offer, seeds come first
+    nxt = sizing.next_step(close, [], finish_available=False)
+    assert nxt['action'] == 'seed' and nxt['seed'] == 1
+
+    far = _run_with(dict(_PERFECT, dcgain=60.0, power=1e-3))
+    nxt = sizing.next_step(far, [_info(0, far.best_cost)])
+    assert nxt['action'] == 'seed' and nxt['seed'] == 1
+    nxt = sizing.next_step(far, [_info(0, 2.0), _info(1, 0.9), _info(2, 1.4)])
+    assert nxt['action'] == 'budget' and nxt['budget'] == 1200
+    assert nxt['seed'] == 1                    # the seed that did best
+    # runs at a smaller budget and on other circuits do not count as tries
+    nxt = sizing.next_step(far, [_info(1, 0.9, budget=100),
+                                 _info(2, 0.5, circuit='amp_fan_smc')])
+    assert nxt['action'] == 'seed'
+
+    stopped = _run_with(dict(_PERFECT, dcgain=60.0), cancelled=True)
+    assert sizing.next_step(stopped, [])['action'] is None
+
+
+def test_run_record_carries_its_search_and_loads_without_it(tmp_path):
+    """algo / seed / budget / notes are what Try-next reads; a run saved
+    before they existed has to load with the defaults, and the finish's
+    account has to reach the report."""
+    import json
+    run = _run_with(_PERFECT, algo='de_llm_finish', seed=3, budget=616)
+    run.notes = 'round 1: moved 2 of 33 variables (A, B); cost 0.5 -> 0.0'
+    p = sizing.save_run(run, tmp_path / 'new.json')
+    back = sizing.load_run(p)
+    assert (back.algo, back.seed, back.budget) == ('de_llm_finish', 3, 616)
+    assert 'search notes:' in back.report() and 'moved 2 of 33' in back.report()
+    assert 'de_llm_finish, seed 3' in back.report()
+    info = sizing.run_info(p)
+    assert (info['algo'], info['seed'], info['budget']) == (
+        'de_llm_finish', 3, 616)
+
+    doc = json.loads(p.read_text())
+    for k in ('algo', 'seed', 'budget', 'notes'):
+        del doc['run'][k]
+    old = tmp_path / 'old.json'
+    old.write_text(json.dumps(doc))
+    back = sizing.load_run(old)
+    assert (back.algo, back.seed, back.budget, back.notes) == ('', 0, 0, '')
+    assert 'search notes' not in back.report()

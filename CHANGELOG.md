@@ -7,6 +7,30 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **Added — the Sizing tab now says what is still short and what to try
+  next, and can do it in one click.**  After a run the status line names
+  the missed targets in the same words the model is given ("Phase margin
+  42.7 deg (want 60..90, off 29%)") and ends with a suggestion drawn from
+  the measured order: **DE + AI finish** when the run is close (two
+  misses or fewer, none over 10%) and the finish was not used; **another
+  seed** while fewer than three have been tried at this budget; then
+  **twice the budget at the seed that did best**.  A *Try next* button
+  applies those settings and runs; circuit, bounds, targets and workers
+  stay as they are.  The rule lives in `sizing.next_step()` and reads
+  the saved runs, so the seed count survives a restart.  A **Seed** box
+  sits under the budget.  The run record carries `algo`, `seed`,
+  `budget` and the finish's round-by-round `notes`; the report prints
+  the notes (which variables the model moved, what the line search
+  found) and the search line; runs saved before these fields existed
+  load with defaults.  `feedback_line` moved into `scoring` so the tab
+  and the prompts print one sentence, not two.
+
+- **Changed — defaults that stand on the evidence.**  Algorithm: DE + AI
+  finish when a model is configured, DE otherwise (was Sobol+Powell,
+  which at 60 evaluations in 33 dimensions did nothing).  Budget: 600
+  (was 150, one DE generation on a 24-variable amplifier; the estimate
+  label shows the cost).  Sobol+Powell stays in the menu.
+
 - **Changed — the two circuit-skills gain targets are now what their
   boxes can reach: 36 dB on the five-transistor OTA (was 40), 64 dB on
   the two-stage (was 70).**  Only widths and bias vary in those boxes —

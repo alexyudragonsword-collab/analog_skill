@@ -31,12 +31,13 @@ like before touching anything.
 
 ## Open
 
-- Expose `optimize(seed=)` in the Sizing tab. Sixteen runs over eight
-  circuits at two seeds (`cairn/pitfalls.md`, "A second seed on every
-  circuit") disagree between seeds on every circuit DE does not finish
-  outright, in both directions; a user holding an unfinished result
-  should be able to try another seed before anything cleverer, and today
-  cannot without editing code. A spin box next to the budget, default 0.
+- Whether *Try next*'s thresholds are right: three seeds before more
+  budget, "close" as two misses none over 10%, budget doubling. They
+  encode sixteen runs at two seeds and one at twice the budget
+  (`cairn/pitfalls.md`); the button says "try", not "will". Each user
+  run at a new seed or budget is a data point for tightening them, and
+  the saved runs carry seed and budget now, so the evidence accumulates
+  without anyone doing anything.
 - `amp_hoilee_affc` under the 60–90° band is unsolved, and it is the
   circuit, not the seed: three seeds land in three different basins
   (over-compensated, under-compensated, offset far out), none feasible,
