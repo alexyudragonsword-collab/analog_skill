@@ -577,6 +577,30 @@ stops close (`ldo_basic` 0.98 → 0 in eight evaluations; `amp_fan_smc`
 0.49 → 0), and a 15–40% cut when it stops mid-way. Not a rescue when it
 stops far away.
 
+**Correction, the next morning — "far away" was the wrong measure.**
+The maintainer asked for `amp_leung_nmcf` at seed 2 with twice the
+budget:
+
+| | cost |
+|---|---|
+| DE at 552 (what a 600 budget would have left) | 2.0603 — worse than either earlier seed |
+| DE at 1000 | 1.0998 |
+| DE at 1152, the cap | 1.0998 — four targets short |
+| finish round 1: input-pair L, two mirror L, bias current | **0.0355** |
+| finish round 2: input-pair W, bias current | **0.0000, all nine met**, PM 68° |
+
+Fifteen minutes. A cost of 1.10 was "far" by the sentence above, and the
+finish closed it in eighteen evaluations. The difference from seed 0's
+1.50 that nothing could move is not the number but *what* was short:
+there, phase margin at 5° — a compensation that had not formed; here,
+four misses that all answered to the bias current and three channel
+lengths. Distance in cost says nothing about that. What does is whether
+the misses share a knob, which is what the model's first rationale
+identified and the line search confirmed. Budget mattered too: at 600
+this seed was the worst of the three. The cheap sequence for a stuck
+circuit, on all of this: another seed, then more budget, then the
+finish — and the finish is the part that turns "close" into "done".
+
 ### An equality target with no tolerance can never be met
 
 `MetricScore.met` is `violation <= 0.0`; for a `'target'` metric the

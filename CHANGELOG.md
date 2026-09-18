@@ -69,6 +69,12 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   finish (it cost nothing on any of the eight); `amp_fan_smc` needed all
   three rounds and got them.  Detail in `cairn/pitfalls.md`.
 
+  The strongest single result came later, on the circuit the first
+  sweep could not move: `amp_leung_nmcf` at seed 2 with 1200
+  evaluations, DE to 1.10 with four targets short, the finish to
+  **0 in two rounds** (bias current and three lengths, then input-pair
+  width and bias current), all nine targets met in 15 minutes.
+
   *Correction, same day:* the reference amplifier re-run under the band
   (next paragraph) made that five of **six** — its third round improved
   8% after two failed ones.  The rule stays; the record is corrected.

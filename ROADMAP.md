@@ -48,13 +48,14 @@ like before touching anything.
   nothing obvious is left to try at 616 evaluations; a much larger DE
   budget at seed 2, or a settling-time metric replacing the 90° guess,
   are the two candidates.
-- Where DE stalls far from feasible — `amp_leung_nmcf` at seed 0, phase
-  margin 5° — the finish has nothing to offer, and that is the case
+- Where DE stalls far from feasible the finish has nothing to offer —
+  `amp_leung_nmcf` at seed 0, phase margin 5° — and that is the case
   *Decided against* names as the reopening condition for a model inside
-  the search. At seed 1 the same circuit lands closer (1.26) and the
-  finish helps (1.08). Whether a rescue is worth building or the seed is
-  the answer is exactly the question the spin box above lets a user
-  answer for themselves.
+  the search. The same circuit at seed 2 with 1200 evaluations reached
+  all nine targets (DE to 1.10, finish to 0 in two rounds, 15 minutes),
+  so on this circuit the answer was seed and budget, not a new
+  mechanism. Nothing to build; the spin box above is what makes that
+  sequence available without editing code.
 
 ## Ideas, not commitments
 

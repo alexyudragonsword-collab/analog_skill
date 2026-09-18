@@ -2,6 +2,17 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-18 · `amp_leung_nmcf` solved: seed 2, budget 1200
+
+- Maintainer asked for it. DE at 552 was 2.06 (worst of three seeds),
+  1.10 at 1152; the finish moved bias current and three lengths
+  (1.10 → 0.036), then input-pair width and bias current (→ 0). All
+  nine targets, PM 68°, 15 min. First feasible sizing on this circuit.
+- Corrects "not a rescue when it stops far away" (`cairn/pitfalls.md`):
+  cost distance was the wrong measure; whether the misses share a knob
+  is the one that predicted this. Correction appended. ROADMAP's leung
+  item closed as "seed and budget, not a mechanism".
+
 ## 2026-09-18 · Three open questions, answered as far as the night allowed
 
 - Reference amplifier under the band: circuit, not seed. Seeds 0/1/2
