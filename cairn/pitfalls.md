@@ -618,6 +618,20 @@ amplifier, LDO and circuit-skills spec. Cost values measured before the
 change are under the old rule; the tables in this file say which. The
 `'target'` kind itself is unchanged and unused by the registry.
 
+### SciPy batches a constraint only in vectorized mode
+
+`differential_evolution(constraints=...)` documents that a constraint
+function may take an `(N, S)` array, and the constraint wrapper does
+pass one — but only when `vectorized=True`; otherwise
+`_calculate_population_feasibilities` loops over members and calls it
+with one point at a time.  The constrained search was written for the
+batched case and ran the first circuit at 2.4 s per evaluation against
+0.6 s for plain DE with four workers — a factor of four, invisible from
+the result (identical cost) and visible only in the wall clock.
+`vectorized` excludes `workers`, so the constrained form has to own its
+objective in `(N, S)` shape too.  Time a new algorithm against the one
+it wraps before reading its numbers.
+
 ### ngspice `show` is column-oriented, and the column is the only key
 
 `show m : id,vgs,gm,...` prints devices **three to a block**, one row per

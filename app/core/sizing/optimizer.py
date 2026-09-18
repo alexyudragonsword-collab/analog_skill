@@ -314,15 +314,19 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         init = init_pop if init is None else init
         maxiter = max(1, (evals if evals is not None else limit)
                       // generation)
+        # scipy batches a constraint call only in vectorized mode, and
+        # vectorized excludes workers — so the constrained form supplies
+        # a (N, S) objective of its own and the plain form keeps the map
+        par = ({'vectorized': True} if constraints
+               else {'workers': lambda func, xs: run_batch(list(xs))})
         res = differential_evolution(
             objective_fn or (lambda xn: run_batch([xn])[0]),
             bounds=[(0.0, 1.0)] * dims,
             x0=x0 if isinstance(init, str) else None, init=init,
             popsize=4, maxiter=maxiter, polish=False, tol=0.0,
             seed=seed_, updating='deferred', constraints=constraints,
-            workers=lambda func, xs: run_batch(list(xs)),
             callback=lambda xk, convergence=0.0:
-                state['cancel'] or state['dispatched'] >= limit)
+                state['cancel'] or state['dispatched'] >= limit, **par)
         keep_population(res)
         return res
 
@@ -369,13 +373,19 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                                  score_detail(circuit, m, overrides)])
             return np.asarray(rows).T                            # (M, S)
 
-        def objective_fn(xn):
-            hit = cache.get(key(xn))
-            if hit is None:                  # scipy bypassed the batch
-                costs, mets = run_batch([xn], with_metrics=True)
-                hit = cache[key(xn)] = (costs[0], mets[0])
-            c, m = hit
-            return 1e12 if m is None else -slack(circuit, m, overrides)
+        def objective_fn(xT):
+            # (N, S) in vectorized mode, (N,) when scipy asks for one;
+            # every point here was just simulated by the constraint call
+            X = np.atleast_2d(np.asarray(xT, float).T)
+            out = []
+            for x in X:
+                hit = cache.get(key(x))
+                if hit is None:
+                    costs, mets = run_batch([x], with_metrics=True)
+                    hit = cache[key(x)] = (costs[0], mets[0])
+                c, m = hit
+                out.append(1e12 if m is None else -slack(circuit, m, overrides))
+            return np.asarray(out) if np.ndim(xT) == 2 else out[0]
 
         res = run_de(objective_fn=objective_fn, constraints=(
             NonlinearConstraint(violations, -np.inf, 0.0),))

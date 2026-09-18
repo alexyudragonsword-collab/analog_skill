@@ -28,7 +28,9 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
     the search keeps widening margins after the first feasible point
     instead of stopping there.  One parallel batch per generation: the
     constraint call sees the whole trial population and the objective
-    reads what it cached.
+    reads what it cached — which requires SciPy's `vectorized` mode;
+    without it the constraint is called one member at a time and the
+    run is four times slower, as the first measured one was.
   - **DE portfolio** (`de_portfolio`): three seeds for half the budget,
     then the best population continued with the other half.  Needs
     twelve generations of budget (4 × dims each); below that it runs
