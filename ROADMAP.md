@@ -31,12 +31,13 @@ like before touching anything.
 
 ## Open
 
-- Measure the four new searches — CMA-ES with restarts, DE + Powell,
-  constrained DE, DE portfolio — against DE on the eight-circuit protocol
-  (600 evaluations, seeds 0 and 1; the portfolio at 1200, where it is
-  defined), judged on feasible count and cost at budget, and put the
-  table next to DE's in `cairn/pitfalls.md`. Until then the menu offers
-  them as options, not recommendations; the default stays DE (+ finish).
+- Finish the measurement of the four new searches: seed 0 at 600 is in
+  (`cairn/pitfalls.md`, "CMA-ES: the first search that beats DE") and
+  CMA-ES leads, 6 of 9 feasible against DE's 3; seed 1 at 600 and the
+  DE-vs-portfolio tier at 1200 are running. When they land, decide the
+  default: CMA-ES for the amplifiers if seed 1 agrees, and CMA-ES +
+  finish as a new entry, since the finish's "close but not closed" case
+  is exactly where CMA-ES stops on `amp_ramos_pfc` and the LDO.
 - Whether *Try next*'s thresholds are right: three seeds before more
   budget, "close" as two misses none over 10%, budget doubling (or the
   same budget again when the run can be continued). They

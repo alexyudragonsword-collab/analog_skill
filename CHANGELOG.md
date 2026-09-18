@@ -40,9 +40,16 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
     then the best population continued with the other half.  Needs
     twelve generations of budget (4 × dims each); below that it runs
     plain DE and says so in the notes.
-  All four record their account in the run's notes.  Not yet measured
-  against DE on the eight-circuit protocol; that run is next and ROADMAP
-  carries it.
+  All four record their account in the run's notes.
+
+  Measured, seed 0, nine circuits, the shipped path (table and reading
+  in `cairn/pitfalls.md`): **CMA-ES reaches feasibility on 6 of 9
+  against DE's 3**, closing three amplifiers DE leaves open — among
+  them the reference amplifier under the 60–90° band, which nothing
+  DE-based had reached — and is best or tied on 7; it loses to DE on
+  `amp_ramos_pfc` and the LDO.  Constrained DE closes 4, the Powell
+  polish 3.  Seed 1 and the 1200-evaluation portfolio tier are running;
+  the default stays DE (+ finish) until they land.
 
 - **Added — a DE run keeps its last population and can be continued.**
   Re-running at twice the budget replays the first half exactly (same

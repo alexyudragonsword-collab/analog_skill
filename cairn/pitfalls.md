@@ -618,6 +618,64 @@ amplifier, LDO and circuit-skills spec. Cost values measured before the
 change are under the old rule; the tables in this file say which. The
 `'target'` kind itself is unchanged and unused by the registry.
 
+### CMA-ES: the first search that beats DE on this problem
+
+Four searches were added on the same day and measured on the nine-
+circuit protocol, seed 0, 600 evaluations (400 for the OTA, 120 for the
+circuit-skills pair), the shipped path, no model calls:
+
+| circuit | DE | CMA-ES | DE + Powell | constrained DE |
+|---|---|---|---|---|
+| amp_leung_nmcf | 1.4999 | **0.2935** | 0.8321 | 1.5217 |
+| amp_peng_tcfc | 0.6695 | **0** | 0.0300 | **0** |
+| amp_ramos_pfc | 1.1609 | 1.2801 | **0.8074** | 1.3094 |
+| amp_fan_smc | 0.4891 | **0** | 0.5842 | 0.1006 |
+| amp_hoilee_affc | 1.1242 | **0** | 0.8792 | **0** |
+| studio_cm_ota (400) | 0 | 0 | 0 | 0 |
+| ldo_basic | **0.6758** | 0.8685 | 1.2348 | 1.3648 |
+| skill_ota5t (120) | 0 | 0 | 0 | 0 |
+| skill_opamp2 (120) | 0 | 0 | 0 | **0.2312** |
+| feasible / 9 | 3 | **6** | 3 | 4 |
+| best or tied / 9 | 4 | **7** | 4 | 4 |
+| sum of costs | 5.62 | **2.44** | 4.37 | 4.53 |
+
+**CMA-ES with restarts closes three amplifiers DE leaves open** —
+including the reference amplifier under the 60–90° band, which four
+DE-based runs and three finish rounds could not reach (phase margin
+87.6°, gain 111 dB, feasible by evaluation 500). Its two losses are
+`amp_ramos_pfc` (10% behind DE; GBW is the wall for every search
+there) and `ldo_basic` (28% behind). Covariance adaptation is the
+plausible reason for the amplifier wins — the cost is ill-conditioned
+in the box, which DE's fixed mutation ignores — but that is an
+explanation, not a measurement; the restart log was not captured on
+this tier (the runner kept only the finish's notes; fixed for the next
+tier).
+
+**Constrained DE is a different search, not a re-scored one.** SciPy's
+acceptance rule (Lampinen) replaces an infeasible parent only with a
+trial *no worse on every metric*: it refuses the trade that fixes one
+target by breaking another, which the summed cost takes. On the
+reference amplifier that refusal is what keeps it out of the 156°
+basin and it reaches feasibility; on `skill_opamp2` the same refusal
+is what stops it at 0.23 where the other three reach 0. Same rule,
+both signs.
+
+**The Powell polish is a modest, uneven gain**: better than DE on four
+amplifiers, worse on `amp_fan_smc` and much worse on the LDO, where
+150 serial evaluations of Powell bought less than DE's next 150 would
+have. Its cost is wall clock — Powell is serial, so those runs took
+1.7x DE's time.
+
+**The LDO family is where all three lose to plain DE.** One circuit,
+one seed; the seed-1 tier and the DE-vs-portfolio tier at 1200 are
+running as this is written.
+
+What it means for the menu: CMA-ES is the candidate default for the
+amplifiers, and it needs the seed-1 tier before it becomes one. The
+finish still applies on top of any of them — `amp_ramos_pfc` and the
+LDO are exactly the "close but not closed" endpoints it was built for —
+and wiring it behind CMA-ES is the obvious next algorithm.
+
 ### SciPy batches a constraint only in vectorized mode
 
 `differential_evolution(constraints=...)` documents that a constraint

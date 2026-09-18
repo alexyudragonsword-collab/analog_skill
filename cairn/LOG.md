@@ -2,6 +2,23 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-18 · CMA-ES leads the seed-0 tier
+
+- Nine circuits, 600 evaluations, seed 0: CMA-ES feasible on 6 (DE 3,
+  constrained DE 4, Powell polish 3), best or tied on 7, and it solves
+  the reference amplifier under the band at 600 where four DE-based
+  runs could not. Loses to DE on `amp_ramos_pfc` and `ldo_basic`.
+- Constrained DE's difference is SciPy's per-metric acceptance
+  (Lampinen), not the objective: it refuses one-for-another trades —
+  which wins `amp_hoilee_affc` and loses `skill_opamp2`. Corrected the
+  earlier description in CHANGELOG and the docstring.
+- Two runner lessons: SciPy batches constraints only with
+  `vectorized=True` (first constrained run was 4x slower, pitfall
+  recorded); the runner kept only the finish's notes, so CMA-ES's
+  restart log for this tier is lost — fixed before the next tier.
+- Running: DE vs portfolio at 1200, then all four at seed 1. Default
+  unchanged until then. Table in `cairn/pitfalls.md`.
+
 ## 2026-09-18 · Four more searches, in the menu
 
 - Maintainer asked which algorithms to try and then to build them all
