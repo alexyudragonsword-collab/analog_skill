@@ -676,6 +676,67 @@ finish still applies on top of any of them — `amp_ramos_pfc` and the
 LDO are exactly the "close but not closed" endpoints it was built for —
 and wiring it behind CMA-ES is the obvious next algorithm.
 
+**The seed-1 tier and the 1200 tier, the next day.** The full picture:
+
+Both seeds, 600 evaluations (400 for the OTA, 120 for the circuit-skills
+pair), the shipped path, no model calls. Bold is best or tied in its row.
+
+| circuit | DE s0 | s1 | CMA-ES s0 | s1 | DE+Powell s0 | s1 | constrained s0 | s1 |
+|---|---|---|---|---|---|---|---|---|
+| amp_leung_nmcf | 1.4999 | 1.2637 | **0.2935** | **1.0338** | 0.8321 | 1.5674 | 1.5217 | 2.0189 |
+| amp_peng_tcfc | 0.6695 | **0** | **0** | **0** | 0.0300 | **0** | **0** | **0** |
+| amp_ramos_pfc | 1.1609 | 1.1263 | 1.2801 | **0.4471** | **0.8074** | 1.1184 | 1.3094 | 1.3583 |
+| amp_fan_smc | 0.4891 | 0.3759 | **0** | **0** | 0.5842 | 0.0712 | 0.1006 | 0.3759 |
+| amp_hoilee_affc | 1.1242 | 1.0904 | **0** | **0** | 0.8792 | **0** | **0** | 1.0904 |
+| studio_cm_ota | **0** | **0** | **0** | **0** | **0** | **0** | **0** | **0** |
+| ldo_basic | **0.6758** | 1.4603 | 0.8685 | **0.3611** | 1.2348 | 1.1242 | 1.3648 | 2.3512 |
+| skill_ota5t | **0** | **0** | **0** | **0** | **0** | **0** | **0** | **0** |
+| skill_opamp2 | **0** | 0.0138 | **0** | **0** | **0** | **0** | 0.2312 | 0.4892 |
+| feasible / 18 | 6 | | **12** | | 8 | | 7 | |
+| best or tied / 18 | 7 | | **16** | | 9 | | 7 | |
+| sum of costs | 10.95 | | **4.28** | | 8.25 | | 12.21 | |
+
+The 1200-evaluation tier, seed 0, where the portfolio is defined:
+
+| circuit | DE @600 | DE @1200 | portfolio @1200 | CMA-ES @600 |
+|---|---|---|---|---|
+| amp_leung_nmcf | 1.4999 | 1.4083 | 1.5811 | **0.2935** |
+| amp_peng_tcfc | 0.6695 | **0** | 0.1242 | **0** |
+| amp_ramos_pfc | 1.1609 | **0.7688** | 1.1639 | 1.2801 |
+| amp_fan_smc | 0.4891 | 0.1394 | 0.0310 | **0** |
+| amp_hoilee_affc | 1.1242 | 0.9778 | fell back to DE | **0** |
+| ldo_basic | 0.6758 | **0.2408** | 0.4917 | 0.8685 |
+| the other three | 0 | 0 | 0 | 0 |
+
+**Seed 1 agrees, and then some.** CMA-ES is best or tied on all nine
+circuits at seed 1, and on 16 of 18 rows overall; it reaches
+feasibility on 12 of 18 against DE's 6, and its two losses at seed 0
+(`amp_ramos_pfc`, `ldo_basic`) turn into wins at seed 1 (0.45 against
+1.13; 0.36 against 1.46). At 600 evaluations it beats DE *at 1200* on
+three amplifiers and ties on one. The restart log, captured this time,
+says every seed-1 run was a single CMA-ES run stopped by the budget:
+**the IPOP restarts never fired at 600**, so what won here is plain
+CMA-ES — covariance adaptation on an ill-conditioned box — and the
+restart machinery is untested on this problem.
+
+**The Powell polish is second**, feasible on 8 of 18, and its pattern
+is exactly the finish's: it closes what DE leaves close and does
+nothing where DE stops far. **Constrained DE is last**, feasible on 7
+but with the worst sum by far, because the per-metric acceptance rule
+that wins `amp_hoilee_affc` at seed 0 refuses too many trades
+elsewhere (seed 1: 2.02, 2.35, 0.49 where DE has 1.26, 1.46, 0.01).
+**The portfolio loses on three of the four circuits it can run on**:
+two generations per seed is not enough to judge a seed by, and the
+384 evaluations spent on the discarded seeds are what the continued
+one lacks. It stays in the menu with its warning; it should not be
+recommended, and whether it stays at all is the maintainer's call.
+
+The LLM finish, in this light: it was the first thing to close a gap
+DE left; CMA-ES now closes most of those gaps by itself at the same
+budget, without a model. The finish's remaining place is behind CMA-ES
+on what CMA-ES leaves close — `amp_leung_nmcf` and `amp_ramos_pfc` at
+seed 1, the LDO at seed 0 — which is a wiring change, not a new idea.
+
 ### SciPy batches a constraint only in vectorized mode
 
 `differential_evolution(constraints=...)` documents that a constraint

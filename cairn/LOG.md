@@ -2,6 +2,16 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-19 · Seed 1 and the 1200 tier agree: CMA-ES
+
+- Full protocol in: 9 circuits x 2 seeds x 4 searches at 600, plus DE
+  vs portfolio at 1200. CMA-ES feasible 12/18 (DE 6, Powell 8,
+  constrained 7), best or tied 16/18, all 9 at seed 1; beats DE@1200
+  on three amplifiers at 600. Restarts never fired — plain CMA-ES won.
+  Portfolio loses 3 of 4 where it runs. Tables in `cairn/pitfalls.md`.
+- Default not changed; ROADMAP carries the decision (CMA-ES default,
+  `cmaes_llm_finish`, portfolio's future, restarts untested).
+
 ## 2026-09-18 · CMA-ES leads the seed-0 tier
 
 - Nine circuits, 600 evaluations, seed 0: CMA-ES feasible on 6 (DE 3,

@@ -42,14 +42,17 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
     plain DE and says so in the notes.
   All four record their account in the run's notes.
 
-  Measured, seed 0, nine circuits, the shipped path (table and reading
-  in `cairn/pitfalls.md`): **CMA-ES reaches feasibility on 6 of 9
-  against DE's 3**, closing three amplifiers DE leaves open — among
-  them the reference amplifier under the 60–90° band, which nothing
-  DE-based had reached — and is best or tied on 7; it loses to DE on
-  `amp_ramos_pfc` and the LDO.  Constrained DE closes 4, the Powell
-  polish 3.  Seed 1 and the 1200-evaluation portfolio tier are running;
-  the default stays DE (+ finish) until they land.
+  Measured, nine circuits, two seeds, the shipped path (tables and
+  reading in `cairn/pitfalls.md`): **CMA-ES reaches feasibility on 12
+  of 18 rows against DE's 6 and is best or tied on 16**, closing the
+  reference amplifier under the 60–90° band at both seeds where nothing
+  DE-based had; at 600 evaluations it beats DE at 1200 on three
+  amplifiers.  Its restarts never fired at this budget — the win is
+  plain CMA-ES.  The Powell polish is second (8 of 18); constrained DE
+  closes 7 but with the worst total, its per-metric acceptance refusing
+  too many trades; the portfolio loses three of the four circuits it
+  can run on.  The default is unchanged in this entry; the numbers
+  argue for CMA-ES on the amplifiers.
 
 - **Added — a DE run keeps its last population and can be continued.**
   Re-running at twice the budget replays the first half exactly (same
