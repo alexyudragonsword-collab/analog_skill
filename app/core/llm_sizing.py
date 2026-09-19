@@ -362,9 +362,16 @@ def run_loop(circuit: str, variables: list[VarSpec], overrides,
 #: minutes each are not the place to save.
 FINISH_EFFORT = None
 
-#: evaluations one round's line search may spend.  The coarse scan is
-#: len(FINISH_ALPHAS); each refinement round costs up to two more.
-FINISH_EVALS = 16
+#: proposals asked per round, in parallel, each searched along.  The
+#: model's answer is not repeatable call to call — two sonnet runs from
+#: one point gave 37% and nothing, first round naming the same three
+#: variables both times — so one call is one draw from that spread and
+#: three are the cheapest way to take its best.
+FINISH_PROPOSALS = 3
+
+#: evaluations one round's line search may spend: a coarse scan of
+#: len(FINISH_ALPHAS) per proposal, then refinement of the best line.
+FINISH_EVALS = 30
 
 #: rounds of diagnose-then-search, each from the previous round's best.
 #: The search holds back FINISH_EVALS * FINISH_ROUNDS.  The finish ends
@@ -421,46 +428,51 @@ def finish_prompt(circuit: str, variables: list[VarSpec], overrides,
         'right matters more than the amounts.')
 
 
-def _line_search(state: dict, run_batch, cap: int, xb, d,
-                 memo: list) -> dict:
-    """Costs along xb + alpha*d, alpha -> cost, spending at most `cap`
-    dispatches in total.  Coarse scan first, then bisection on both sides
-    of the best alpha; stops early at cost 0.
+def _line_search(state: dict, run_batch, cap: int, xb, dirs: list,
+                 memo: list) -> tuple[int, dict]:
+    """Costs along xb + alpha*d for every direction in `dirs`, spending
+    at most `cap` dispatches in total.  One coarse scan covers all the
+    directions in a single batch; the best line is then bisected on both
+    sides of its best alpha, stopping early at cost 0.  Returns (index
+    of the winning direction, its alpha -> cost).
 
     `memo` is every (point, cost) this finish has paid for: a later round
     from a new best can land on one again (the proposal itself, often),
     and clipping at the box folds distinct alphas onto one point."""
-    seen = {0.0: state['best']}
+    seen = [{0.0: state['best']} for _ in dirs]
 
-    def at(alpha):
-        return np.clip(xb + alpha * d, 0.0, 1.0)
+    def at(i, alpha):
+        return np.clip(xb + alpha * dirs[i], 0.0, 1.0)
 
     def scan(cands):
+        """cands: (direction index, alpha) pairs."""
         pts, keep = [xb], []
-        for a in cands:
-            if a in seen or any(np.allclose(at(a), q) for q in pts):
+        for i, a in cands:
+            if a in seen[i] or any(np.allclose(at(i, a), q) for q in pts):
                 continue
-            known = next((c for q, c in memo if np.allclose(at(a), q)),
+            known = next((c for q, c in memo if np.allclose(at(i, a), q)),
                          None)
             if known is not None:
-                seen[a] = known
+                seen[i][a] = known
                 continue
-            pts.append(at(a))
-            keep.append(a)
+            pts.append(at(i, a))
+            keep.append((i, a))
         if not keep or state['cancel']:
             return
-        costs = run_batch([at(a) for a in keep])
-        for a, c in zip(keep, costs, strict=True):
+        costs = run_batch([at(i, a) for i, a in keep])
+        for (i, a), c in zip(keep, costs, strict=True):
             if np.isfinite(c):                # the cap ran out → inf
-                seen[a] = c
-                memo.append((at(a), c))
+                seen[i][a] = c
+                memo.append((at(i, a), c))
 
-    scan(list(FINISH_ALPHAS))
+    scan([(i, a) for i in range(len(dirs)) for a in FINISH_ALPHAS])
+    best_i = min(range(len(dirs)), key=lambda i: min(seen[i].values()))
     for _ in range(3):
-        if state['dispatched'] >= cap or min(seen.values()) == 0.0:
+        s = seen[best_i]
+        if state['dispatched'] >= cap or min(s.values()) == 0.0:
             break
-        order = sorted(seen)
-        i = min(range(len(order)), key=lambda k: seen[order[k]])
+        order = sorted(s)
+        i = min(range(len(order)), key=lambda k: s[order[k]])
         if i == 0:              # nothing along it beat the start: no refining
             break
         mids = []
@@ -470,28 +482,41 @@ def _line_search(state: dict, run_batch, cap: int, xb, d,
             mids.append((order[i] + order[i + 1]) / 2)
         else:                                 # best is the far end: extend
             mids.append(order[i] * 1.5)
-        scan(mids)
-    return seen
+        scan([(best_i, a) for a in mids])
+    return best_i, seen[best_i]
+
+
+def _ask(chat, prompt, names, lo, hi):
+    """One proposal: (normalized point, rationale), or an LLMError."""
+    reply = chat([{'role': 'user', 'content': prompt}], system=_SYSTEM,
+                 schema=candidates_schema(names, lo, hi, 1),
+                 effort=FINISH_EFFORT)
+    xp = _parse_candidates(reply, names, lo, hi, 1)[0]
+    doc = llm_client.extract_json(reply)
+    return xp, (doc.get('rationale', '') if isinstance(doc, dict) else '')
 
 
 def run_finish(circuit: str, variables: list[VarSpec], overrides,
                state: dict, run_batch, budget: int, workers: int,
                chat=None) -> str:
-    """The last mile: diagnose, search along the diagnosis, repeat.
+    """The last mile: diagnose, search along the diagnoses, repeat.
 
     Called by sizing.optimize after the search phase with whatever the
     budget has left.  Returns an account for the log, one line per round;
     the best point, if a line search finds one, lands in `state` through
     run_batch like any other evaluation.
 
-    The model's proposal is treated as a *direction* from the current
-    best, not a point.  Earlier rounds are told to the model in the next
-    prompt so it does not repeat itself; a round that meets every target
-    ends the finish, and so does one that improves nothing (measured:
-    the round after a failed one failed too, every time).  Re-running
+    Each round asks the same question FINISH_PROPOSALS times in parallel
+    and treats every answer as a *direction* from the current best, not
+    a point; one coarse scan covers them all and the best line is
+    refined.  Earlier rounds are told to the model in the next prompt so
+    it does not repeat itself; a round that meets every target ends the
+    finish, and so does one that improves nothing (measured: usually
+    the next fails too, and gains little when it does not).  Re-running
     the search instead would return the same converged point, which is
     why the continuation is another question, not more DE.
     """
+    from concurrent.futures import ThreadPoolExecutor
     if chat is None:
         if not llm_client.configured():
             raise llm_client.not_configured_error()
@@ -512,45 +537,51 @@ def run_finish(circuit: str, variables: list[VarSpec], overrides,
         best_x, before = dict(state['best_x']), state['best']
         xb = np.clip((np.array([best_x[n] for n in names]) - lo) / span,
                      0, 1)
-        try:
-            reply = chat([{'role': 'user', 'content': finish_prompt(
-                circuit, variables, overrides, best_x, state['best_m'],
-                history)}],
-                system=_SYSTEM, schema=candidates_schema(names, lo, hi, 1),
-                effort=FINISH_EFFORT)
-            xp = _parse_candidates(reply, names, lo, hi, 1)[0]
-        except llm_client.LLMError as exc:
-            lines.append(f'round {rnd}: no diagnosis ({exc})')
-            break
-        doc = llm_client.extract_json(reply)
-        rationale = (doc.get('rationale', '') if isinstance(doc, dict)
-                     else '')
+        prompt = finish_prompt(circuit, variables, overrides, best_x,
+                               state['best_m'], history)
+        with ThreadPoolExecutor(max_workers=FINISH_PROPOSALS) as ex:
+            futs = [ex.submit(_ask, chat, prompt, names, lo, hi)
+                    for _ in range(FINISH_PROPOSALS)]
+        answers, errors = [], []
+        for f in futs:
+            try:
+                answers.append(f.result())
+            except llm_client.LLMError as exc:
+                errors.append(str(exc))
         # what the model changed, judged against the 4-significant-figure
         # values it was shown — against the exact ones every echoed value
-        # would count as a change
+        # would count as a change.  Identical proposals collapse to one.
         shown = np.array([float(f'{best_x[n]:.4g}') for n in names])
-        prop = xp * span + lo
-        moved = [n for n, a, b in zip(names, shown, prop, strict=True)
-                 if abs(b - a) > 1e-6 * max(abs(a), abs(b), 1e-30)]
-        if not moved:
-            lines.append(f'round {rnd}: the model proposed the current '
-                         'sizing; stopping')
+        props = []                            # (direction, moved, rationale)
+        for xp, rationale in answers:
+            prop = xp * span + lo
+            moved = [n for n, a, b in zip(names, shown, prop, strict=True)
+                     if abs(b - a) > 1e-6 * max(abs(a), abs(b), 1e-30)]
+            d = xp - xb
+            if moved and not any(np.allclose(d, q[0]) for q in props):
+                props.append((d, moved, rationale))
+        if not props:
+            lines.append(f'round {rnd}: no usable diagnosis in '
+                         f'{FINISH_PROPOSALS} ('
+                         + ('; '.join(errors) if errors
+                            else 'all proposed the current sizing') + ')')
             break
         # this round's share of the reserve, never past the budget
         state['cap'] = min(budget, state['dispatched'] + FINISH_EVALS)
-        seen = _line_search(state, run_batch, state['cap'], xb, xp - xb,
-                            memo)
+        win, seen = _line_search(state, run_batch, state['cap'], xb,
+                                 [q[0] for q in props], memo)
         state['cap'] = budget
+        _d, moved, rationale = props[win]
         a_best = min(seen, key=seen.get)
         after = seen[a_best]
-        what = (f'moved {len(moved)} of {len(names)} variables '
-                f'({", ".join(moved[:6])}{", ..." if len(moved) > 6 else ""})')
+        what = (f'{len(props)} proposals; best moved {len(moved)} of '
+                f'{len(names)} variables ({", ".join(moved[:6])}'
+                f'{", ..." if len(moved) > 6 else ""})')
         if after < before:
             outcome = (f'cost {before:.4f} -> {after:.4f} at {a_best:.3g}x '
-                       f'the proposal ({len(seen) - 1} points)')
+                       f'that proposal ({len(seen) - 1} points on it)')
         else:
-            outcome = (f'no point along it improved on {before:.4f} '
-                       f'({len(seen) - 1} points)')
+            outcome = (f'no point along any improved on {before:.4f}')
         lines.append(f'round {rnd}: {what}; {outcome}'
                      + (f'. Rationale: {rationale[:300]}' if rationale
                         else ''))

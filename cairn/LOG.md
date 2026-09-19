@@ -2,6 +2,16 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-19 · The finish asks three times per round
+
+- Maintainer said build it. `FINISH_PROPOSALS = 3`: parallel calls,
+  one coarse scan across all directions, identical proposals collapse,
+  best line refined; per-round reserve 30, total 90. `_line_search`
+  takes a list of directions. Tests updated, one added (wrong / right /
+  timid answers, the right one wins). Measurement on the three CMA-ES
+  endpoints running, sonnet, three rounds forced, for the table next
+  to the one-proposal runs.
+
 ## 2026-09-19 · Opus vs sonnet on the finish: not separable at n=1
 
 - Same three CMA-ES endpoints, finish alone, three rounds forced.

@@ -285,10 +285,14 @@ class SizingTab(QWidget, JobTabMixin):
             note = '  (+ AI time, varies)'
         elif self.algo_combo.currentData() in ('de_llm_finish',
                                                'cmaes_llm_finish'):
-            from app.core.llm_sizing import FINISH_EFFORT, FINISH_ROUNDS
+            from app.core.llm_sizing import (
+                FINISH_EFFORT, FINISH_PROPOSALS, FINISH_ROUNDS)
+            # the proposals of a round run in parallel: wall clock is
+            # one call per round
             secs += FINISH_ROUNDS * llm_client.round_seconds(
                 effort=FINISH_EFFORT)
-            note = f'  (+ up to {FINISH_ROUNDS} AI calls)'
+            note = (f'  (+ up to {FINISH_ROUNDS} AI rounds of '
+                    f'{FINISH_PROPOSALS} calls)')
         elif self.algo_combo.currentData() == 'llm':
             # The simulations are the small half here.  One round is one LLM
             # call plus min(workers, 4) evaluations, and the call can be a

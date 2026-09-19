@@ -1118,11 +1118,11 @@ def test_cmaes_llm_finish_leaves_the_finish_its_reserve(monkeypatch):
         return 'fake finish'
 
     monkeypatch.setattr(llm_sizing, 'run_finish', fake_finish)
-    run = sizing.optimize('skill_bootstrap', variables, budget=100,
+    run = sizing.optimize('skill_bootstrap', variables, budget=300,
                           algo='cmaes_llm_finish', workers=1)
     assert len(seen) == 1
     at, cap, budget = seen[0]
-    assert at <= 100 - llm_sizing.finish_reserve() and cap == budget == 100
+    assert at <= 300 - llm_sizing.finish_reserve() and cap == budget == 300
     assert run.evals == at and 'llm finish: fake finish' in run.notes
     assert 'run 0: popsize' in run.notes
 

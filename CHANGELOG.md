@@ -7,6 +7,20 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **Changed — each finish round asks three proposals, in parallel, and
+  searches along all of them.**  The model's answer is not repeatable
+  call to call: two sonnet runs from the same point, same prompt, named
+  the same three variables and proposed different amounts — one cut the
+  cost 37%, the other found nothing in three rounds.  One call is one
+  draw from that spread; `FINISH_PROPOSALS` (3) takes its best.  One
+  coarse scan covers every direction in a single batch, identical
+  proposals collapse to one, and only the best line is refined.  The
+  per-round reserve rises to 30 evaluations (from 16), the search phase
+  holds back 90; wall clock per round is unchanged, since the calls run
+  concurrently.  The Sizing tab's estimate says "3 AI rounds of 3
+  calls".  Not yet measured; the three CMA-ES endpoints from the
+  opus/sonnet comparison are the test and the run is in progress.
+
 - **Changed — CMA-ES is the default search** when the `cma` package is
   present, with the AI finish behind it when a model is configured
   (`cmaes_llm_finish`, new); DE and DE + finish remain the defaults

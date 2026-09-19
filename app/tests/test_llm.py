@@ -816,8 +816,36 @@ def test_finish_treats_the_proposal_as_a_direction_and_lands():
     assert state['dispatched'] <= llm_sizing.FINISH_EVALS
     assert len(evaluated) == len(set(round(w, 9) for w in evaluated)), \
         'a point was paid for twice'
-    assert 'round 1: moved 1 of 1 variables (W_IN)' in note
+    assert 'round 1: 1 proposals; best moved 1 of 1 variables (W_IN)' in note
     assert 'cost 2.3000 ->' in note and 'widen the input pair' in note
+
+
+def test_finish_asks_several_times_and_keeps_the_best_line():
+    """The model's answer is not repeatable call to call (two sonnet runs
+    from one point: 37% and nothing), so a round asks three times and
+    searches along each.  Here the three answers are wrong, right and
+    timid; the right one has to win, and the timid one must not be
+    paid for twice."""
+    from itertools import cycle
+    from app.core import llm_sizing
+    cost_of = lambda w: abs(w - 7.3)
+    variables, state, run_batch, evaluated = _finish_harness(
+        5.0, cost_of, llm_sizing.FINISH_EVALS)
+    answers = cycle([3.0, 9.0, 6.0])
+
+    def fake_chat(messages, **kw):
+        w = next(answers)
+        return json.dumps({'rationale': f'try {w}',
+                           'candidates': [{'W_IN': w}]})
+
+    note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
+                                 state=state, run_batch=run_batch,
+                                 budget=llm_sizing.FINISH_EVALS, workers=4,
+                                 chat=fake_chat)
+    assert state['best'] < 0.1
+    assert '3 proposals' in note and 'try 9.0' in note
+    assert state['dispatched'] <= llm_sizing.FINISH_EVALS
+    assert len(evaluated) == len(set(round(w, 9) for w in evaluated))
 
 
 def test_finish_rounds_continue_from_the_new_best_with_history():
@@ -833,19 +861,21 @@ def test_finish_rounds_continue_from_the_new_best_with_history():
         5.0, cost_of, budget)
     prompts = []
 
+    k = llm_sizing.FINISH_PROPOSALS
+
     def fake_chat(messages, **kw):
         prompts.append(messages[-1]['content'])
-        w = 6.0 if len(prompts) == 1 else 9.0       # timid, then bolder
+        w = 6.0 if len(prompts) <= k else 9.0       # timid, then bolder
         return json.dumps({'rationale': f'try {w}',
                            'candidates': [{'W_IN': w}]})
 
     note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
                                  state=state, run_batch=run_batch,
                                  budget=budget, workers=4, chat=fake_chat)
-    assert 'round 1' in prompts[1] and 'cost 2.3000 ->' in prompts[1] \
-        and 'Do not repeat' in prompts[1]
+    assert 'round 1' in prompts[k] and 'cost 2.3000 ->' in prompts[k] \
+        and 'Do not repeat' in prompts[k]
     assert 'round 1' not in prompts[0]
-    assert 'W_IN: 5' not in prompts[1]            # round 2 starts further on
+    assert 'W_IN: 5' not in prompts[k]            # round 2 starts further on
     assert state['best'] < 0.1
     assert note.count('round ') >= 2
     assert state['dispatched'] <= budget
@@ -865,8 +895,9 @@ def test_finish_ends_after_a_round_that_improved_nothing(monkeypatch):
     note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
                                  state=state, run_batch=run_batch,
                                  budget=budget, workers=4, chat=fake_chat)
-    assert len(calls) == 1 and note.count('round ') == 1
-    assert 'no point along it improved' in note
+    assert len(calls) == llm_sizing.FINISH_PROPOSALS
+    assert note.count('round ') == 1
+    assert 'no point along any improved' in note
     assert state['best'] == 2.3                   # the search result survives
     # the coarse scan and nothing more: no refining toward the start
     assert len(evaluated) <= len(llm_sizing.FINISH_ALPHAS)
@@ -879,7 +910,7 @@ def test_finish_ends_after_a_round_that_improved_nothing(monkeypatch):
     note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
                                  state=state, run_batch=run_batch,
                                  budget=budget, workers=4, chat=fake_chat)
-    assert len(calls) == llm_sizing.FINISH_ROUNDS
+    assert len(calls) == llm_sizing.FINISH_ROUNDS * llm_sizing.FINISH_PROPOSALS
 
 
 def test_finish_stops_at_zero_and_leaves_the_rest_of_the_budget():
@@ -894,7 +925,7 @@ def test_finish_stops_at_zero_and_leaves_the_rest_of_the_budget():
     note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
                                  state=state, run_batch=run_batch,
                                  budget=budget, workers=4, chat=fake_chat)
-    assert state['best'] == 0.0 and len(calls) == 1
+    assert state['best'] == 0.0 and len(calls) == llm_sizing.FINISH_PROPOSALS
     assert state['dispatched'] <= len(llm_sizing.FINISH_ALPHAS)
     assert '-> 0.0000' in note
 
@@ -933,7 +964,7 @@ def test_finish_spends_nothing_when_there_is_nothing_to_do():
                                  state=state, run_batch=run_batch,
                                  budget=10, workers=1,
                                  chat=lambda *a, **k: 'no json here')
-    assert 'no diagnosis' in note and not evaluated
+    assert 'no usable diagnosis' in note and not evaluated
     assert state['best'] == 1.0                 # the search result survives
 
 
