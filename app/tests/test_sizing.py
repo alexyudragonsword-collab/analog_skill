@@ -183,6 +183,24 @@ def test_ldo_evaluate_default():
 
 
 @needs_ngspice
+def test_a_failed_ldo_simulation_does_not_inherit_the_last_points_metrics(
+        monkeypatch):
+    """Two unrelated LDO sizings once reported byte-identical metrics: the
+    second's ngspice run had died on an out-of-range device, and the
+    reader took the first's wrdata files, still in the slot, as its
+    result.  A failed run must come back empty, not as its predecessor."""
+    from app.core.sizing import evaluation as ev
+    values = {v.name: v.default for v in sizing.parse_variables('ldo_basic')}
+    good = sizing.evaluate('ldo_basic', values, slot=9)
+    assert good.get('gbw_maxload', 0) > 1e4
+    # the next run in the same slot produces nothing at all
+    monkeypatch.setattr(ev, '_ngspice_cmd', lambda: 'true')
+    again = sizing.evaluate('ldo_basic', values, slot=9)
+    assert 'gbw_maxload' not in again and 'lr' not in again, again
+    assert sizing.score('ldo_basic', again) > 10       # missing → penalty
+
+
+@needs_ngspice
 def test_micro_optimize_and_render(tmp_path):
     variables = sizing.parse_variables('amp_hoilee_affc')
     seen = []

@@ -826,6 +826,31 @@ thirty evaluations. `FINISH_STOP_ON_STALL` is now off by default; the
 first measurement that put it on is above, uncorrected, with its
 correction beside it.
 
+### A failed simulation that looks like the last successful one
+
+The LDO's CMA-ES trajectory would not reproduce between runs while the
+amplifiers' reproduced to the digit, and two unrelated LDO sizings —
+different widths, lengths, multipliers — reported *byte-identical*
+metrics: GBW 1572541 Hz, phase margin 90.0258°, seven digits each.
+Re-evaluated in a clean slot, one of them was a real point and the
+other's ngspice run died ("Simulation interrupted due to error") and
+produced nothing.
+
+`evaluate()` deleted the previous log before every run, so a failed
+amplifier run parsed an empty log and came back as missing metrics.
+The LDO metrics come from wrdata files, which were not deleted; a
+failed LDO run left them in place and the reader returned the slot's
+previous point as this one. Under four parallel slots that is a
+random earlier point, and a search keeps it if it happens to be good —
+which is exactly how a phantom 0.3210 became the "best" of a run.
+
+Fixed by clearing every output of the previous evaluation before a
+run. The lesson is the general one: **a parser that reads whatever
+file is there cannot tell "this run wrote it" from "the last one did"**.
+Delete before you run, or write to a name the run owns. Every LDO
+number in the tables above was measured with the old reader and is
+suspect; the amplifier numbers are not.
+
 ### SciPy batches a constraint only in vectorized mode
 
 `differential_evolution(constraints=...)` documents that a constraint

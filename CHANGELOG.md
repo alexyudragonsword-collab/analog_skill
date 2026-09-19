@@ -7,6 +7,20 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **Fixed — a failed LDO simulation no longer reports the previous
+  point's metrics.**  `evaluate()` removed the old log before each run
+  but not the LDO testbench's wrdata files; when ngspice died before
+  writing them — an out-of-range device is enough — the reader took the
+  slot's previous files as this point's result.  Two unrelated LDO
+  sizings reported byte-identical metrics to seven digits, and a search
+  could "find" a point whose numbers belonged to another.  Every output
+  of the previous evaluation in a slot is now removed first, wave dumps
+  included; a failed run comes back empty and is penalised as missing.
+  **Every LDO number recorded before this entry is suspect** — the
+  amplifier numbers are not, since their metrics come from the log,
+  which was always cleared — and the LDO rows of the algorithm tables
+  are being re-measured.
+
 - **Changed — each finish round asks three proposals, in parallel, and
   searches along all of them.**  The model's answer is not repeatable
   call to call: two sonnet runs from the same point, same prompt, named

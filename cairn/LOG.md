@@ -2,6 +2,18 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-19 · The LDO phantom: failed runs inherited the last point
+
+- The nine-circuit run of the three-proposal finish is in
+  (`plan-f`), but while reading it two LDO endpoints with different
+  sizings showed identical metrics. Cause: a failed ngspice run left
+  the slot's previous wrdata files and the reader took them. Fixed in
+  `evaluate()` / `capture_waves()` (`_clear_outputs`), regression
+  test added. Every LDO number before this is suspect; amplifiers
+  unaffected (metrics from the always-cleared log).
+- LDO rows re-running on the fixed code (11 runs). The plan-f table
+  is held until they land so it is written once, correctly.
+
 ## 2026-09-19 · Three proposals a round: 3 of 3 improved; stall rule off
 
 - Same three CMA-ES endpoints, sonnet, three rounds: 1.03 → 0.89,

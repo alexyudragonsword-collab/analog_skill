@@ -31,12 +31,11 @@ like before touching anything.
 
 ## Open
 
-- Why the LDO's CMA-ES trajectory did not reproduce between two runs
-  at the same seed while both amplifiers' did to the digit
-  (`cairn/pitfalls.md`, the CMA-ES section). If an LDO evaluation can
-  fail under load and return inf, every search on it is a little
-  random and a "seed" means less there; two more runs of `ldo_basic
-  cmaes` at seed 0 with the ngspice logs kept would settle it.
+- Re-measure the LDO rows of the algorithm tables on the fixed
+  evaluator (running): DE, CMA-ES, DE + Powell, constrained DE and the
+  CMA-ES finish at both seeds, DE at 1200. Until they land, every LDO
+  number in `cairn/pitfalls.md` is marked suspect and the CMA-ES
+  default rests on the amplifier rows, which were never affected.
 - Ranking models or prompts for the finish needs several runs per
   cell: the model call is not repeatable (two sonnet runs from one
   point, 37% and nothing). Three proposals a round now use that spread

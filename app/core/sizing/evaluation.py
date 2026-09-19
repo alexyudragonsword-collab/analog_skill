@@ -227,6 +227,25 @@ def _evaluate_skill(spec: SizingSpec, values: dict) -> dict:
     raise KeyError(spec.skill_key)
 
 
+def _clear_outputs(run: Path, spec: SizingSpec):
+    """Remove the previous evaluation's outputs from a slot before running.
+
+    The log was always removed; the LDO wrdata files were not, and a
+    simulation that fails before writing them — an out-of-range device
+    is enough — left the reader the previous point's numbers as this
+    point's.  Two unrelated LDO sizings reported byte-identical metrics
+    that way, and every LDO search result before this carried such
+    phantoms.  Wave dumps get the same treatment for the same reason.
+    """
+    for p in [run / 'log.txt'] + list(run.glob('waves_*.dat')) + (
+            list(run.glob(f'{spec.wrdata_prefix}_*'))
+            if spec.wrdata_prefix else []):
+        try:
+            p.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def evaluate(circuit: str, values: dict, slot: int = 0,
              single_thread: bool = False) -> dict:
     """One full testbench evaluation → metric dict (missing metrics absent).
@@ -245,8 +264,7 @@ def evaluate(circuit: str, values: dict, slot: int = 0,
     _write_params(spec, values, run / 'params.spice')
     tb = _render_testbench(spec, run, single_thread=single_thread)
     log = run / 'log.txt'
-    if log.exists():
-        log.unlink()
+    _clear_outputs(run, spec)
     subprocess.run([_ngspice_cmd(), '-o', str(log), '-b', str(tb)],
                    cwd=run, capture_output=True, timeout=300)
     metrics = _parse_meas_log(log)
@@ -292,8 +310,7 @@ def capture_waves(circuit: str, values: dict, tag: str) -> dict:
     _write_params(spec, values, run / 'params.spice')
     tb = _render_testbench(spec, run, dump_waves=True)
     log = run / 'log.txt'
-    if log.exists():
-        log.unlink()
+    _clear_outputs(run, spec)
     subprocess.run([_ngspice_cmd(), '-o', str(log), '-b', str(tb)],
                    cwd=run, capture_output=True, timeout=300)
     out: dict = {'kind': spec.kind, 'metrics': _parse_meas_log(log)}
