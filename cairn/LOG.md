@@ -2,6 +2,20 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-20 · LDO rows re-measured; the nine-circuit finish table
+
+- On the fixed reader the phantoms were the good numbers (0.32, 0.36,
+  0.24); DE + Powell honestly closes the LDO at seed 0 (Powell 9/18
+  feasible); CMA-ES tallies stand (12/18, best or tied 16/18); the
+  LDO's CMA-ES trajectories reproduce to the digit now — the
+  discrepancy was the reader, closed.
+- `cmaes_llm_finish` on nine circuits, two seeds: of six open rows it
+  improves four, leaves one, ends worse than plain CMA-ES on one (LDO
+  s0: the reserve was taken while the search was still improving).
+  Default stands; ROADMAP asks for an adaptive reserve.
+- Tables in `cairn/pitfalls.md`; CHANGELOG entries updated in place
+  (unreleased).
+
 ## 2026-09-19 · The LDO phantom: failed runs inherited the last point
 
 - The nine-circuit run of the three-proposal finish is in

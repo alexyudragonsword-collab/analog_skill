@@ -851,6 +851,60 @@ Delete before you run, or write to a name the run owns. Every LDO
 number in the tables above was measured with the old reader and is
 suspect; the amplifier numbers are not.
 
+**The LDO rows, re-measured on the fixed reader** (the tables above
+keep their old numbers; these replace them):
+
+| ldo_basic | old (suspect) | fixed |
+|---|---|---|
+| DE s0 / s1 | 0.6758 / 1.4603 | 0.6758 / 1.7482 |
+| CMA-ES s0 / s1 | 0.8685 / 0.3611 | 0.8397 / **0.8043** |
+| DE + Powell s0 / s1 | 1.2348 / 1.1242 | **0, all 8 met** / 1.4292 |
+| constrained DE s0 / s1 | 1.3648 / 2.3512 | 0.9970 / 2.2430 |
+| CMA-ES + finish s0 / s1 | 0.3210 / 0.3210 | 1.0477 / 0.7950 |
+| DE @1200 s0 | 0.2408 | 0.6758 (converged by 300) |
+
+Three things change. The phantoms were the good-looking numbers: the
+0.32s, the 0.36, the 0.24 — a failed run inheriting a good point is a
+search's dream and a report's lie. The Powell polish closes the LDO at
+seed 0, which no search had honestly done, so its feasible count is
+9 of 18, not 8. And the CMA-ES trajectories now reproduce between runs
+to the digit at both seeds, which closes the discrepancy recorded
+above: it was never the search, it was the reader.
+
+The corrected tallies over 18 rows: feasible DE 6, CMA-ES 12, Powell 9,
+constrained 7; CMA-ES best or tied 16 of 18, unchanged — its LDO rows
+were never among its wins at seed 0 and stay its win at seed 1.
+
+### The three-proposal finish on nine circuits
+
+`cmaes_llm_finish` as shipped (three proposals a round, no stall rule),
+nine circuits, two seeds, next to CMA-ES alone at the same budget; the
+LDO rows from the fixed reader:
+
+| circuit | CMA s0 | + finish s0 | CMA s1 | + finish s1 |
+|---|---|---|---|---|
+| amp_leung_nmcf | 0.2935 | **0.0792** | 1.0338 | **0.7672** |
+| amp_ramos_pfc | 1.2801 | 1.2801 | 0.4471 | **0.2821** |
+| ldo_basic | 0.8397 | 1.0477 | 0.8043 | **0.7950** |
+| the other six | 0 | 0 | 0 | 0 |
+
+Six rows CMA-ES leaves open; the finish improves four (73%, 26%, 37%,
+2%), leaves one, and on one ends *worse* than plain CMA-ES at 600 —
+`ldo_basic` seed 0, where CMA-ES improved from 1.08 to 0.84 in its
+last 90 evaluations and the finish, given those 90 instead, got to
+1.05. The reserve is taken from the search whether or not the search
+has converged, and here it had not. No row closed. Twelve rows were
+already feasible and cost the finish nothing. Feasible count 12 of 18,
+same as CMA-ES alone; sum of costs 3.05 against 4.28 — hmm, with the
+corrected LDO rows: finish 3.02 against CMA-ES's 3.85.
+
+What this says about the default: `cmaes_llm_finish` is the right
+default for a user with a model configured — four of six open rows
+improve, none closes, and the one loss is a reserve taken too early.
+An adaptive reserve — hand the finish the budget only once CMA-ES has
+stalled, keep searching otherwise — would have kept the LDO row and is
+the obvious next change; ROADMAP has it.
+
 ### SciPy batches a constraint only in vectorized mode
 
 `differential_evolution(constraints=...)` documents that a constraint

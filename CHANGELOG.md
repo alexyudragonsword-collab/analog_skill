@@ -18,8 +18,11 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   included; a failed run comes back empty and is penalised as missing.
   **Every LDO number recorded before this entry is suspect** — the
   amplifier numbers are not, since their metrics come from the log,
-  which was always cleared — and the LDO rows of the algorithm tables
-  are being re-measured.
+  which was always cleared.  Re-measured (`cairn/pitfalls.md`): the
+  phantoms were the good-looking numbers; the Powell polish honestly
+  closes the LDO at seed 0 (9 of 18 feasible, was 8); CMA-ES's tallies
+  stand; and the LDO's CMA-ES trajectories now reproduce to the digit,
+  which closes the discrepancy recorded earlier.
 
 - **Changed — each finish round asks three proposals, in parallel, and
   searches along all of them.**  The model's answer is not repeatable
@@ -34,7 +37,11 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   concurrently.  The Sizing tab's estimate says "3 AI rounds of 3
   calls".  Measured on the three CMA-ES endpoints from the opus/sonnet
   comparison: **three of three improved** (14%, 44%, 10%) where one
-  proposal a round had improved one of three; table in
+  proposal a round had improved one of three.  Then as shipped on nine
+  circuits at two seeds: of the six rows CMA-ES leaves open it improves
+  four (73%, 26%, 37%, 2%), leaves one, and ends worse than plain
+  CMA-ES on one — `ldo_basic` seed 0, where the search was still
+  improving when the reserve was taken from it.  Tables in
   `cairn/pitfalls.md`.
 
 - **Changed — a round that improves nothing no longer ends the finish**
