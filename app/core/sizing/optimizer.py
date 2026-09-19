@@ -39,6 +39,14 @@ def cmaes_available() -> bool:
         return False
 
 
+#: evaluations without a new best after which a search is "stalled" and
+#: the finish may begin.  About five CMA-ES generations or two DE ones on
+#: the amplifiers.  The finish used to take its reserve from the end of
+#: the search regardless; on ldo_basic at seed 0 CMA-ES improved 1.08 to
+#: 0.84 in exactly those evaluations and the finish, given them instead,
+#: reached 1.05.  Now the search keeps its budget while it is improving.
+STALL_EVALS = 60
+
 #: share of the budget de_powell keeps for the polish.  Powell in 30
 #: dimensions spends ~4 evaluations per dimension per pass; a quarter of
 #: 600 is about one pass, serial.
@@ -306,9 +314,18 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         state['pop_costs'] = [float(c) if np.isfinite(c) else None
                               for c in res.population_energies]
 
+    def stalled(window: int | None) -> bool:
+        """No new best in the last `window` evaluations."""
+        h = state['history']
+        if window is None or not h:
+            return False
+        n_now, best = h[-1]
+        first = next(n for n, b in h if b <= best)   # when this best arrived
+        return n_now - first >= window
+
     def run_de(limit: int = budget, seed_: int = seed, init=None,
                evals: int | None = None, objective_fn=None,
-               constraints=()):
+               constraints=(), stall: int | None = None):
         """One DE search up to `limit` dispatched evaluations.  `init` is a
         population to start from (else the resumed run's, else Sobol);
         `evals` sizes the generation count when `limit` includes earlier
@@ -329,7 +346,8 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             popsize=4, maxiter=maxiter, polish=False, tol=0.0,
             seed=seed_, updating='deferred', constraints=constraints,
             callback=lambda xk, convergence=0.0:
-                state['cancel'] or state['dispatched'] >= limit, **par)
+                state['cancel'] or state['dispatched'] >= limit
+                or stalled(stall), **par)
         keep_population(res)
         return res
 
@@ -407,13 +425,21 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         else:
             state['notes'] = 'constrained: no feasible point found'
 
-    def run_cmaes(limit: int = budget):
+    def run_cmaes(limit: int = budget, stall: int | None = None,
+                  start=None, sigma: float = 0.25):
+        """CMA-ES up to `limit` dispatches, restarting when a run stops
+        on its own.  `stall` (evaluations without a new best) ends the
+        whole search early — the finish's cue.  `start`/`sigma` resume
+        from a point, as after a finish, with the notes continued."""
         import cma
         rng = np.random.default_rng(seed)
         lam = max(workers, 4 + int(3 * np.log(dims)))
-        start, restarts, lines = x0, 0, []
-        while not state['cancel'] and state['dispatched'] < limit:
-            es = cma.CMAEvolutionStrategy(start, 0.25, {
+        restarts = 0
+        lines = state['notes'].splitlines() if state['notes'] else []
+        start = x0 if start is None else start
+        while (not state['cancel'] and state['dispatched'] < limit
+               and not stalled(stall)):
+            es = cma.CMAEvolutionStrategy(start, sigma, {
                 'bounds': [0.0, 1.0], 'popsize': lam,
                 'seed': seed + restarts + 1,
                 'maxfevals': limit - state['dispatched'],
@@ -421,34 +447,51 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                 'verbose': -9, 'verb_disp': 0, 'verb_log': 0})
             at = state['dispatched']
             while (not es.stop() and not state['cancel']
-                   and state['dispatched'] < limit):
+                   and state['dispatched'] < limit
+                   and not stalled(stall)):
                 X = es.ask()
                 costs = run_batch(X)
                 es.tell(X, [c if np.isfinite(c) else 1e12 for c in costs])
-            lines.append(f'run {restarts}: popsize {lam}, '
+            why = ', '.join(es.stop()) or (
+                'stall' if stalled(stall) else 'budget')
+            lines.append(f'run {len(lines)}: popsize {lam}, '
                          f'{state["dispatched"] - at} evaluations, best '
-                         f'{es.best.f:.4f}, stopped on '
-                         f'{", ".join(es.stop()) or "budget"}')
+                         f'{es.best.f:.4f}, stopped on {why}')
             # IPOP: a stalled run restarts with twice the population from
             # a fresh point; the larger population is what makes the next
             # basin reachable, the fresh point is what makes it different
             restarts += 1
             lam *= 2
             start = rng.uniform(0.0, 1.0, dims)
+            sigma = 0.25
         state['notes'] = '\n'.join(lines)
 
     def run_cmaes_llm_finish():
         from app.core import llm_sizing
-        state['cap'] = max(budget - llm_sizing.finish_reserve(), budget // 2)
-        run_cmaes(state['cap'])
+        # the search keeps its budget while it is improving: it stops for
+        # the finish when it stalls, or at the latest with one finish
+        # round left.  Whatever the finish leaves goes back to CMA-ES,
+        # restarted from the finished point with a tight step.
+        state['cap'] = max(budget - llm_sizing.FINISH_EVALS, budget // 2)
+        run_cmaes(state['cap'], stall=STALL_EVALS)
         state['cap'] = budget
         if state['cancel'] or state['dispatched'] >= budget:
             return
+        before = state['best']
         note = llm_sizing.run_finish(circuit, variables, overrides,
                                      state=state, run_batch=run_batch,
                                      budget=budget, workers=workers)
         state['notes'] += '\nllm finish: ' + note
         print(f'llm finish: {note}')
+        left = budget - state['dispatched']
+        if (state['cancel'] or left < 4 + int(3 * np.log(dims))
+                or state['best'] == 0.0):
+            return
+        state['notes'] += (f'\nresumed CMA-ES from the finished point with '
+                           f'{left} evaluations left'
+                           + ('' if state['best'] < before
+                              else ' (finish found nothing)'))
+        run_cmaes(budget, start=state['best_xn'], sigma=0.1)
 
     def run_optuna():
         import optuna
@@ -484,10 +527,11 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
 
     def run_de_llm_finish():
         from app.core import llm_sizing
-        # the reserve is a floor, not a share: the finish needs a fixed
-        # handful of points, and a tiny budget still has to leave it some
-        state['cap'] = max(budget - llm_sizing.finish_reserve(), budget // 2)
-        run_de(state['cap'])
+        # the search keeps its budget while it is improving (see
+        # STALL_EVALS); at the latest it stops with one finish round left.
+        # DE moves the best once a generation, so the window is doubled.
+        state['cap'] = max(budget - llm_sizing.FINISH_EVALS, budget // 2)
+        run_de(state['cap'], stall=max(STALL_EVALS, 2 * generation))
         state['cap'] = budget
         if state['cancel'] or state['dispatched'] >= budget:
             return

@@ -65,6 +65,7 @@ def _render_testbench(spec: SizingSpec, run: Path,
                sweep file the capture reads directly)."""
     src = _pkg_root(spec) / spec.kind / 'testbench' / spec.testbench
     netlist_dir = _pkg_root(spec) / spec.kind / 'netlist'
+    dut = spec.subckt or 'HoiLee_AFFC_Pin_3'
     netlist = netlist_dir / spec.netlist
     pdk = paths.sky130_pdk_dir()
     out_lines = []
@@ -99,20 +100,36 @@ def _render_testbench(spec: SizingSpec, run: Path,
                 n_ac += 1
                 pending_ac = False
             continue
-        elif ls == '.control' and single_thread:
+        elif ls == '.control':
+            if spec.kind == 'amp':
+                # the step-response instance: the same follower the DC
+                # testbench uses for offset and tempco, driven by a 100 mV
+                # step at the common-mode level.  Settling time is what a
+                # phase-margin ceiling stood in for: a 156-degree design
+                # that met every AC target never settled (29 us, 23 mV
+                # short), a 40-degree one rang 31%, and 78-88 degrees
+                # settled inside a microsecond.  See _step_metrics.
+                out_lines += STEP_INSTANCE.replace('DUT', dut).splitlines()
             out_lines.append(line)
-            line = '  set num_threads=1'
+            if single_thread:
+                line = '  set num_threads=1'
+            else:
+                continue
         elif spec.subckt and spec.subckt != 'HoiLee_AFFC_Pin_3':
             line = re.sub(r'\bHoiLee_AFFC_Pin_3\b', spec.subckt, line)
         out_lines.append(line)
+        if spec.kind == 'amp' and ls.startswith('ac dec'):
+            if dump_waves:              # from the AC plot, before tran replaces it
+                out_lines.append('wrdata waves_ac.dat vdb(opout) vp(opout) '
+                                 'vdb(cm3) vdb(ppsr1) vdb(npsr1)')
+            # 20 us at 20 ns: +0.1 s on a 5 s evaluation, 1000 points; the
+            # target is 2 us, so 20 is already "never"
+            out_lines += ['tran 20n 20u', 'wrdata step.dat v(vout7)']
         if not dump_waves:
             continue
         if spec.kind == 'amp':
             if ls.startswith('dc temp'):
                 out_lines.append('wrdata waves_dc.dat v(vout6)')
-            elif ls.startswith('ac dec'):
-                out_lines.append('wrdata waves_ac.dat vdb(opout) vp(opout) '
-                                 'vdb(cm3) vdb(ppsr1) vdb(npsr1)')
         elif spec.kind == 'ldo':
             if ls.startswith('ac dec'):
                 pending_ac = True
@@ -123,6 +140,47 @@ def _render_testbench(spec: SizingSpec, run: Path,
     tb = run / spec.testbench
     tb.write_text('\n'.join(out_lines) + '\n')
     return tb
+
+
+#: unity-gain follower on the amplifier testbenches, stepped 100 mV up
+#: from the common-mode level 1 us in.  Node/param names are the ones both
+#: amp testbenches (AnalogGym's and studio's) define; DUT is substituted.
+STEP_INSTANCE = (
+    '* step response (Analog Studio): unity-gain follower, 100 mV step\n'
+    'Vstep vstep 0 pulse({supply_voltage*VCM_ratio} '
+    '{supply_voltage*VCM_ratio+0.1} 1u 1n 1n 40u 80u)\n'
+    'xop7 vss vdd vout7 vstep vout7 DUT\n'
+    "Cload7 vout7 0 'PARAM_CLOAD'\n")
+
+STEP_SIZE, STEP_AT, STEP_BAND = 0.1, 1e-6, 0.01      # V, s, fraction
+
+
+def settling(t: np.ndarray, v: np.ndarray) -> dict[str, float]:
+    """tsettle (s) and overshoot (fraction) of a step response.
+
+    Settling is to within STEP_BAND of the *commanded* step from its
+    start, not of wherever the output ends up: a follower that never gets
+    there is the case the metric exists for, and measuring against its
+    own final value would call it settled.  If it never enters the band,
+    the whole window counts.
+    """
+    before = v[t < STEP_AT * 0.9]
+    v0 = float(before.mean()) if before.size else float(v[0])
+    final = v0 + STEP_SIZE
+    outside = np.where(np.abs(v - final) > STEP_BAND * STEP_SIZE)[0]
+    last = float(t[outside[-1]]) if outside.size else STEP_AT
+    return {'tsettle': max(last - STEP_AT, 0.0),
+            'overshoot': (float(v.max()) - final) / STEP_SIZE}
+
+
+def _step_metrics(run: Path) -> dict[str, float]:
+    try:
+        d = np.loadtxt(run / 'step.dat', ndmin=2)
+        if d.shape[0] < 10:
+            return {}
+        return settling(d[:, 0], d[:, 1])
+    except (OSError, ValueError):
+        return {}
 
 
 def _parse_meas_log(log: Path) -> dict[str, float]:
@@ -161,6 +219,20 @@ def _ngspice_cmd() -> str:
     return st.exe
 
 
+def _clear_skill_outputs():
+    """The circuit-skills simulators write fixed filenames under their
+    logs dir and parse whatever is there; a failed run would otherwise
+    hand back the previous point's numbers (the LDO phantom, see
+    _clear_outputs).  Outputs only — the dir is the tool's own scratch.
+    Called inside skill_context, where ngspice_common is importable."""
+    try:
+        import ngspice_common
+        for p in Path(ngspice_common.LOG_DIR).glob('*.txt'):
+            p.unlink()
+    except (ImportError, AttributeError, OSError):
+        pass
+
+
 def _evaluate_skill(spec: SizingSpec, values: dict) -> dict:
     """One evaluation of a circuit-skills circuit via its plot-free
     simulate_*() metric path (runs inside skill_context import isolation;
@@ -171,6 +243,7 @@ def _evaluate_skill(spec: SizingSpec, values: dict) -> dict:
     scripts = paths.circuit_skills_dir() / cspec.subdir
     with circuits.skill_context(scripts):
         common = importlib.import_module(cspec.common_mod)
+        _clear_skill_outputs()
         circuits._apply_params(common, values)
         # point the model dir at the space-free workspace copy before the
         # simulate_* modules load — see circuits._repoint_models (Windows
@@ -237,7 +310,8 @@ def _clear_outputs(run: Path, spec: SizingSpec):
     that way, and every LDO search result before this carried such
     phantoms.  Wave dumps get the same treatment for the same reason.
     """
-    for p in [run / 'log.txt'] + list(run.glob('waves_*.dat')) + (
+    for p in [run / 'log.txt', run / 'step.dat'] + list(
+            run.glob('waves_*.dat')) + (
             list(run.glob(f'{spec.wrdata_prefix}_*'))
             if spec.wrdata_prefix else []):
         try:
@@ -270,6 +344,8 @@ def evaluate(circuit: str, values: dict, slot: int = 0,
     metrics = _parse_meas_log(log)
     if spec.kind == 'ldo':
         metrics = _ldo_metrics(run, metrics, spec.wrdata_prefix)
+    elif spec.kind == 'amp':
+        metrics.update(_step_metrics(run))
     return metrics
 
 
@@ -315,6 +391,10 @@ def capture_waves(circuit: str, values: dict, tag: str) -> dict:
                    cwd=run, capture_output=True, timeout=300)
     out: dict = {'kind': spec.kind, 'metrics': _parse_meas_log(log)}
     if spec.kind == 'amp':
+        out['metrics'].update(_step_metrics(run))
+        step = _read_wave_file(run / 'step.dat')
+        if step and len(step) >= 2:
+            out.update(t_step=step[0], v_step=step[1])
         ac = _read_wave_file(run / 'waves_ac.dat')
         if ac and len(ac) >= 6:
             out.update(freq=ac[0], adm_db=ac[1], adm_ph=ac[2],
@@ -350,6 +430,7 @@ def _capture_skill_waves(spec: SizingSpec, values: dict) -> dict:
     scripts = paths.circuit_skills_dir() / cspec.subdir
     with circuits.skill_context(scripts):
         common = importlib.import_module(cspec.common_mod)
+        _clear_skill_outputs()
         circuits._apply_params(common, values)
         circuits._repoint_models(
             common, 'ptm45hp.lib' if spec.skill_key == 'comparator'

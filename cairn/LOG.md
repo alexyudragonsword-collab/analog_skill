@@ -2,6 +2,20 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-20 · Six asks: settling time, stall-triggered finish, skill audit
+
+- Maintainer said do all six. Done in code so far: (2) the finish
+  starts when the search stalls (`STALL_EVALS`), CMA-ES resumes from
+  the finished point with what is left; (4) circuit-skills simulators
+  parse fixed filenames — outputs cleared before each evaluation; (6)
+  settling time. The step-response measurement decided (6): the 156°
+  design never settles (29 µs, 23 mV short), 78–88° settle in ~0.9 µs,
+  40° rings 31% — so `tsettle` (2 µs, 1% of a 100 mV follower step) is
+  the tenth amplifier target and the 90° ceiling is gone. +0.1 s per
+  evaluation. Amplifier cost values change from here.
+- Next: (1) the 27-circuit sweep on the default, (5) IPOP restarts at
+  1200 queued behind it, (3) release v1.6 after both.
+
 ## 2026-09-20 · LDO rows re-measured; the nine-circuit finish table
 
 - On the fixed reader the phantoms were the good numbers (0.32, 0.36,

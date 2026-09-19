@@ -7,6 +7,46 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **Changed — settling time replaces the phase-margin ceiling.**  Every
+  amplifier evaluation now also steps a unity-gain follower by 100 mV
+  (an instance the app appends to the rendered testbench, driven from
+  the common-mode level; `tran 20n 20u`, about +0.1 s on a 5 s
+  evaluation) and reports `tsettle`, the 1% settling time measured
+  against the *commanded* step, and `overshoot`.  `tsettle` is the
+  tenth amplifier target, 2 µs (4 µs on the 0.6 MHz CM OTA); phase
+  margin is a floor of 60° again, no ceiling.  The measurement that
+  decided it, on four reference-amplifier sizings:
+
+  | phase margin | settle to 1% | overshoot |
+  |---|---|---|
+  | 156° (the design the ceiling was introduced against) | never (29 µs, still 23 mV short) | — |
+  | 88° (CMA-ES, feasible under the band) | 0.90 µs | 2.4% |
+  | 78° | 0.96 µs | 5.2% |
+  | 40° | 1.44 µs | 31.5% |
+
+  A ceiling caught the first row and nothing else; settling time
+  charges both ends for what they cost.  Under the new spec the 88°
+  design meets all ten targets and the 156° one costs 10.  Cost values
+  on every amplifier change; earlier tables in `cairn/` say which rule
+  they were measured under.  Wave capture carries the step (`t_step`,
+  `v_step`) for a future panel.
+
+- **Changed — the finish begins when the search stalls, not at a fixed
+  point.**  `de_llm_finish` and `cmaes_llm_finish` used to hand the
+  finish a fixed reserve from the end of the budget; on `ldo_basic` at
+  seed 0 CMA-ES improved 1.08 to 0.84 in exactly those evaluations and
+  the finish, given them instead, reached 1.05.  Now the search keeps
+  its budget while it improves and stops for the finish after
+  `STALL_EVALS` (60) evaluations without a new best, or at the latest
+  with one finish round left; and for CMA-ES, whatever the finish
+  leaves goes back to a CMA-ES restarted from the finished point with a
+  tight step, so the budget is spent.
+
+- **Fixed — circuit-skills evaluations clear the simulators' output
+  files first.**  The same shape as the LDO phantom below: the vendored
+  simulators write fixed filenames and parse whatever is there.  An
+  audit after that fix found no other reader of this kind in `app/`.
+
 - **Fixed — a failed LDO simulation no longer reports the previous
   point's metrics.**  `evaluate()` removed the old log before each run
   but not the LDO testbench's wrdata files; when ngspice died before

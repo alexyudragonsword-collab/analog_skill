@@ -16,19 +16,26 @@ def _amp_metrics() -> list:
     return [
         MetricSpec('dcgain', 'DC gain', 'dB', 100.0, 'max', 2.0),
         MetricSpec('gain_bandwidth_product', 'GBW', 'Hz', 1.2e6, 'max', 2.0),
-        # a band, 60-90: an equality target is never *met* (violation is
-        # zero only at exact equality) and was the reason no amplifier here
-        # could ever report all targets met; a bare floor admitted a 156
-        # degree design with its dominant pole below 0.1 Hz.  90 is where
-        # over-compensation starts costing what nothing else charges for.
-        MetricSpec('phase_in_deg', 'Phase margin', 'deg', 60.0, 'max', 1.5,
-                   ceiling=90.0),
+        # a floor: an equality target is never *met* (violation is zero
+        # only at exact equality) and was the reason no amplifier here
+        # could ever report all targets met.  A bare floor admitted a
+        # 156-degree design with its dominant pole below 0.1 Hz; a 90
+        # degree ceiling caught it and nothing else.  What that design
+        # actually costs is measured now, by tsettle below — it never
+        # settles — so the ceiling is gone and the floor stays.
+        MetricSpec('phase_in_deg', 'Phase margin', 'deg', 60.0, 'max', 1.5),
         MetricSpec('dcpsrp', 'PSRR+ (dc)', 'dB', -60.0, 'min', 1.0),
         MetricSpec('dcpsrn', 'PSRR- (dc)', 'dB', -60.0, 'min', 1.0),
         MetricSpec('cmrrdc', 'CMRR (dc)', 'dB', -60.0, 'min', 1.0),
         MetricSpec('power', 'Power', 'W', 0.5e-3, 'min', 1.0),
         MetricSpec('vos25', 'Offset (25C)', 'V', 0.1e-3, 'absmin', 0.5),
         MetricSpec('tc', 'Temp. coeff.', 'V/°C', 10e-6, 'absmin', 0.5),
+        # 1% settling of a 100 mV unity-gain step, ~15 time constants at
+        # the 1.2 MHz GBW target.  Measured on the reference amplifier:
+        # 78-88 degree designs 0.9-1.0 us, a 40 degree one 1.4 us
+        # (ringing), the 156 degree one never.  The Analog Studio
+        # addition to AnalogGym's nine.
+        MetricSpec('tsettle', 'Settling (1%)', 's', 2e-6, 'min', 1.0),
     ]
 
 
@@ -53,6 +60,8 @@ def _cm_ota_metrics() -> list:
         MetricSpec('power', 'Power', 'W', 1.0e-3, 'min', 1.0),
         MetricSpec('vos25', 'Offset (25C)', 'V', 5e-3, 'absmin', 0.5),
         MetricSpec('tc', 'Temp. coeff.', 'V/°C', 60e-6, 'absmin', 0.5),
+        # the same follower step as the amps; 4 us for a 0.6 MHz GBW
+        MetricSpec('tsettle', 'Settling (1%)', 's', 4e-6, 'min', 1.0),
     ]
 
 

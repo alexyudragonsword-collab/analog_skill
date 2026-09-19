@@ -128,7 +128,8 @@ def test_score_directions():
     spec_key = 'amp_hoilee_affc'
     perfect = {'dcgain': 120, 'gain_bandwidth_product': 2e6,
                'phase_in_deg': 60, 'dcpsrp': -80, 'dcpsrn': -80,
-               'cmrrdc': -80, 'power': 0.1e-3, 'vos25': 1e-6, 'tc': 1e-6}
+               'cmrrdc': -80, 'power': 0.1e-3, 'vos25': 1e-6, 'tc': 1e-6,
+               'tsettle': 1e-6}
     assert sizing.score(spec_key, perfect) == 0.0
     worse = dict(perfect, dcgain=50)
     assert sizing.score(spec_key, worse) > 0
@@ -138,11 +139,13 @@ def test_score_directions():
     # amplifier here ever reported — "all targets met" was unreachable.
     assert sizing.score(spec_key, dict(perfect, phase_in_deg=78.3)) == 0.0
     assert sizing.score(spec_key, dict(perfect, phase_in_deg=50.0)) > 0
-    # ...and a band, not a floor: the first design to meet every target
-    # under the floor sat at 156 deg with its dominant pole below 0.1 Hz
-    assert sizing.score(spec_key, dict(perfect, phase_in_deg=90.0)) == 0.0
-    over = sizing.score(spec_key, dict(perfect, phase_in_deg=156.0))
-    assert over == pytest.approx((156 - 90) / 90 * 1.5)
+    # ...and a floor only, again: the 156 deg design the floor once
+    # admitted is charged for what it actually costs, settling time
+    assert sizing.score(spec_key, dict(perfect, phase_in_deg=156.0)) == 0.0
+    slow = sizing.score(spec_key, dict(perfect, tsettle=19e-6))
+    assert slow == pytest.approx(8.5)           # (19 - 2) / 2
+    assert sizing.score(spec_key, dict(perfect, tsettle=3e-6)) == \
+        pytest.approx(0.5)
     assert all(d.met for d in sizing.score_detail(
         spec_key, dict(perfect, phase_in_deg=59.86))) is False
 
@@ -151,7 +154,7 @@ def test_score_overrides_and_hard():
     key = 'amp_hoilee_affc'
     m = {'dcgain': 90, 'gain_bandwidth_product': 2e6, 'phase_in_deg': 60,
          'dcpsrp': -80, 'dcpsrn': -80, 'cmrrdc': -80, 'power': 0.1e-3,
-         'vos25': 1e-6, 'tc': 1e-6}
+         'vos25': 1e-6, 'tc': 1e-6, 'tsettle': 1e-6}
     base = sizing.score(key, m)                          # dcgain 90 < 100
     assert base > 0
     # relaxing the target to 80 clears the violation
@@ -162,6 +165,24 @@ def test_score_overrides_and_hard():
 
 
 # ── real evaluations (ngspice) ───────────────────────────────────────────────
+def test_settling_is_measured_against_the_commanded_step():
+    """A follower that never reaches the step must not count as settled
+    at its own final value — that was the 156-degree design."""
+    from app.core.sizing.evaluation import STEP_AT, settling
+    import numpy as np
+    t = np.linspace(0, 20e-6, 1001)
+    v = np.where(t < STEP_AT, 0.45, 0.55 - 0.02 * np.exp(-(t - STEP_AT) / 2e-7))
+    s = settling(t, v)
+    assert 0.5e-6 < s['tsettle'] < 0.7e-6 and s['overshoot'] <= 1e-9
+    stuck = np.where(t < STEP_AT, 0.45, 0.527)      # 23 mV short, for ever
+    assert settling(t, stuck)['tsettle'] == pytest.approx(20e-6 - STEP_AT)
+    ring = np.where(t < STEP_AT, 0.45, 0.55 + 0.03 * np.exp(
+        -(t - STEP_AT) / 5e-7) * np.cos(2e7 * (t - STEP_AT)))
+    r = settling(t, ring)
+    assert r['overshoot'] == pytest.approx(0.3, abs=0.02)
+    assert 1.5e-6 < r['tsettle'] < 2.5e-6
+
+
 @needs_ngspice
 def test_amp_evaluate_default():
     values = {v.name: v.default for v in
@@ -169,6 +190,7 @@ def test_amp_evaluate_default():
     m = sizing.evaluate('amp_hoilee_affc', values)
     # default HoiLee_AFFC sizing measured on ngspice-42 (see analysis doc)
     assert 80 < m['dcgain'] < 100
+    assert m['tsettle'] > 0 and 'overshoot' in m      # the step ran
     assert m['gain_bandwidth_product'] > 1e5
     assert m['power'] > 0
     assert 0 < sizing.score('amp_hoilee_affc', m) < 50
@@ -799,7 +821,8 @@ def test_score_is_exactly_the_sum_of_its_explanation():
     not scored on."""
     m = {'dcgain': 62.1, 'gain_bandwidth_product': 1.35e6,
          'phase_in_deg': 59.2, 'dcpsrp': -71.0, 'dcpsrn': -68.0,
-         'cmrrdc': -64.0, 'power': 8.1e-4, 'vos25': 4.2e-5, 'tc': 6.0e-6}
+         'cmrrdc': -64.0, 'power': 8.1e-4, 'vos25': 4.2e-5, 'tc': 6.0e-6,
+         'tsettle': 1.1e-6}
     for overrides in (None, {'dcgain': (80.0, True)}):
         detail = sizing.score_detail('amp_hoilee_affc', m, overrides)
         assert len(detail) == len(sizing.SIZING['amp_hoilee_affc'].metrics)
@@ -983,7 +1006,7 @@ def test_device_variable_map_reads_the_netlist_not_a_guess():
 # ── what to try next, from the measured order ────────────────────────────────
 _PERFECT = {'dcgain': 120, 'gain_bandwidth_product': 2e6, 'phase_in_deg': 70,
             'dcpsrp': -80, 'dcpsrn': -80, 'cmrrdc': -80, 'power': 0.1e-3,
-            'vos25': 1e-6, 'tc': 1e-6}
+            'vos25': 1e-6, 'tc': 1e-6, 'tsettle': 1e-6}
 
 
 def _run_with(metrics, algo='diff_evolution', seed=0, budget=600,
@@ -1006,7 +1029,7 @@ def test_next_step_follows_the_measured_order(monkeypatch):
     three have been; then twice the budget at the best seed.  The order
     is the one sixteen runs at two seeds supported, not a preference."""
     done = sizing.next_step(_run_with(_PERFECT), [])
-    assert done['action'] is None and done['text'].startswith('all 9')
+    assert done['action'] is None and done['text'].startswith('all 10')
 
     close = _run_with(dict(_PERFECT, phase_in_deg=58.0))   # one miss, 3%
     nxt = sizing.next_step(close, [])
@@ -1122,9 +1145,13 @@ def test_de_powell_polishes_where_de_stopped(monkeypatch):
     assert run.continuable                        # DE population kept
 
 
-def test_cmaes_llm_finish_leaves_the_finish_its_reserve(monkeypatch):
-    """The measured default with the finish behind it: CMA-ES stops at
-    the reserve, the finish sees the whole budget as its cap."""
+def test_cmaes_llm_finish_begins_when_the_search_stalls(monkeypatch):
+    """The finish used to take its reserve from the end of the search
+    regardless; on ldo_basic at seed 0 CMA-ES improved 1.08 to 0.84 in
+    exactly those evaluations.  Now the search keeps its budget while it
+    improves — here a bowl that keeps improving by hairs runs until one
+    finish round is left — and what the finish leaves goes back to
+    CMA-ES from the finished point."""
     pytest.importorskip('cma')
     from app.core import llm_sizing
     variables = _fake_bowl(monkeypatch)
@@ -1140,9 +1167,24 @@ def test_cmaes_llm_finish_leaves_the_finish_its_reserve(monkeypatch):
                           algo='cmaes_llm_finish', workers=1)
     assert len(seen) == 1
     at, cap, budget = seen[0]
-    assert at <= 300 - llm_sizing.finish_reserve() and cap == budget == 300
-    assert run.evals == at and 'llm finish: fake finish' in run.notes
-    assert 'run 0: popsize' in run.notes
+    assert 300 - llm_sizing.FINISH_EVALS - 8 <= at <= 300 - llm_sizing.FINISH_EVALS
+    assert cap == budget == 300
+    assert 'llm finish: fake finish' in run.notes
+    assert 'resumed CMA-ES from the finished point' in run.notes
+    assert run.evals > at                        # the leftover was spent
+
+    # a search that goes flat hands over early, and the finish's leftover
+    # goes back to the search
+    seen.clear()
+    fake = sizing.optimizer.evaluate
+    monkeypatch.setattr(sizing.optimizer, 'evaluate',
+                        lambda c, v, **kw: {'q': max(fake(c, v)['q'], 0.05)})
+    run = sizing.optimize('skill_bootstrap', variables, budget=300,
+                          algo='cmaes_llm_finish', workers=1)
+    at, cap, budget = seen[0]
+    assert at < 200, at                          # stalled long before the cap
+    assert 'stopped on stall' in run.notes
+    assert run.evals >= 300 - 8                  # and the budget was spent
 
 
 def test_signed_margin_and_slack():

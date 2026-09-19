@@ -626,7 +626,7 @@ def test_the_search_loop_asks_for_low_effort_and_the_one_shots_do_not(
 # ── telling the model which target it missed ─────────────────────────────────
 _M = {'dcgain': 62.1, 'gain_bandwidth_product': 1.35e6, 'phase_in_deg': 59.2,
       'dcpsrp': -71.0, 'dcpsrn': -68.0, 'cmrrdc': -64.0, 'power': 8.1e-4,
-      'vos25': 4.2e-5, 'tc': 6.0e-6}
+      'vos25': 4.2e-5, 'tc': 6.0e-6, 'tsettle': 1.1e-6}
 
 
 def test_metric_feedback_names_the_misses_and_counts_the_slack():
@@ -636,7 +636,7 @@ def test_metric_feedback_names_the_misses_and_counts_the_slack():
     trades away."""
     from app.core import llm_sizing
     line = llm_sizing.metric_feedback('amp_hoilee_affc', _M)
-    assert '6/9 met' in line
+    assert '7/10 met' in line
     assert 'DC gain 62.1 dB (want >= 100' in line       # value and target
     assert 'off 38%' in line                            # and by how much
     assert 'Power' in line and 'want <= 0.0005' in line  # direction per spec
@@ -647,7 +647,7 @@ def test_metric_feedback_says_so_when_everything_is_met_or_nothing_ran():
     from app.core import llm_sizing
     good = dict(_M, dcgain=104.0, power=3.0e-4, phase_in_deg=60.0)
     assert llm_sizing.metric_feedback('amp_hoilee_affc', good) == \
-        'all 9 targets met'
+        'all 10 targets met'
     assert 'no metrics' in llm_sizing.metric_feedback('amp_hoilee_affc', None)
 
 

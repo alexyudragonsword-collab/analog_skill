@@ -31,14 +31,15 @@ like before touching anything.
 
 ## Open
 
-- An adaptive finish reserve. The finish takes its 90 evaluations from
-  the end of the search whether or not the search has converged; on
-  `ldo_basic` at seed 0 CMA-ES improved 1.08 → 0.84 in exactly those 90
-  and the finish, given them instead, reached 1.05. The signal is in
-  the run already — CMA-ES's own stop criteria, or simply "no
-  improvement in the last N evaluations" from the history — so the
-  finish could begin when the search stalls and not before, with the
-  full budget as the fallback. One measured loss; a small change.
+- Show the step response in the waves panel. Capture carries it
+  (`t_step`, `v_step`) since settling time became a target; the amp
+  panel is a 2x2 grid with no free cell, so it needs a fifth panel or a
+  tab.
+- Whether 2 µs is the right settling target across all fifteen
+  AnalogGym amplifiers. It is ~15 time constants at the shared 1.2 MHz
+  GBW target and was chosen on the reference amplifier's four
+  sizings; the 27-circuit sweep will show whether any well-compensated
+  amplifier misses it for a reason that is not a design fault.
 - Ranking models or prompts for the finish needs several runs per
   cell: the model call is not repeatable (two sonnet runs from one
   point, 37% and nothing). Three proposals a round now use that spread

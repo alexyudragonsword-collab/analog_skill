@@ -826,6 +826,21 @@ thirty evaluations. `FINISH_STOP_ON_STALL` is now off by default; the
 first measurement that put it on is above, uncorrected, with its
 correction beside it.
 
+### A ceiling is a guess about a cost; measure the cost instead
+
+The 90° phase-margin ceiling was put in because a 156° design met
+every AC target and was plainly wrong (dominant pole below 0.1 Hz,
+gain 144 dB). The ceiling caught it and nothing else — and the only
+argument for 90 rather than 100 or 120 was that 156 was on one side of
+it. What the design actually costs showed up the first time anyone
+stepped it: a unity-gain follower with a 100 mV step never settles
+(29 µs window, still 23 mV short), where 78–88° designs settle to 1%
+inside a microsecond and a 40° one rings with 31% overshoot and takes
+1.4 µs. One transient, +0.1 s per evaluation, and the guess became a
+number with both failure modes on its scale. The general form: when a
+constraint exists to exclude one bad design, ask what that design
+would cost a user, and measure that.
+
 ### A failed simulation that looks like the last successful one
 
 The LDO's CMA-ES trajectory would not reproduce between runs while the
