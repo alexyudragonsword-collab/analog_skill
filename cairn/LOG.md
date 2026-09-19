@@ -8,8 +8,9 @@ This file records substantive progress in reverse-chronological order — newest
   alone took both `ldo_basic` seeds to all targets met. ROADMAP:
   drop the restart code or retrigger it on the history's stall.
 - Released v1.6 (version bump, CHANGELOG section dated, workflow
-  dispatched with the release tag). CI is the first check of `cma` in
-  the frozen builds.
+  dispatched with the release tag). Build run 98 green, all six jobs
+  including the source-leak gate, with `cma` in the frozen builds;
+  Release published 2026-09-19 23:34 UTC.
 
 ## 2026-09-20 · The default on 26 circuits: 12 of 22 feasible, two bugs found
 
