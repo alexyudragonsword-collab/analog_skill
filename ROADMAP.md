@@ -57,25 +57,13 @@ like before touching anything.
   run at a new seed or budget is a data point for tightening them, and
   the saved runs carry seed and budget now, so the evidence accumulates
   without anyone doing anything.
-- `amp_hoilee_affc` under the 60–90° band is unsolved, and it is the
-  circuit, not the seed: three seeds land in three different basins
-  (over-compensated, under-compensated, offset far out), none feasible,
-  and making the band a hard constraint sends DE somewhere worse. The
-  best endpoint is seed 2 at 0.86 with only the offset short (271 µV vs
-  100) and the finish already having cut a third off it. The model's
-  rationale for stopping there — the input pair sets the offset and also
-  the metrics that are met — is plausible and unverified. Open because
-  nothing obvious is left to try at 616 evaluations; a much larger DE
-  budget at seed 2, or a settling-time metric replacing the 90° guess,
-  are the two candidates.
-- Where DE stalls far from feasible the finish has nothing to offer —
-  `amp_leung_nmcf` at seed 0, phase margin 5° — and that is the case
-  *Decided against* names as the reopening condition for a model inside
-  the search. The same circuit at seed 2 with 1200 evaluations reached
-  all nine targets (DE to 1.10, finish to 0 in two rounds, 15 minutes),
-  so on this circuit the answer was seed and budget, not a new
-  mechanism. Nothing to build; the spin box above is what makes that
-  sequence available without editing code.
+- Two entries that stood here are closed by later measurement and are
+  kept only as pointers: `amp_hoilee_affc` under the 60–90° band was
+  "unsolved, and it is the circuit" — CMA-ES then met every target on
+  it at both seeds in 600 evaluations (phase margin 87.6°), so it was
+  the search; and `amp_leung_nmcf` "where DE stalls far from feasible"
+  reached all nine targets at seed 2 with 1200 evaluations and the
+  finish. Both stories are in `cairn/pitfalls.md`.
 
 ## Ideas, not commitments
 
