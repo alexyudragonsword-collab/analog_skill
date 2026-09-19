@@ -2,6 +2,15 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-20 · Restarts never fire; v1.6
+
+- Four CMA-ES runs at 1200: no IPOP restart triggered in any; budget
+  alone took both `ldo_basic` seeds to all targets met. ROADMAP:
+  drop the restart code or retrigger it on the history's stall.
+- Released v1.6 (version bump, CHANGELOG section dated, workflow
+  dispatched with the release tag). CI is the first check of `cma` in
+  the frozen builds.
+
 ## 2026-09-20 · The default on 26 circuits: 12 of 22 feasible, two bugs found
 
 - Sweep done (about a day of simulator time). Feasible 12 of 22 under

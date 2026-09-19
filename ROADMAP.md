@@ -63,10 +63,13 @@ like before touching anything.
   rather than suffer it (three of three cases improved); a comparison
   of opus against sonnet under the three-proposal finish has not been
   run, and at one run per cell would not settle anything either.
-- CMA-ES's IPOP restarts are untested on this problem: at 600
-  evaluations no run stalled, so none restarted. A larger budget on
-  the circuits it leaves open would say whether the restart or the
-  budget is what moves them.
+- CMA-ES's IPOP restarts never fire: four runs at 1200 evaluations,
+  none stopped on pycma's tolerances, and the budget alone closed both
+  LDO seeds (`cairn/pitfalls.md`). Either drop the restart code as
+  unreachable, or retrigger it on the history's stall signal
+  (`STALL_EVALS`) the way the finish is — a restart from a fresh point
+  with a doubled population after 60 flat evaluations is the IPOP idea
+  with a criterion that actually happens here. Unmeasured either way.
 - Whether *Try next*'s thresholds are right: three seeds before more
   budget, "close" as two misses none over 10%, budget doubling (or the
   same budget again when the run can be continued). They

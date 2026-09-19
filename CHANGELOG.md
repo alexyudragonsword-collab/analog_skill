@@ -5,7 +5,23 @@ development milestones and were never tagged — v1.4 is the first release;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
-## vNext — unreleased
+## v1.6 — 2026-09-20
+
+The search changed under this release and so did what it measures. The
+two entries that matter to every user first: **a failed LDO simulation
+used to report the previous point's numbers** (fixed below — every LDO
+result from before this release is suspect), and **settling time is now
+a target**, measured on a real step, which retired the phase-margin
+ceiling and with it a whole class of over-compensated "feasible"
+designs. Then the default search: **CMA-ES**, feasible on 12 of 18
+circuit-seed rows against DE's 6 in the comparison, and on 12 of 22
+circuits in a full sweep; with an **AI finish** behind it when a model
+is configured, which asks three proposals a round and searches along
+each. The Sizing tab names what is still short after a run and offers
+the next step — seed, budget, finish — in one click, and a DE run can be
+continued from its saved population. Known defect, unchanged in this
+release: the four LDO variants' metric mapping is wrong; their numbers
+should not be believed until it is read off each testbench.
 
 - **Changed — no phase-margin ceilings anywhere.**  The amplifiers' went
   when settling time began measuring what over-compensation costs; the
@@ -180,7 +196,10 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
     then the best population continued with the other half.  Needs
     twelve generations of budget (4 × dims each); below that it runs
     plain DE and says so in the notes.
-  All four record their account in the run's notes.
+  All four record their account in the run's notes.  (CMA-ES's IPOP
+  restarts turned out never to fire on this problem — four runs at
+  1200 evaluations, none stopped on pycma's tolerances, and the budget
+  alone closed both LDO seeds; ROADMAP has the two options.)
 
   Measured, nine circuits, two seeds, the shipped path (tables and
   reading in `cairn/pitfalls.md`): **CMA-ES reaches feasibility on 12

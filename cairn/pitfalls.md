@@ -826,6 +826,28 @@ thirty evaluations. `FINISH_STOP_ON_STALL` is now off by default; the
 first measurement that put it on is above, uncorrected, with its
 correction beside it.
 
+### IPOP restarts never fire here; budget does the work
+
+CMA-ES alone at 1200 evaluations on the four rows it left open at 600
+(ten-target spec):
+
+| row | @600 | @1200 | restarts |
+|---|---|---|---|
+| amp_leung_nmcf s1 | 0.8965 | 0.7960 | none |
+| amp_ramos_pfc s0 | 0.5781 | 0.5299 | none |
+| ldo_basic s0 | 0.8397 | **0, all 8 met** | none |
+| ldo_basic s1 | 0.8043 | **0, all 8 met** | none |
+
+Not one run stopped on pycma's own criteria (`tolfun` 1e-6, `tolx`
+1e-4) in 1200 evaluations: the search keeps finding hairs of
+improvement, so the restart machinery — twice the population from a
+fresh point — is dead code on this problem at these budgets. What
+moved the rows was the budget itself: both LDO seeds reach every
+target by 1000. The lesson is the same as the finish's: "stalled" on
+this cost surface has to be defined by the history (no new best in N
+evaluations), not by the optimizer's internal tolerances, and if a
+restart is ever wanted here it should trigger on that.
+
 ### The default on every circuit, once
 
 `cmaes_llm_finish` as shipped — three proposals a round, finish on
