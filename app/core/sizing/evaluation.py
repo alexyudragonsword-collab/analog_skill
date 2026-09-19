@@ -310,10 +310,18 @@ def _clear_outputs(run: Path, spec: SizingSpec):
     that way, and every LDO search result before this carried such
     phantoms.  Wave dumps get the same treatment for the same reason.
     """
+    # never the deck or the params: two LDO variants name their testbench
+    # after the wrdata prefix (ldo_simple_acdc.cir / ldo_simple_*), and
+    # the first version of this deleted the rendered deck before ngspice
+    # read it — every evaluation "produced no metrics" and a sweep scored
+    # both circuits 95 at every point
+    keep = {'.cir', '.spice', '.sp', '.lib', '.txt'}
     for p in [run / 'log.txt', run / 'step.dat'] + list(
             run.glob('waves_*.dat')) + (
             list(run.glob(f'{spec.wrdata_prefix}_*'))
             if spec.wrdata_prefix else []):
+        if p.suffix in keep and p.name != 'log.txt':
+            continue
         try:
             p.unlink()
         except FileNotFoundError:
@@ -335,10 +343,10 @@ def evaluate(circuit: str, values: dict, slot: int = 0,
     paths.ensure_sky130()
     run = _run_dir(circuit) if slot == 0 else _run_dir(circuit) / f'w{slot}'
     run.mkdir(parents=True, exist_ok=True)
+    _clear_outputs(run, spec)                # before anything is written
     _write_params(spec, values, run / 'params.spice')
     tb = _render_testbench(spec, run, single_thread=single_thread)
     log = run / 'log.txt'
-    _clear_outputs(run, spec)
     subprocess.run([_ngspice_cmd(), '-o', str(log), '-b', str(tb)],
                    cwd=run, capture_output=True, timeout=300)
     metrics = _parse_meas_log(log)
@@ -383,10 +391,10 @@ def capture_waves(circuit: str, values: dict, tag: str) -> dict:
     paths.ensure_sky130()
     run = _run_dir(circuit) / f'waves_{tag}'
     run.mkdir(parents=True, exist_ok=True)
+    _clear_outputs(run, spec)
     _write_params(spec, values, run / 'params.spice')
     tb = _render_testbench(spec, run, dump_waves=True)
     log = run / 'log.txt'
-    _clear_outputs(run, spec)
     subprocess.run([_ngspice_cmd(), '-o', str(log), '-b', str(tb)],
                    cwd=run, capture_output=True, timeout=300)
     out: dict = {'kind': spec.kind, 'metrics': _parse_meas_log(log)}

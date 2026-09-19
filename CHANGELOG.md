@@ -42,6 +42,15 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   leaves goes back to a CMA-ES restarted from the finished point with a
   tight step, so the budget is spent.
 
+- **Fixed — the output clearing no longer deletes the deck.**  Two LDO
+  variants name their testbench after their wrdata prefix
+  (`ldo_simple_acdc.cir`, `ldo_simple_*`), and the first version of the
+  clearing below removed the rendered deck before ngspice read it: every
+  evaluation of `ldo_simple` and `ldo_folded_cascode` "produced no
+  metrics" and a sweep scored both 95 at every point.  Clearing now
+  happens before anything is written and never touches decks or
+  parameter files; the variant test covers `ldo_simple`.
+
 - **Fixed — circuit-skills evaluations clear the simulators' output
   files first.**  The same shape as the LDO phantom below: the vendored
   simulators write fixed filenames and parse whatever is there.  An

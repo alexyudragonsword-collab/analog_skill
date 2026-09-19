@@ -249,11 +249,13 @@ def test_amp_variant_evaluate():
 @needs_ngspice
 def test_ldo_variant_evaluate():
     """ldo_1 exercises the ../simulations/ include mapping and the
-    _ACDC wrdata prefix."""
-    values = {v.name: v.default for v in sizing.parse_variables('ldo_1')}
-    m = sizing.evaluate('ldo_1', values)
-    for k in ('pm_maxload', 'gbw_maxload', 'lnr', 'lr', 'iq'):
-        assert k in m, k
+    _ACDC wrdata prefix; ldo_simple names its testbench after its wrdata
+    prefix, which the output clearing once deleted before ngspice ran."""
+    for key in ('ldo_1', 'ldo_simple'):
+        values = {v.name: v.default for v in sizing.parse_variables(key)}
+        m = sizing.evaluate(key, values)
+        for k in ('pm_maxload', 'gbw_maxload', 'lnr', 'lr', 'iq'):
+            assert k in m, (key, k)
 
 
 @needs_ngspice
