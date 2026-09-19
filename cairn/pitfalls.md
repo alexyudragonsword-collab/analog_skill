@@ -895,8 +895,8 @@ last 90 evaluations and the finish, given those 90 instead, got to
 1.05. The reserve is taken from the search whether or not the search
 has converged, and here it had not. No row closed. Twelve rows were
 already feasible and cost the finish nothing. Feasible count 12 of 18,
-same as CMA-ES alone; sum of costs 3.05 against 4.28 — hmm, with the
-corrected LDO rows: finish 3.02 against CMA-ES's 3.85.
+same as CMA-ES alone; sum of costs over the 18 rows 4.25 against
+CMA-ES's 4.70, LDO rows from the fixed reader in both.
 
 What this says about the default: `cmaes_llm_finish` is the right
 default for a user with a model configured — four of six open rows
