@@ -796,6 +796,36 @@ small when it does", against one model call and six to sixteen
 evaluations per round. It stays, as a default and not a law, and the
 switch exists for whoever wants the rounds anyway.
 
+### Three proposals a round: the spread, used
+
+Built on the repeatability finding: each round asks the same question
+three times in parallel, scans all three directions in one batch,
+refines the best. Same three endpoints, sonnet, three rounds:
+
+| case | start | ×1, stall rule | ×1, 3 rounds | opus ×1, 3 rounds | **×3, 3 rounds** |
+|---|---|---|---|---|---|
+| amp_leung_nmcf s1 | 1.0338 | 1.0338 | 1.0338 | 0.9971 | **0.8901** (round 1) |
+| amp_ramos_pfc s1 | 0.4471 | 0.2836 | 0.4471 | 0.4471 | **0.2519** (round 2, after a failed round 1) |
+| ldo_basic s0 | 0.7390 | 0.7390 | 0.7009 | **0.5778** | 0.6638 (rounds 1 and 2) |
+| evaluations | | 6–12 | 18–24 | 18–30 | 60–66 |
+| wall | | | 7–9 min | 4–7 min | 10–14 min |
+
+Three of three improved, by 14%, 44% and 10% — the first column in
+this whole series to improve every case — and best of all five on two.
+The cost is evaluations (three lines scanned a round) and some wall
+clock: three concurrent CLI calls do slow each other. What it buys is
+what the repeatability row predicted: on `amp_ramos_pfc`, one draw
+found the 37% cut once in two tries; three draws found 44%.
+
+**The stall rule, turned off.** `amp_ramos_pfc`'s win came in round
+2 after a round 1 in which none of three lines improved — the third
+time a round after a failure paid, now 3 of 6 chances, and the largest
+gain of the three. With three proposals a round, a failed round is
+three draws, not a verdict; the next costs three parallel calls and
+thirty evaluations. `FINISH_STOP_ON_STALL` is now off by default; the
+first measurement that put it on is above, uncorrected, with its
+correction beside it.
+
 ### SciPy batches a constraint only in vectorized mode
 
 `differential_evolution(constraints=...)` documents that a constraint

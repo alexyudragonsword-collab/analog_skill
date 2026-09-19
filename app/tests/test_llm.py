@@ -881,10 +881,12 @@ def test_finish_rounds_continue_from_the_new_best_with_history():
     assert state['dispatched'] <= budget
 
 
-def test_finish_ends_after_a_round_that_improved_nothing(monkeypatch):
-    """Measured on eight circuits: the round after a failed round failed
-    too, five times of five.  So a failed round ends the finish, and the
-    model is not asked again; the remaining reserve goes unspent."""
+def test_finish_keeps_asking_after_a_failed_round_unless_told_not_to(
+        monkeypatch):
+    """A first measurement said the round after a failed round always
+    fails; asked anyway, later runs improved after a failure three times
+    in six, once by 44%.  So a failed round no longer ends the finish by
+    default; FINISH_STOP_ON_STALL restores the old behaviour."""
     from app.core import llm_sizing
     budget = llm_sizing.finish_reserve()
     variables, state, run_batch, evaluated = _finish_harness(
@@ -895,22 +897,22 @@ def test_finish_ends_after_a_round_that_improved_nothing(monkeypatch):
     note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
                                  state=state, run_batch=run_batch,
                                  budget=budget, workers=4, chat=fake_chat)
-    assert len(calls) == llm_sizing.FINISH_PROPOSALS
-    assert note.count('round ') == 1
-    assert 'no point along any improved' in note
+    assert len(calls) == llm_sizing.FINISH_ROUNDS * llm_sizing.FINISH_PROPOSALS
+    assert note.count('no point along any improved') == llm_sizing.FINISH_ROUNDS
     assert state['best'] == 2.3                   # the search result survives
-    # the coarse scan and nothing more: no refining toward the start
+    # a failed line is scanned once and never refined toward the start,
+    # and the same wrong proposal is not paid for again in later rounds
     assert len(evaluated) <= len(llm_sizing.FINISH_ALPHAS)
 
-    # an experiment can ask for every round regardless
-    monkeypatch.setattr(llm_sizing, 'FINISH_STOP_ON_STALL', False)
+    monkeypatch.setattr(llm_sizing, 'FINISH_STOP_ON_STALL', True)
     variables, state, run_batch, evaluated = _finish_harness(
         5.0, lambda w: abs(w - 7.3), budget)
     calls.clear()
     note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
                                  state=state, run_batch=run_batch,
                                  budget=budget, workers=4, chat=fake_chat)
-    assert len(calls) == llm_sizing.FINISH_ROUNDS * llm_sizing.FINISH_PROPOSALS
+    assert len(calls) == llm_sizing.FINISH_PROPOSALS
+    assert note.count('round ') == 1
 
 
 def test_finish_stops_at_zero_and_leaves_the_rest_of_the_budget():

@@ -37,11 +37,12 @@ like before touching anything.
   fail under load and return inf, every search on it is a little
   random and a "seed" means less there; two more runs of `ldo_basic
   cmaes` at seed 0 with the ngspice logs kept would settle it.
-- The finish's model call is not repeatable: two sonnet runs from one
-  point gave 37% and nothing. Each round now asks three times and keeps
-  the best line (`FINISH_PROPOSALS`); measured on the three CMA-ES
-  endpoints next. Ranking models or prompts for the finish still needs
-  several runs per cell.
+- Ranking models or prompts for the finish needs several runs per
+  cell: the model call is not repeatable (two sonnet runs from one
+  point, 37% and nothing). Three proposals a round now use that spread
+  rather than suffer it (three of three cases improved); a comparison
+  of opus against sonnet under the three-proposal finish has not been
+  run, and at one run per cell would not settle anything either.
 - CMA-ES's IPOP restarts are untested on this problem: at 600
   evaluations no run stalled, so none restarted. A larger budget on
   the circuits it leaves open would say whether the restart or the

@@ -381,10 +381,13 @@ FINISH_EVALS = 30
 #: while they keep paying — amp_fan_smc took three to reach cost 0.
 FINISH_ROUNDS = 3
 
-#: whether a round that improved nothing ends the finish.  On by the
-#: 5-of-6 measurement above; off is for experiments that want every
-#: round asked regardless.
-FINISH_STOP_ON_STALL = True
+#: whether a round that improved nothing ends the finish.  It was on,
+#: by a first measurement in which the round after a failed one failed
+#: five times of five; asked every round anyway, later runs improved
+#: after a failure three times in six, once by 44%.  With three
+#: proposals a round, a failed round is three draws, not a verdict, and
+#: the next one costs three parallel calls and thirty evaluations.  Off.
+FINISH_STOP_ON_STALL = False
 
 #: where along the model's direction to look first.  0 is the search's
 #: best point, 1 is the proposal as written; the measured proposals
@@ -511,8 +514,8 @@ def run_finish(circuit: str, variables: list[VarSpec], overrides,
     a point; one coarse scan covers them all and the best line is
     refined.  Earlier rounds are told to the model in the next prompt so
     it does not repeat itself; a round that meets every target ends the
-    finish, and so does one that improves nothing (measured: usually
-    the next fails too, and gains little when it does not).  Re-running
+    finish (a round that improves nothing does not, by default: see
+    FINISH_STOP_ON_STALL).  Re-running
     the search instead would return the same converged point, which is
     why the continuation is another question, not more DE.
     """

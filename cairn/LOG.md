@@ -2,6 +2,17 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-19 · Three proposals a round: 3 of 3 improved; stall rule off
+
+- Same three CMA-ES endpoints, sonnet, three rounds: 1.03 → 0.89,
+  0.45 → 0.25, 0.74 → 0.66 — the first finish variant to improve every
+  case, best of five columns on two. 60–66 evaluations, 10–14 min.
+- ramos's win came after a failed round: 3 of 6 now, largest gain of
+  all. `FINISH_STOP_ON_STALL` default flipped to off; recorded as a
+  correction beside the original. Test flipped with it.
+- Container restarted once more mid-run; the resumable script lost
+  nothing. Table in `cairn/pitfalls.md`.
+
 ## 2026-09-19 · The finish asks three times per round
 
 - Maintainer said build it. `FINISH_PROPOSALS = 3`: parallel calls,

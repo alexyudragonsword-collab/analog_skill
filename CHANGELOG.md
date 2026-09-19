@@ -18,8 +18,17 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   per-round reserve rises to 30 evaluations (from 16), the search phase
   holds back 90; wall clock per round is unchanged, since the calls run
   concurrently.  The Sizing tab's estimate says "3 AI rounds of 3
-  calls".  Not yet measured; the three CMA-ES endpoints from the
-  opus/sonnet comparison are the test and the run is in progress.
+  calls".  Measured on the three CMA-ES endpoints from the opus/sonnet
+  comparison: **three of three improved** (14%, 44%, 10%) where one
+  proposal a round had improved one of three; table in
+  `cairn/pitfalls.md`.
+
+- **Changed — a round that improves nothing no longer ends the finish**
+  (`FINISH_STOP_ON_STALL` is off).  The rule rested on five of five;
+  asked anyway, the round after a failure has now paid three times in
+  six, once by 44%.  With three proposals a round a failed round is
+  three draws, not a verdict, and the next costs three parallel calls
+  and thirty evaluations.
 
 - **Changed — CMA-ES is the default search** when the `cma` package is
   present, with the AI finish behind it when a model is configured
