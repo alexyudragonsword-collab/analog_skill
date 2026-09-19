@@ -31,6 +31,23 @@ like before touching anything.
 
 ## Open
 
+- The four LDO variants' metric mapping. `_ldo_metrics` reads every
+  variant's `<prefix>_LR_Power_vos` and the rest in `ldo_basic`'s
+  column order; at the shipped defaults that yields output errors of
+  −4.8 to −5.7 V and load regulation of 4–15 V/A, so the columns are
+  not what the reader assumes. Read each variant testbench's `wrdata`
+  lines, map them, and add a default-sizing sanity test per variant
+  (output within a few hundred millivolts of its reference). Until
+  then the variants are in the menu but every number from them is
+  wrong.
+- Whether the settling target should be 2 or 2.5 µs. Four amplifiers
+  end within 0.5 µs of 2 µs with everything else met; 2.5 would make
+  two of them feasible. Set on one circuit; the sweep table is the
+  evidence for the call.
+- A load-step settling metric for the LDOs, the honest replacement for
+  the ceiling that was removed: step the load 5 → 55 mA and measure
+  the output's settling and droop.  The testbench seam that carries
+  the amplifiers' step works the same way.
 - Show the step response in the waves panel. Capture carries it
   (`t_step`, `v_step`) since settling time became a target; the amp
   panel is a 2x2 grid with no free cell, so it needs a fifth panel or a

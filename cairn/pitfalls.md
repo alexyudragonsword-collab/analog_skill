@@ -826,6 +826,59 @@ thirty evaluations. `FINISH_STOP_ON_STALL` is now off by default; the
 first measurement that put it on is above, uncorrected, with its
 correction beside it.
 
+### The default on every circuit, once
+
+`cmaes_llm_finish` as shipped — three proposals a round, finish on
+stall, CMA-ES resumed after it — on every registered circuit but the
+160 s/evaluation comparator, seed 0, 600 evaluations (400 OTA, 120
+circuit-skills, 60 the bootstrap switch), the ten-target amplifier
+spec with settling time:
+
+| circuit | cost | what is short |
+|---|---|---|
+| amp_hoilee_affc | **0** | — |
+| amp_leung_nmcf | 0.9573 | phase margin 30°, power 20% over |
+| amp_leung_nmcnr | 0.2305 | settling 2.46 µs |
+| amp_leung_dfcfc1 | 0.5062 | power 30%, gain 92 dB, GBW |
+| amp_leung_dfcfc2 | **0** | — |
+| amp_peng_acbc | **0** | — |
+| amp_peng_iac | **0** (280 evals) | — |
+| amp_peng_tcfc | **0** (208 evals) | — |
+| amp_qu2017_azc | 0.0067 | settling 2.013 µs |
+| amp_ramos_pfc | 0.5396 | power 48%, settling 2.12 µs |
+| amp_sau_cfcc | 0.5951 | gain 85 dB, offset, tempco |
+| amp_song_dacfc | 0.2581 | phase margin 55°, settling 2.25 µs |
+| amp_yan_az | **0** | — |
+| amp_fan_smc | **0** (126 evals) | — |
+| amp_alfio_raffc | **0** (265 evals) | — |
+| ldo_basic | **0** | — (0.18 with the LDO ceiling that went the same day) |
+| skill_ota5t / opamp2 | **0** / **0** | — |
+| skill_ldo | 0.1270 | loop gain 52 of 55 dB, PSRR 57 of 60 |
+| skill_comparator_fast | 0.8994 | latch τ 8.5 of 6 ps, width |
+| skill_bootstrap | 0.0683 | Ron ratio 1.26 of 1.2 |
+| studio_cm_ota | **0** (96 evals) | — |
+
+**Twelve of twenty-two feasible**, five of them with the search ending
+early on stall at cost 0 (126–280 evaluations instead of 600: the
+stall rule pays both ways). The four LDO variants are missing from the
+table on purpose: at their *shipped defaults* they report output
+errors of −4.8 to −5.7 V against a 1.8 V supply and load regulation of
+4–15 V/A, which is not a circuit but a metric mapping — `_ldo_metrics`
+reads the variants' wrdata columns in `ldo_basic`'s order and the
+variants do not write them that way. Registered since v1.4 and never
+run until now; ROADMAP has it, and nothing measured on them counts.
+
+Two readings. First, the settling target is tight: four amplifiers end
+within 0.5 µs of the 2 µs with everything else met, and two of those
+(`amp_qu2017_azc` at 2.013 µs, `amp_leung_nmcnr` at 2.46 µs) would be
+feasible at 2.5 µs. The number is ~15 time constants at the GBW
+target and was set on one circuit; whether 2 or 2.5 is right is a
+design call, and the table is the evidence for making it. Second, the
+sweep's cost was one day of simulator time and it found two bugs of
+mine (the deleted deck, the variants' mapping) that no nine-circuit
+protocol would have. A default is a claim about every circuit; test it
+on every circuit.
+
 ### A ceiling is a guess about a cost; measure the cost instead
 
 The 90° phase-margin ceiling was put in because a 156° design met

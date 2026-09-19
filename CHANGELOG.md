@@ -7,6 +7,28 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **Changed — no phase-margin ceilings anywhere.**  The amplifiers' went
+  when settling time began measuring what over-compensation costs; the
+  LDO and circuit-skills bands (60–90°) were the same guess without the
+  measurement, and `ldo_basic`'s only misses in the full sweep were
+  phase margins of 94° and 97°.  Floors of 60° stay.  The LDO's honest
+  replacement is a load-step settling metric (ROADMAP).
+
+- **Measured — the default on every circuit** (`cairn/pitfalls.md`, "The
+  default on every circuit, once"): 12 of 22 feasible at seed 0, five
+  of them with the search stopping early at cost 0.  The four LDO
+  variants are excluded: their metric mapping is wrong at the shipped
+  defaults (output error −5 V on a 1.8 V supply) and is recorded as a
+  defect below.
+
+- **Known defect — the four LDO variants' metrics.**  `ldo_simple`,
+  `ldo_1`, `ldo_2` and `ldo_folded_cascode` have been registered since
+  v1.4 with `ldo_basic`'s wrdata column order, which their testbenches
+  do not follow; their offset and regulation numbers are not the
+  quantities the labels say.  Found by the first sweep that ran them.
+  They stay in the menu; nothing measured on them should be believed
+  until the mapping is read off each testbench.
+
 - **Changed — settling time replaces the phase-margin ceiling.**  Every
   amplifier evaluation now also steps a unity-gain follower by 100 mV
   (an instance the app appends to the rendered testbench, driven from

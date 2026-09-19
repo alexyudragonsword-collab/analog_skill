@@ -2,6 +2,19 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-20 · The default on 26 circuits: 12 of 22 feasible, two bugs found
+
+- Sweep done (about a day of simulator time). Feasible 12 of 22 under
+  the ten-target spec; five stopped early at cost 0. Found: the output
+  clearing deleted two LDO variants' decks (fixed, tested); the four
+  LDO variants' metric mapping is wrong at the shipped defaults (−5 V
+  output error) — registered since v1.4, never run before; recorded as
+  a known defect, ROADMAP has the fix. All remaining phase-margin
+  ceilings removed (LDO, circuit-skills) — `ldo_basic` becomes
+  feasible; a ceiling nothing measures is a guess.
+- Settling target 2 µs is tight on four amplifiers; ROADMAP asks the
+  2-or-2.5 question with the table. IPOP restart runs still going.
+
 ## 2026-09-20 · Six asks: settling time, stall-triggered finish, skill audit
 
 - Maintainer said do all six. Done in code so far: (2) the finish

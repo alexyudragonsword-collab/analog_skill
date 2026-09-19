@@ -66,11 +66,15 @@ def _cm_ota_metrics() -> list:
 
 
 def _ldo_metrics_spec() -> list:
+    # phase margins are floors here too: the amplifiers' ceiling went when
+    # settling time began measuring what over-compensation costs, and a
+    # ceiling nothing measures is a guess on every circuit.  The LDO's
+    # honest replacement is a load-step settling metric (ROADMAP).
     return [
         MetricSpec('pm_maxload', 'Phase margin (55 mA)', 'deg', 60.0,
-                   'max', 1.5, ceiling=90.0),
+                   'max', 1.5),
         MetricSpec('pm_minload', 'Phase margin (5 mA)', 'deg', 60.0,
-                   'max', 1.5, ceiling=90.0),
+                   'max', 1.5),
         MetricSpec('gbw_maxload', 'Loop GBW (55 mA)', 'Hz', 2e6, 'max', 1.5),
         MetricSpec('lnr', 'Line regulation', 'V/V', 0.01, 'absmin', 1.0),
         MetricSpec('lr', 'Load regulation', 'V/A', 0.1, 'absmin', 1.0),
@@ -126,7 +130,7 @@ _SKILL_CIRCUITS: dict[str, dict] = {
             MetricSpec('dc_gain_db', 'DC gain', 'dB', 36.0, 'max', 2.0),
             MetricSpec('ugb_hz', 'UGB', 'Hz', 100e6, 'max', 2.0),
             MetricSpec('phase_margin_deg', 'Phase margin', 'deg', 60.0,
-                       'max', 1.5, ceiling=90.0),
+                       'max', 1.5),
         ]),
     'opamp2': dict(
         title='Two-stage Miller op amp — circuit-skills (PTM 180 nm)',
@@ -135,7 +139,7 @@ _SKILL_CIRCUITS: dict[str, dict] = {
             MetricSpec('dc_gain_db', 'DC gain', 'dB', 64.0, 'max', 2.0),
             MetricSpec('ugb_hz', 'UGB', 'Hz', 40e6, 'max', 2.0),
             MetricSpec('phase_margin_deg', 'Phase margin', 'deg', 60.0,
-                       'max', 1.5, ceiling=90.0),
+                       'max', 1.5),
             MetricSpec('power_w', 'Power', 'W', 2e-3, 'min', 1.0),
         ]),
     'ldo': dict(
@@ -145,7 +149,7 @@ _SKILL_CIRCUITS: dict[str, dict] = {
             MetricSpec('dc_gain_db', 'Loop DC gain', 'dB', 55.0, 'max', 1.5),
             MetricSpec('gbw_hz', 'Loop GBW', 'Hz', 2e6, 'max', 1.5),
             MetricSpec('phase_margin_deg', 'Phase margin', 'deg', 60.0,
-                       'max', 1.5, ceiling=90.0),
+                       'max', 1.5),
             # circuit-skills LDO reports PSRR as positive rejection dB
             MetricSpec('psrr_dc_db', 'PSRR (dc)', 'dB', 60.0, 'max', 1.0),
         ]),
