@@ -762,6 +762,40 @@ amplifiers say the search is deterministic; the LDO says something in
 its evaluation is not — a simulation that failed once under load is
 the likely candidate, not verified.
 
+### Opus against sonnet on the finish: inside one model's own spread
+
+The maintainer asked whether the diagnosis is model-sensitive. The
+same three CMA-ES endpoints, the finish alone with 48 evaluations,
+every round asked (`FINISH_STOP_ON_STALL = False`), one run per cell:
+
+| case | start | opus, 3 rounds | sonnet, 3 rounds | sonnet earlier, stall rule |
+|---|---|---|---|---|
+| amp_leung_nmcf s1 | 1.0338 | **0.9971** (rounds 1 and 3) | 1.0338 | 1.0338 (1 round) |
+| amp_ramos_pfc s1 | 0.4471 | 0.4471 | 0.4471 | **0.2836** (round 1) |
+| ldo_basic s0 | 0.7390 | **0.5778** (rounds 1 and 2) | 0.7009 (round 2) | 0.7390 (1 round) |
+| wall, three rounds | | 4–7 min | 7–9 min | |
+
+Opus improved two of three, by 4% and 22%; sonnet with every round
+asked improved one, by 5%. The row that decides how to read this is
+`amp_ramos_pfc`: **sonnet's two runs from the same point disagree with
+each other** — 37% off in one, nothing in three rounds of the other,
+with the first round naming the same three variables both times and
+proposing different amounts. A model's proposal is not repeatable
+call to call, and that spread (37 points on one row) is larger than
+any difference between the two models here. One run per cell cannot
+rank them; the honest statement is that opus was faster per call at
+the default effort (an hour of calls said so consistently) and not
+measurably better.
+
+**Correction to the stall rule's record.** With every round asked, a
+round after a failed round improved twice in five chances — opus's
+round 3 on `amp_leung_nmcf` (1.5%) and sonnet's round 2 on the LDO
+(5%) — where the first sweep had seen none in five. "Five of five"
+was the small-sample reading; the rule now rests on "usually not, and
+small when it does", against one model call and six to sixteen
+evaluations per round. It stays, as a default and not a law, and the
+switch exists for whoever wants the rounds anyway.
+
 ### SciPy batches a constraint only in vectorized mode
 
 `differential_evolution(constraints=...)` documents that a constraint

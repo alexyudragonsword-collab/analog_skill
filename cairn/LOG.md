@@ -2,6 +2,19 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-19 · Opus vs sonnet on the finish: not separable at n=1
+
+- Same three CMA-ES endpoints, finish alone, three rounds forced.
+  Opus 2 of 3 improved (4%, 22%), sonnet 1 of 3 (5%); sonnet's earlier
+  stall-rule run had cut ramos 37% from the same point and its repeat
+  found nothing — the model's own call-to-call spread exceeds any
+  opus/sonnet difference. Opus faster per call. Table in pitfalls.
+- Stall rule corrected: a round after a failed round improved 2 of 5
+  times here (small); rule kept as a default, switch recorded.
+- A container restart killed the sonnet run mid-way; the script now
+  resumes from its result file. A queued runner also never started —
+  its own `pgrep` matched itself; the third time this bit this session.
+
 ## 2026-09-19 · The CMA-ES finish on its three cases
 
 - Maintainer asked for it. `amp_ramos_pfc` s1 0.4471 → 0.2836 (one
