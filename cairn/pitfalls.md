@@ -1058,6 +1058,42 @@ the default stays CMA-ES.
 Same lesson as the finish and the seed portfolio: an evaluation-count
 win has to be re-read as a minute count before it means anything here.
 
+**The batch-fill fix, measured** (same day, `plan-s2`, same eight
+circuits, seed 0, 600 evaluations): each surrogate step rounded up to
+whole waves of four workers.
+
+| circuit | CMA-ES @600 (wall) | lq unfilled @600 (wall) | lq filled @600 (wall) | filled: gens / evaluated |
+|---|---|---|---|---|
+| amp_leung_nmcf | 1.285 (10.9) | **0.851** (21.0) | 1.128 (10.3) | 54 / 85 % |
+| amp_peng_tcfc | 0 (14.9) | 0 (29.1) | 0 (14.7) | 51 / 90 % |
+| amp_ramos_pfc | **0.578** (11.2) | 1.291 (22.4) | 0.971 (10.3) | 51 / 90 % |
+| amp_fan_smc | 0 (11.5) | 0 (21.7) | 0 (12.0) | 50 / 92 % |
+| studio_cm_ota | 0 (3.9) | 0 (8.2) | 0 (3.4) | 53 / 94 % |
+| ldo_basic | 1.048 (10.0) | **0** (21.6) | 0.889 (9.0) | 55 / 91 % |
+| skill_ota5t / opamp2 | 0 / 0 | 0 / 0 | 0 / 0 | serial, unchanged |
+
+The wall clock is fixed: every parallel row now runs in CMA-ES's time.
+What fixed it is also what removed the benefit. With steps of four the
+Kendall check passes rarely, so the surrogate evaluates 85–94 % of
+each population instead of 58–68 %, gets 51–55 generations from 600
+instead of 73–80, and lands between the two: against CMA-ES still 2–1
+with five ties (nmcf 1.13 vs 1.28, ldo_basic 0.89 vs 1.05, ramos 0.97
+vs 0.58) but by margins a second seed could erase, and it lost the one
+result that mattered — ldo_basic to all targets met. The step sizes
+tell the mechanism: `1×40 4×138 8×1` per run, i.e. three waves of four
+and one leftover (13 = 3 × 4 + 1) every generation, the same idle
+last wave plain CMA-ES has.
+
+So the conclusion holds and is now measured both ways: lq-CMA-ES saves
+evaluations, and evaluations are not what this project pays in. At
+equal wall clock it is CMA-ES with a different ranking rule, not
+separable from CMA-ES on one seed. It stays in the menu as a pilot and
+the default stays. If the surrogate is ever to pay here, the lever is
+the population's shape, not the model: a population that is a multiple
+of the worker count (16 on four workers, not 13) would remove the idle
+wave for *both* algorithms — worth measuring for the default before
+anything model-shaped is revisited.
+
 ### A ceiling is a guess about a cost; measure the cost instead
 
 The 90° phase-margin ceiling was put in because a 156° design met

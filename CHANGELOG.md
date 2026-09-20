@@ -20,7 +20,9 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   clock on every parallel circuit because pycma's tau-check schedule
   (1, 2, 3, 5 points a step) left workers idle. Each step is now
   filled to whole waves of `workers` points (4, 8, 12 on four workers);
-  the run notes list the step sizes (`cairn/pitfalls.md`).
+  the run notes list the step sizes. Measured again: the wall clock
+  now matches CMA-ES, and so does the result — 2–1 with five ties by
+  small margins on one seed (`cairn/pitfalls.md`). Stays a pilot.
 - **The four LDO variants report their own numbers now.** Every vendored
   LDO deck prints its output error as `vout − 4·Vref` and its quiescent
   current off a 1.8 V supply and a 5 mA floor — Basic_LDO's arithmetic,

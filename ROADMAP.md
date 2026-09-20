@@ -40,14 +40,14 @@ like before touching anything.
   before it is a regulation one. Whether to keep Basic_LDO's targets on
   the variants, or give each its own (LNR window, GBW at 10 mA), is a
   design call to make with a sweep of the four at the new numbers.
-- `cmaes_surrogate` (lq-CMA-ES) fills its workers. Measured 2–1 per
-  evaluation against CMA-ES on the eight-circuit protocol but twice the
-  wall clock on every parallel circuit: the surrogate loop evaluates
-  1, 2, 3, 5 … points between Kendall-tau checks and idles three of
-  four workers. Fill each step to at least `workers` points, measure
-  again at equal wall time (not equal evaluations), and only then
-  decide whether it replaces CMA-ES as the default. One seed per
-  circuit so far.
+- Population size as a multiple of the worker count. Both CMA-ES and
+  the lq-CMA-ES pilot run 13 points per generation on four workers:
+  three full waves and one point alone, an idle last wave every
+  generation. Measure the default with `popsize` rounded up to 16 at
+  equal wall clock (not equal evaluations) before anything else is
+  done to the search. The lq-CMA-ES pilot is measured both ways (twice
+  the wall clock unfilled; filled, indistinguishable from CMA-ES at
+  equal wall clock) and stays in the menu as a pilot.
 - Whether the settling target should be 2 or 2.5 µs. Four amplifiers
   end within 0.5 µs of 2 µs with everything else met; 2.5 would make
   two of them feasible. Set on one circuit; the sweep table is the

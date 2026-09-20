@@ -2,6 +2,19 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-20 · Batch-fill measured: wall clock fixed, benefit gone
+
+- Filled lq-CMA-ES on the eight circuits: every parallel row now in
+  CMA-ES's wall time (10.3 vs 10.9 min etc.), but the surrogate then
+  evaluates 85–94 % of each population and lands between CMA-ES and the
+  unfilled variant: 2–1 with five ties against CMA-ES by small margins,
+  and the ldo_basic all-met result is lost (0.89). Not separable from
+  CMA-ES at equal wall clock on one seed. Stays a pilot; default stays.
+  Table and the population-shape lever (13 → 16 on four workers, for
+  both algorithms) in `cairn/pitfalls.md`; ROADMAP updated. Two container
+  restarts killed the run twice; the runner is resumable and the wait
+  was done in the foreground.
+
 ## 2026-09-20 · cmaes_surrogate fills its workers
 
 - Maintainer said do the batch-fill fix first. Each surrogate step's

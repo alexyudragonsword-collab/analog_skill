@@ -495,10 +495,14 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         check runs after 4, 8, 12 with four workers, 1, 2, 3, 5 with
         one."""
         import cma
+        import warnings
         from collections import Counter
         from functools import partial
         from cma.fitness_models import (LQModel, SurrogatePopulation,
                                         SurrogatePopulationSettings as SP)
+        # the injected model optimum comes back in the next population
+        # now and then; the archive skips the duplicate and says so
+        warnings.filterwarnings('ignore', message='x value already in')
         rng = np.random.default_rng(seed)
         steps = Counter()
         lam = max(workers, 4 + int(3 * np.log(dims)))
