@@ -2,6 +2,16 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-20 · cmaes_surrogate fills its workers
+
+- Maintainer said do the batch-fill fix first. Each surrogate step's
+  cumulative count is rounded to whole waves of `workers` (4, 8, 12 on
+  four workers instead of pycma's 1, 2, 3, 5); skill circuits (serial)
+  unchanged; run notes list the step sizes; test on an amp-kind bowl
+  (skill circuits ignore `workers`). Gate 206 green. Measurement on the
+  eight circuits running (scratchpad `plan-s2`) against this morning's
+  CMA-ES and unfilled-surrogate rows.
+
 ## 2026-09-20 · GP pipeline evaluated: not worth building now
 
 - Asked to evaluate a Gaussian-process pipeline as such. Two numbers

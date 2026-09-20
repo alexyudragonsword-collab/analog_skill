@@ -1,6 +1,7 @@
 """Tests for the AnalogGym sizing adapter (Sizing tab core)."""
 
 import os
+import re
 import shutil
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
@@ -1220,8 +1221,28 @@ def test_cmaes_surrogate_solves_the_bowl_with_fewer_evaluations(
     def first_below(r, tol=1e-4):
         return next(n for n, c in r.history if c < tol)
     assert first_below(run) < first_below(plain), (run.notes, plain.notes)
-    # a failing evaluation ranks last and the search still converges
     good = sizing.optimizer.evaluate
+    # the surrogate's steps come in whole waves of workers: pycma's own
+    # 1, 2, 3, 5 schedule idled three of four workers and doubled the
+    # wall clock.  Skill circuits are serial whatever `workers` says, so
+    # a bowl on an amp (15 variables, population 12, four workers):
+    # steps of 4, 8 or 12, never 1, 2, 3 or 5.
+    amp_vars = sizing.parse_variables('studio_cm_ota')
+    a, b = amp_vars[0], amp_vars[1]
+
+    def amp_bowl(circuit, values, **kw):
+        u = (values[a.name] - a.default) / (a.hi - a.lo)
+        v = (values[b.name] - b.default) / (b.hi - b.lo)
+        return {'q': 4 * u * u + v * v}
+    monkeypatch.setattr(sizing.optimizer, 'evaluate', amp_bowl)
+    run4 = sizing.optimize('studio_cm_ota', amp_vars, budget=120,
+                           algo='cmaes_surrogate', workers=4)
+    steps = re.search(r'steps ([^)]*)\)', run4.notes).group(1)
+    sizes = {int(t.split('×')[0]) for t in steps.split()}
+    assert sizes and all(n % 4 == 0 for n in sizes), run4.notes
+    assert run4.evals <= 120
+    monkeypatch.setattr(sizing.optimizer, 'evaluate', good)
+    # a failing evaluation ranks last and the search still converges
 
     def flaky(circuit, values, **kw):
         if values['W.sw'] > 60.0:

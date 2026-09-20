@@ -53,6 +53,11 @@ STALL_EVALS = 60
 POLISH_SHARE = 0.25
 
 
+def _fill(n: int, workers: int, cap: int) -> int:
+    """`n` rounded up to whole waves of `workers`, at most `cap`."""
+    return min(cap, int(np.ceil(n / workers)) * workers)
+
+
 def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
              progress=None, should_cancel=None, overrides: dict | None = None,
              algo: str = 'sobol_powell', workers: int = 1,
@@ -480,11 +485,22 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         """lq-CMA-ES: run_cmaes with the population ranked by pycma's
         LQModel; see the algo docstring.  Same restarts, same stop cues.
         Failed evaluations rank last and are kept out of the model — a
-        least-squares fit with a 1e12 in it predicts nothing."""
+        least-squares fit with a 1e12 in it predicts nothing.
+
+        pycma's schedule evaluates 1, 2, 3, 5 ... points between its
+        Kendall-tau checks; measured here that idled three of four
+        workers and doubled the wall clock on every parallel circuit
+        for a 2–1 per-evaluation result (cairn/pitfalls.md).  Each step
+        is therefore filled to whole waves of `workers` points: the
+        check runs after 4, 8, 12 with four workers, 1, 2, 3, 5 with
+        one."""
         import cma
+        from collections import Counter
+        from functools import partial
         from cma.fitness_models import (LQModel, SurrogatePopulation,
                                         SurrogatePopulationSettings as SP)
         rng = np.random.default_rng(seed)
+        steps = Counter()
         lam = max(workers, 4 + int(3 * np.log(dims)))
         restarts = 0
         lines = state['notes'].splitlines() if state['notes'] else []
@@ -505,9 +521,13 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                    and not stalled(stall)):
                 X = [np.asarray(x, float) for x in es.ask()]
                 ev = SurrogatePopulation.EvaluationManager(X)
-                number = int(1 + max(
-                    len(X) * SP.min_evals_percent / 100,
-                    3 / model.settings.truncation_ratio - model.size))
+                pop = len(X)
+                # cumulative evaluation count rounded to whole waves
+                # of workers, never past the population
+                fill = partial(_fill, workers=workers, cap=pop)
+                number = fill(int(1 + max(
+                    pop * SP.min_evals_percent / 100,
+                    3 / model.settings.truncation_ratio - model.size)))
                 tau = 0.0
                 while ev.remaining and state['dispatched'] < limit \
                         and not state['cancel']:
@@ -517,6 +537,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                             if not ev.evaluated[i]][:number - ev.evaluations]
                     if not todo:
                         break
+                    steps[len(todo)] += 1
                     for i, c in zip(todo, run_batch([X[i] for i in todo]),
                                     strict=True):
                         if np.isfinite(c):
@@ -528,7 +549,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                     tau = model.kendall(SP.n_for_tau(len(X), ev.evaluations))
                     if tau >= SP.tau_truth_threshold:
                         break
-                    number += int(np.ceil(number / 2))
+                    number = fill(number + int(np.ceil(number / 2)))
                 if ev.evaluations == 0:          # budget ran out first
                     break
                 model.sort(ev.evaluations)
@@ -545,8 +566,10 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             lines.append(
                 f'run {len(lines)}: popsize {lam}, {n} evaluations over '
                 f'{gens} generations ({n / max(1, gens * lam):.0%} of the '
-                f'population evaluated, model {model.size} points), best '
-                f'{state["best"]:.4f}, stopped on {why}')
+                f'population evaluated, model {model.size} points; steps '
+                + ' '.join(f'{k}×{v}' for k, v in sorted(steps.items()))
+                + f'), best {state["best"]:.4f}, stopped on {why}')
+            steps.clear()
             restarts += 1
             lam *= 2
             start = rng.uniform(0.0, 1.0, dims)
