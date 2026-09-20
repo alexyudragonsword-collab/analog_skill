@@ -31,15 +31,15 @@ like before touching anything.
 
 ## Open
 
-- The four LDO variants' metric mapping. `_ldo_metrics` reads every
-  variant's `<prefix>_LR_Power_vos` and the rest in `ldo_basic`'s
-  column order; at the shipped defaults that yields output errors of
-  −4.8 to −5.7 V and load regulation of 4–15 V/A, so the columns are
-  not what the reader assumes. Read each variant testbench's `wrdata`
-  lines, map them, and add a default-sizing sanity test per variant
-  (output within a few hundred millivolts of its reference). Until
-  then the variants are in the menu but every number from them is
-  wrong.
+- The LDO variants' benchmark conditions. Their mapping is fixed
+  (vNext), and the honest defaults show what the vendored decks ask:
+  the line-regulation sweep starts *at* the regulated output for
+  `ldo_simple` / `ldo_folded_cascode` (1.8 V in for 1.8 V out) and
+  20 mV above it for `ldo_1` / `ldo_2` at 100 mA, so the LNR window
+  includes dropout and the 0.01 target is a pass-device-width contest
+  before it is a regulation one. Whether to keep Basic_LDO's targets on
+  the variants, or give each its own (LNR window, GBW at 10 mA), is a
+  design call to make with a sweep of the four at the new numbers.
 - Whether the settling target should be 2 or 2.5 µs. Four amplifiers
   end within 0.5 µs of 2 µs with everything else met; 2.5 would make
   two of them feasible. Set on one circuit; the sweep table is the

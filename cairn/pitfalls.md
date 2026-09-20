@@ -890,6 +890,15 @@ reads the variants' wrdata columns in `ldo_basic`'s order and the
 variants do not write them that way. Registered since v1.4 and never
 run until now; ROADMAP has it, and nothing measured on them counts.
 
+> Correction (same day, after the fix): half of that diagnosis was
+> wrong. The columns *are* in the same order in all five decks; what
+> differs is the arithmetic typed into them (next section). And the
+> load-regulation numbers were never a mapping error — 4.3 and 14.7
+> are what `ldo_simple` and `ldo_folded_cascode` really do at their
+> defaults (78 mV and 224 mV of output swing over 10 mA, relative to
+> the output, per ampere). The unit was the lie: the decks compute
+> ppavl/avgval/ΔI, which is 1/A, and the spec had labelled it V/A.
+
 Two readings. First, the settling target is tight: four amplifiers end
 within 0.5 µs of the 2 µs with everything else met, and two of those
 (`amp_qu2017_azc` at 2.013 µs, `amp_leung_nmcnr` at 2.46 µs) would be
@@ -900,6 +909,50 @@ sweep's cost was one day of simulator time and it found two bugs of
 mine (the deleted deck, the variants' mapping) that no nine-circuit
 protocol would have. A default is a claim about every circuit; test it
 on every circuit.
+
+### Five decks, one author's arithmetic: undo it per deck
+
+The vendored LDO testbenches all print the same five columns in the
+same order — `LR Power1 Power2 vos1 vos2` — and all five compute them
+with Basic_LDO's numbers typed in: `vos = vout - 4*Vref` (there is a
+4:1 divider only in Basic_LDO and `ldo_1`; `ldo_2`, `ldo_simple` and
+`ldo_folded_cascode` regulate to the reference itself, so their "vos"
+was `vout − 6.4` or `vout − 7.2`), and the reader took the quiescent
+current as `Power2/1.8 − 5 mA` on circuits running from 2 V at 10 µA.
+At the shipped defaults that read −5.4 V of output error on a circuit
+sitting 3 mV from its 1.8 V target.
+
+The fix is a per-circuit bench table (`LdoBench` in `spec.py`, filled
+in `registry.py`): the regulated output, the supply, the Vref the deck
+subtracts four times, and the two load points. `_ldo_metrics` adds
+`4·tb_vref` back to recover `vout`, takes the error against the
+circuit's own output, and takes the min-load current off the supply
+current with the deck's own supply. The decks are untouched, as the
+rule says; the reader carries the knowledge.
+
+| circuit | in / out | loads | Vout error (max / min load) | Iq |
+|---|---|---|---|---|
+| ldo_basic | 1.8 / 1.6 V | 5–55 mA | −8 / −4 mV | 19 µA |
+| ldo_1 | 1.8 / 1.6 V | 1–100 mA | +5 / +6 mV | 21 µA |
+| ldo_2 | 1.8 / 1.6 V | 1–100 mA | −30 / −30 mV | 30 µA |
+| ldo_simple | 2 / 1.8 V | 10 µA–10 mA | +3 / +81 mV | 291 µA |
+| ldo_folded_cascode | 2 / 1.8 V | 10 µA–10 mA | −313 / −89 mV | 1.6 mA |
+
+What kept this alive from v1.4 to v1.6 was that the reader's column
+order *was* right, so a test that only checked the keys existed
+passed. The test that catches it is the one that says what the number
+must be: the output within a few hundred millivolts of the circuit's
+own reference at its shipped default. Two more now hold the line: the
+bench table is checked against each deck's `.PARAM` and `alter` lines
+and the netlist's divider, and the fold is unit-tested from a
+fabricated wrdata row.
+
+Three of the four are far from Basic_LDO's targets at their defaults
+(costs 19–33 against ldo_basic's 10), and the decks' own conditions
+explain part of it: the line-regulation sweep for `ldo_simple` and
+`ldo_folded_cascode` runs VDD 1.8→2.2 V for a 1.8 V output, so it
+starts in dropout. Whether the variants keep Basic_LDO's targets is
+now a design question on real numbers (ROADMAP), not a bug.
 
 ### A ceiling is a guess about a cost; measure the cost instead
 

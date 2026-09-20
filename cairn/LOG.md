@@ -2,6 +2,20 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-20 · The four LDO variants report their own numbers
+
+- Fixed the variants' metric mapping without touching the decks: a
+  per-circuit bench table (`LdoBench`) undoes each deck's typed-in
+  `vout − 4·Vref` and `Power/1.8 − 5 mA`. Defaults now read +5 mV,
+  −30 mV, +3 mV, −313 mV output error (folded cascode really is low)
+  instead of −5 V. Half the earlier diagnosis corrected in pitfalls:
+  the column order was right and the load-regulation numbers were
+  real; the unit label (V/A for a 1/A quantity) was the lie.
+- Titles and labels carry each circuit's real conditions; three tests
+  (table vs decks, fold from a fabricated row, defaults near their own
+  reference). ROADMAP item rewritten as the design question it now is:
+  Basic_LDO's targets on decks whose LNR sweep starts in dropout.
+
 ## 2026-09-20 · Restarts never fire; v1.6
 
 - Four CMA-ES runs at 1200: no IPOP restart triggered in any; budget

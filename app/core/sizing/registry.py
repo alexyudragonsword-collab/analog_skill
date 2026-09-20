@@ -8,7 +8,7 @@ built once at import; user-imported circuits are added to it later by
 """
 
 from app import paths
-from app.core.sizing.spec import MetricSpec, SizingSpec
+from app.core.sizing.spec import LdoBench, MetricSpec, SizingSpec
 
 
 def _amp_metrics() -> list:
@@ -65,22 +65,38 @@ def _cm_ota_metrics() -> list:
     ]
 
 
-def _ldo_metrics_spec() -> list:
+def _amps(i: float) -> str:
+    return f'{i * 1e3:g} mA' if i >= 1e-3 else f'{i * 1e6:g} µA'
+
+
+def _ldo_conditions(bench: LdoBench) -> str:
+    """'1.8 V in, 1.6 V out, 5–55 mA' for the circuit titles."""
+    lo, hi = _amps(bench.i_min), _amps(bench.i_max)
+    if lo.split()[1] == hi.split()[1]:
+        lo = lo.split()[0]
+    return f'{bench.supply:g} V in, {bench.vout:g} V out, {lo}–{hi}'
+
+
+def _ldo_metrics_spec(bench: LdoBench) -> list:
     # phase margins are floors here too: the amplifiers' ceiling went when
     # settling time began measuring what over-compensation costs, and a
     # ceiling nothing measures is a guess on every circuit.  The LDO's
     # honest replacement is a load-step settling metric (ROADMAP).
+    hi, lo = _amps(bench.i_max), _amps(bench.i_min)
     return [
-        MetricSpec('pm_maxload', 'Phase margin (55 mA)', 'deg', 60.0,
+        MetricSpec('pm_maxload', f'Phase margin ({hi})', 'deg', 60.0,
                    'max', 1.5),
-        MetricSpec('pm_minload', 'Phase margin (5 mA)', 'deg', 60.0,
+        MetricSpec('pm_minload', f'Phase margin ({lo})', 'deg', 60.0,
                    'max', 1.5),
-        MetricSpec('gbw_maxload', 'Loop GBW (55 mA)', 'Hz', 2e6, 'max', 1.5),
+        MetricSpec('gbw_maxload', f'Loop GBW ({hi})', 'Hz', 2e6, 'max', 1.5),
         MetricSpec('lnr', 'Line regulation', 'V/V', 0.01, 'absmin', 1.0),
-        MetricSpec('lr', 'Load regulation', 'V/A', 0.1, 'absmin', 1.0),
-        MetricSpec('psrr_maxload', 'PSRR (dc, 55 mA)', 'dB', -40.0,
+        # the decks print LR as ppavl/avgval/ΔI: a relative swing per
+        # ampere, not volts per ampere
+        MetricSpec('lr', 'Load regulation (ΔV/V)', '1/A', 0.1, 'absmin',
+                   1.0),
+        MetricSpec('psrr_maxload', f'PSRR (dc, {hi})', 'dB', -40.0,
                    'min', 1.0),
-        MetricSpec('vos_maxload', 'Vout error (55 mA)', 'V', 2e-3,
+        MetricSpec('vos_maxload', f'Vout error ({hi})', 'V', 2e-3,
                    'absmin', 1.0),
         MetricSpec('iq', 'Quiescent current', 'A', 1e-3, 'min', 1.0),
     ]
@@ -102,7 +118,23 @@ _AMP_NETLISTS = [
 
 
 # LDO variants: each has its own testbench; wrdata files carry the prefix
-# (ldo_1/ldo_2 insert an extra _ACDC infix).
+# (ldo_1/ldo_2 insert an extra _ACDC infix).  The conditions come from
+# each deck's .PARAM and alter lines and from the netlist's feedback:
+# Basic_LDO and ldo_1 divide the output 4:1 to a 0.4 V reference, the
+# other three regulate to the reference itself — but every deck prints
+# vos as `vout - 4*Vref`, so the reader undoes that with tb_vref.
+_LDO_BENCH = {
+    'ldo_basic': LdoBench(vout=1.6, supply=1.8, tb_vref=0.4,
+                          i_max=55e-3, i_min=5e-3),
+    'ldo_1': LdoBench(vout=1.6, supply=1.8, tb_vref=0.4,
+                      i_max=100e-3, i_min=1e-3),
+    'ldo_2': LdoBench(vout=1.6, supply=1.8, tb_vref=1.6,
+                      i_max=100e-3, i_min=1e-3),
+    'ldo_simple': LdoBench(vout=1.8, supply=2.0, tb_vref=1.8,
+                           i_max=10e-3, i_min=10e-6),
+    'ldo_folded_cascode': LdoBench(vout=1.8, supply=2.0, tb_vref=1.8,
+                                   i_max=10e-3, i_min=10e-6),
+}
 _LDO_VARIANTS = {'ldo_simple': 'ldo_simple', 'ldo_1': 'ldo_1_ACDC',
                  'ldo_2': 'ldo_2_ACDC',
                  'ldo_folded_cascode': 'ldo_folded_cascode'}
@@ -182,17 +214,21 @@ def _build_registry() -> dict[str, SizingSpec]:
             testbench='TB_Amplifier_ACDC.cir', metrics=_amp_metrics(),
             fixed=('CLOAD', 'VCM'), schematic=sch, eval_seconds=3.5,
             subckt=name)
+    bench = _LDO_BENCH['ldo_basic']
     reg['ldo_basic'] = SizingSpec(
-        title='Basic LDO (SKY130, 1.8 V, 5–55 mA)',
+        title=f'Basic LDO (SKY130, {_ldo_conditions(bench)})',
         kind='ldo', netlist='LDO_netlist.txt', variables='LDO_variables.txt',
-        testbench='TB_LDO_ACDC.cir', metrics=_ldo_metrics_spec(),
-        fixed=('M_CL',), eval_seconds=8.0, wrdata_prefix='LDO_TB_ACDC')
+        testbench='TB_LDO_ACDC.cir', metrics=_ldo_metrics_spec(bench),
+        fixed=('M_CL',), eval_seconds=8.0, wrdata_prefix='LDO_TB_ACDC',
+        bench=bench)
     for v, prefix in _LDO_VARIANTS.items():
+        bench = _LDO_BENCH[v]
         reg[v] = SizingSpec(
-            title=f'LDO — {v} (SKY130, 1.8 V, 5–55 mA)',
+            title=f'LDO — {v} (SKY130, {_ldo_conditions(bench)})',
             kind='ldo', netlist=f'{v}.txt', variables=f'{v}_vars.spice',
-            testbench=f'{v}_acdc.cir', metrics=_ldo_metrics_spec(),
-            fixed=('M_CL',), eval_seconds=8.0, wrdata_prefix=prefix)
+            testbench=f'{v}_acdc.cir', metrics=_ldo_metrics_spec(bench),
+            fixed=('M_CL',), eval_seconds=8.0, wrdata_prefix=prefix,
+            bench=bench)
     for key, cfg in _SKILL_CIRCUITS.items():
         reg[f'skill_{key}'] = SizingSpec(
             title=cfg['title'], kind='skill', netlist='', variables='',

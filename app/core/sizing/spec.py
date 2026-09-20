@@ -53,6 +53,20 @@ class MetricSpec:
 
 
 @dataclass
+class LdoBench:
+    """What an LDO testbench holds fixed, read off its .PARAM and alter
+    lines.  The vendored decks all print `vos = vout - 4*Vref` and
+    `Power = -Ivdd*<supply>` with numbers typed in per deck; the reader
+    needs the same numbers to turn those columns back into an output
+    error and a quiescent current."""
+    vout: float      # the regulated output the circuit is designed for
+    supply: float    # .PARAM supply_voltage
+    tb_vref: float   # .PARAM Vref — the deck subtracts 4x this from vout
+    i_max: float     # the two load points the deck alternates between
+    i_min: float
+
+
+@dataclass
 class SizingSpec:
     title: str
     kind: str                     # 'amp' | 'ldo'
@@ -65,6 +79,7 @@ class SizingSpec:
     eval_seconds: float = 4.0     # rough single-evaluation cost (UI estimate)
     subckt: str | None = None     # DUT token to substitute into the TB
     wrdata_prefix: str = ''       # LDO wrdata file prefix (variant TBs differ)
+    bench: LdoBench | None = None # LDO testbench conditions
     skill_key: str | None = None  # kind='skill': key into circuits.CIRCUITS
     mode: str = ''                # skill variant: '' | 'fast' | 'ron'
     verify_key: str | None = None # re-evaluate the best point on this circuit

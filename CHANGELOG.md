@@ -5,6 +5,32 @@ development milestones and were never tagged — v1.4 is the first release;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
+## vNext — unreleased
+
+- **The four LDO variants report their own numbers now.** Every vendored
+  LDO deck prints its output error as `vout − 4·Vref` and its quiescent
+  current off a 1.8 V supply and a 5 mA floor — Basic_LDO's arithmetic,
+  typed into all five. Only Basic_LDO and `ldo_1` have the 4:1 divider;
+  `ldo_2`, `ldo_simple` and `ldo_folded_cascode` regulate to the
+  reference itself, and two of them run from 2 V between 10 µA and
+  10 mA. The reader (`_ldo_metrics`) now undoes each deck's arithmetic
+  with a per-circuit bench table (`LdoBench`: regulated output, supply,
+  the deck's Vref, the two load points). At the shipped defaults the
+  output errors go from −4.8…−5.7 V to +5 mV, −30 mV, +3 mV and
+  −0.31 V (the folded cascode's default really is low), and the
+  quiescent currents from nonsense to 21 µA…1.6 mA. New metrics
+  `vout_maxload` / `vout_minload` carry the reconstructed output. The
+  vendored decks are untouched.
+- LDO metric labels and circuit titles now state each circuit's real
+  conditions (`1.8 V in, 1.6 V out, 5–55 mA`; `2 V in, 1.8 V out,
+  10 µA–10 mA`) instead of Basic_LDO's on every variant. Load
+  regulation is labelled for what the decks compute: a relative swing
+  per ampere (`1/A`), not `V/A`.
+- Tests: the bench table is checked against every deck's `.PARAM` and
+  `alter` lines and the netlist's divider; the fold is unit-tested from
+  a fabricated wrdata row; all four variants are evaluated at their
+  defaults and their outputs must sit near their own reference.
+
 ## v1.6 — 2026-09-20
 
 The search changed under this release and so did what it measures. The

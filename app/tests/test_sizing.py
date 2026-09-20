@@ -246,16 +246,80 @@ def test_amp_variant_evaluate():
     assert m['dcgain'] > 60 and m['gain_bandwidth_product'] > 1e5
 
 
+_LDOS = ('ldo_basic', 'ldo_1', 'ldo_2', 'ldo_simple', 'ldo_folded_cascode')
+
+
+def test_ldo_bench_table_matches_the_decks():
+    """Every LDO deck types its own supply, reference and load points into
+    its measurements; the bench table the reader undoes them with must
+    say the same numbers, or the mapping is wrong on that circuit."""
+    import re
+    for key in _LDOS:
+        spec = sizing.SIZING[key]
+        tb = (paths.analoggym_dir() / 'ldo' / 'testbench'
+              / spec.testbench).read_text()
+        param = dict(re.findall(r'^\.PARAM\s+(\w+)\s*=\s*(\S+)', tb,
+                                re.MULTILINE | re.IGNORECASE))
+        b = spec.bench
+        assert float(param['supply_voltage']) == b.supply, key
+        assert float(param['Vref']) == b.tb_vref, key
+        # the deck prints vos = vout - 4*Vref: the only thing the reader
+        # needs from the deck's arithmetic
+        assert f'-4*{param["Vref"]}' in tb.replace(' ', ''), key
+        loads = sorted({sizing.spec._parse_num(x) for x in
+                        re.findall(r'^alter Iload3 dc=(\S+)', tb,
+                                   re.MULTILINE)})
+        assert len(loads) == 2, (key, loads)
+        assert loads[0] == pytest.approx(b.i_min), (key, loads)
+        assert loads[1] == pytest.approx(b.i_max), (key, loads)
+        # the regulated output is the reference through the feedback:
+        # a 4:1 divider (r0/r1 or the Basic_LDO ladder) or none
+        netlist = (paths.analoggym_dir() / 'ldo' / 'netlist'
+                   / spec.netlist).read_text()
+        divided = bool(re.search(r'^r0 vout vfb 300e3', netlist,
+                                 re.MULTILINE | re.IGNORECASE)) \
+            or key == 'ldo_basic'
+        assert b.vout == (4 * b.tb_vref if divided else b.tb_vref), key
+
+
+def test_ldo_metric_fold_undoes_the_decks_arithmetic(tmp_path):
+    """The deck prints vos = vout - 4*Vref and Power = -Ivdd*supply.  The
+    reader reconstructs vout, takes the error against the circuit's own
+    regulated output, and takes the load current off the supply current
+    at min load; the first version did all of that with Basic_LDO's
+    numbers on every variant (−5 V output errors at the defaults)."""
+    from app.core.sizing import evaluation as ev
+    spec = sizing.SIZING['ldo_simple']       # 2 V in, 1.8 V out, 10 uA
+    row = [(1e-5, v) for v in (4.28, 20.5e-3, 0.6e-3, 1.803 - 7.2,
+                               1.881 - 7.2)]
+    (tmp_path / 'ldo_simple_LR_Power_vos').write_text(
+        ' '.join(f'{x:.8e}' for pair in row for x in pair) + '\n')
+    m = ev._ldo_metrics(tmp_path, {}, spec)
+    assert abs(m['vout_maxload'] - 1.803) < 1e-9
+    assert abs(m['vos_maxload'] - 0.003) < 1e-9
+    assert abs(m['vos_minload'] - 0.081) < 1e-9
+    assert abs(m['iq'] - (0.6e-3 / 2.0 - 10e-6)) < 1e-12
+    assert m['lr'] == 4.28 and m['power_maxload'] == 20.5e-3
+
+
 @needs_ngspice
 def test_ldo_variant_evaluate():
-    """ldo_1 exercises the ../simulations/ include mapping and the
-    _ACDC wrdata prefix; ldo_simple names its testbench after its wrdata
-    prefix, which the output clearing once deleted before ngspice ran."""
-    for key in ('ldo_1', 'ldo_simple'):
+    """All four variants at their shipped defaults.  ldo_1 exercises the
+    ../simulations/ include mapping and the _ACDC wrdata prefix;
+    ldo_simple names its testbench after its wrdata prefix, which the
+    output clearing once deleted before ngspice ran.  The output must
+    sit near each circuit's own reference: the folded cascode's default
+    really is 0.31 V low at 10 mA, everything else is within 30 mV."""
+    for key in _LDOS[1:]:
         values = {v.name: v.default for v in sizing.parse_variables(key)}
         m = sizing.evaluate(key, values)
-        for k in ('pm_maxload', 'gbw_maxload', 'lnr', 'lr', 'iq'):
+        for k in ('pm_maxload', 'gbw_maxload', 'lnr', 'lr', 'iq',
+                  'vos_maxload', 'vout_minload'):
             assert k in m, (key, k)
+        bench = sizing.SIZING[key].bench
+        assert abs(m['vout_maxload'] - bench.vout) < 0.35, (key, m)
+        assert abs(m['vout_minload'] - bench.vout) < 0.1, (key, m)
+        assert 0 < m['iq'] < 5e-3, (key, m['iq'])
 
 
 @needs_ngspice

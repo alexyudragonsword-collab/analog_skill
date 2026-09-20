@@ -351,7 +351,7 @@ def evaluate(circuit: str, values: dict, slot: int = 0,
                    cwd=run, capture_output=True, timeout=300)
     metrics = _parse_meas_log(log)
     if spec.kind == 'ldo':
-        metrics = _ldo_metrics(run, metrics, spec.wrdata_prefix)
+        metrics = _ldo_metrics(run, metrics, spec)
     elif spec.kind == 'amp':
         metrics.update(_step_metrics(run))
     return metrics
@@ -412,7 +412,7 @@ def capture_waves(circuit: str, values: dict, tag: str) -> dict:
             out.update(temp=dc[0], vout=dc[1])
         return out
     # ldo: two harvested AC sweeps (loop dB, PSRR dB, loop phase) ...
-    out['metrics'] = _ldo_metrics(run, out['metrics'], spec.wrdata_prefix)
+    out['metrics'] = _ldo_metrics(run, out['metrics'], spec)
     for i, load in ((0, 'max'), (1, 'min')):
         ac = _read_wave_file(run / f'waves_ac_{i}.dat')
         if ac and len(ac) >= 4:
@@ -491,19 +491,32 @@ def _capture_skill_waves(spec: SizingSpec, values: dict) -> dict:
     raise KeyError(spec.skill_key)
 
 
-def _ldo_metrics(run: Path, meas: dict, prefix: str) -> dict:
+def _ldo_metrics(run: Path, meas: dict, spec: SizingSpec) -> dict:
     """Fold the LDO testbench's wrdata outputs into named metrics.
 
     The Basic-LDO testbench writes LDO_TB_ACDC_*; each variant testbench
-    uses its own prefix (ldo_simple_*, ldo_1_*, ...)."""
+    uses its own prefix (ldo_simple_*, ldo_1_*, ...).  All five print
+    the same columns in the same order, but with Basic_LDO's arithmetic
+    typed in: vos is `vout - 4*Vref`, right only where a 4:1 divider
+    exists, and the quiescent current came off a 1.8 V supply and a
+    5 mA floor whatever the deck said.  The first version of this read
+    the columns as they came and reported −5 V output errors on three
+    variants at their shipped defaults; spec.bench holds each deck's
+    numbers so the columns turn back into what they measure.
+    """
     out = {}
+    prefix, bench = spec.wrdata_prefix, spec.bench
     v = _read_wrdata(run / f'{prefix}_LR_Power_vos', 5)
     if v:
         lr, p_max, p_min, vos_max, vos_min = v
+        vout_max = vos_max + 4 * bench.tb_vref
+        vout_min = vos_min + 4 * bench.tb_vref
         out.update(lr=lr, power_maxload=p_max, power_minload=p_min,
-                   vos_maxload=vos_max, vos_minload=vos_min,
-                   # quiescent current = supply current at min load − 5 mA
-                   iq=max(p_min / 1.8 - 5e-3, 0.0))
+                   vout_maxload=vout_max, vout_minload=vout_min,
+                   vos_maxload=vout_max - bench.vout,
+                   vos_minload=vout_min - bench.vout,
+                   # quiescent current = supply current at min load − load
+                   iq=max(p_min / bench.supply - bench.i_min, 0.0))
     v = _read_wrdata(run / f'{prefix}_LNR_maxload', 1)
     if v:
         out['lnr'] = v[0]
