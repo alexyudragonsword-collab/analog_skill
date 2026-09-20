@@ -2,6 +2,18 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-20 · Surrogate-assisted optimisation: probed, not adopted
+
+- Maintainer asked for a feasibility view of GP/NN surrogate → CMA-ES
+  on the model → SPICE verification. Measured instead of argued:
+  Sobol samples on amp_hoilee (whole box and ±10 % box) and ldo_basic,
+  GP and gradient-boosting per metric, three surrogate-CMA-ES rounds
+  verified in SPICE. Power/PM/GBW learnable; offset, tempco, settling,
+  CMRR/PSRR not; whole-box optimum is fiction (predicted 0.02, real
+  21); local refitted loop 3.71 → 0.42 in 24 verifications. Table and
+  reading in `cairn/pitfalls.md`. Recommendation: pilot pycma's
+  built-in lq-CMA-ES as one more algo before any GP pipeline.
+
 ## 2026-09-20 · The four LDO variants report their own numbers
 
 - Fixed the variants' metric mapping without touching the decks: a

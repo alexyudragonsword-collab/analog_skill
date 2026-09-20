@@ -954,6 +954,46 @@ explain part of it: the line-regulation sweep for `ldo_simple` and
 starts in dropout. Whether the variants keep Basic_LDO's targets is
 now a design question on real numbers (ROADMAP), not a bug.
 
+### A surrogate over the whole box learns power and little else
+
+Probe for the surrogate-assisted idea (fit a model of sizes → metrics,
+optimise on it, verify in SPICE), 2026-09-20, scratchpad
+`surr_sample.py` / `surr_fit.py`: Sobol samples, a Gaussian process
+(Matern ARD) and a gradient-boosted baseline per metric, held-out
+R² / Spearman ρ, then three rounds of CMA-ES on the predicted cost
+with eight SPICE verifications each.
+
+| regime | sims complete | learnable (GP R²) | not learnable (R² ≤ 0) | proposals vs SPICE |
+|---|---|---|---|---|
+| amp_hoilee, whole box, 256 pts, 33 vars | 87 % | power 0.89; GBW, PSR+ ≈ 0.3 | PM, CMRR, PSR−, offset, tempco, settling | predicted 0.02–0.2, real 2.7–21; sample best (1.02) never beaten |
+| ldo_basic, whole box, 192 pts, 20 vars | 37 % | Vout error 0.80, PSRR 0.74, LR 0.60 | both phase margins | 1.21 → 1.16 in two rounds; third round 8 of 8 failed sims (cost 95) |
+| amp_hoilee, ±10 % box, 160 pts | 98 % | power 0.96, PM 0.74–0.83, GBW 0.48 | gain, PSR, CMRR, offset, tempco, settling | 3.71 → 1.78 → **0.42** in 24 verifications; "predicted 0" was 5.6 twice |
+
+Three readings. The quantities that are smooth in the sizes (power,
+phase margin, GBW near an operating point) a model learns from ~150
+points; the ones the search actually fights over — offset and tempco
+(differences of nearly-equal terms), settling (a threshold-crossing
+time), CMRR/PSRR (cancellations) — it does not, in either regime, with
+either model. A surrogate of the *cost* is therefore a surrogate of
+the easy half. Second, the whole-box model is a fantasy generator in
+33 dimensions: its optimum predicts 0.02 and measures 21, and on the
+LDO, where 63 % of the box fails to simulate, the model has no notion
+of failure and walks the search into the dead region. Third, the
+local, refitted loop does work — 3.71 to 0.42 in 24 verifications —
+which is the Bayesian-optimisation regime, not "fit once, search for
+free": every round is a refit (40–60 s on 4 cores at ~180 points,
+O(n³)) plus SPICE. The honest comparison is against CMA-ES at the
+same evaluation count, which was not recorded; the sweep's CMA-ES
+reaches 0 on this circuit within 600.
+
+The cheapest real test is already installed: pycma ships lq-CMA-ES
+(`cma.fmin_lq_surr`, `cma.fitness_models.SurrogatePopulation`), a
+local quadratic surrogate of the *ranking* inside CMA-ES, built for
+exactly this regime and with no new dependency for the frozen build.
+One more `algo` in `optimize()` behind the existing seam, measured on
+the eight-circuit protocol, decides whether model assistance earns
+its place; a Gaussian-process pipeline should wait for that number.
+
 ### A ceiling is a guess about a cost; measure the cost instead
 
 The 90° phase-margin ceiling was put in because a 156° design met
