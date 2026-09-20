@@ -2,6 +2,19 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-20 · lq-CMA-ES pilot: `cmaes_surrogate`
+
+- Maintainer said do it. Added `cmaes_surrogate` to `optimize()`: pycma's
+  LQModel ranks each CMA-ES population, points are evaluated in the
+  model's order until Kendall tau ≥ 0.85, the rest are ranked by the
+  model; the loop is a port of `SurrogatePopulation.__call__` with each
+  step batched across the workers, failed points kept out of the model.
+  Menu entry in the Sizing tab, bowl test (fewer evaluations than plain
+  CMA-ES to 1e-4, survives failing evaluations), CHANGELOG vNext.
+- Measurement against `cmaes` at 600 on the eight-circuit protocol is
+  running (scratchpad `plan-s`); the result decides whether it stays a
+  pilot.
+
 ## 2026-09-20 · Surrogate-assisted optimisation: probed, not adopted
 
 - Maintainer asked for a feasibility view of GP/NN surrogate → CMA-ES

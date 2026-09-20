@@ -99,6 +99,16 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                         it lost three of the four circuits it could run
                         on, two generations being too few to judge a
                         seed by.
+      'cmaes_surrogate' lq-CMA-ES (Hansen 2019, pycma's fitness_models):
+                        'cmaes' whose population is ranked by a linear-
+                        quadratic model of the evaluated archive.  Each
+                        generation evaluates points in the model's order
+                        until Kendall's tau between model and truth
+                        reaches 0.85 and lets the model rank the rest.
+                        pycma's own loop evaluates serially; this is the
+                        same loop with each step's points batched.  A
+                        pilot: measured against 'cmaes' at equal budget
+                        before it earns a default (cairn/pitfalls.md).
       'cmaes_llm_finish' 'cmaes' for all but the finish's reserve, then
                         llm_sizing.run_finish — the finish behind the
                         search that leaves the fewest gaps.
@@ -466,6 +476,83 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             sigma = 0.25
         state['notes'] = '\n'.join(lines)
 
+    def run_cmaes_surrogate(limit: int = budget, stall: int | None = None):
+        """lq-CMA-ES: run_cmaes with the population ranked by pycma's
+        LQModel; see the algo docstring.  Same restarts, same stop cues.
+        Failed evaluations rank last and are kept out of the model — a
+        least-squares fit with a 1e12 in it predicts nothing."""
+        import cma
+        from cma.fitness_models import (LQModel, SurrogatePopulation,
+                                        SurrogatePopulationSettings as SP)
+        rng = np.random.default_rng(seed)
+        lam = max(workers, 4 + int(3 * np.log(dims)))
+        restarts = 0
+        lines = state['notes'].splitlines() if state['notes'] else []
+        start, sigma = x0, 0.25
+        while (not state['cancel'] and state['dispatched'] < limit
+               and not stalled(stall)):
+            es = cma.CMAEvolutionStrategy(start, sigma, {
+                'bounds': [0.0, 1.0], 'popsize': lam,
+                'seed': seed + restarts + 1,
+                'maxfevals': limit - state['dispatched'],
+                'tolfun': 1e-6, 'tolx': 1e-4,
+                'verbose': -9, 'verb_disp': 0, 'verb_log': 0})
+            model = LQModel()
+            model.settings.max_absolute_size = SP.model_max_size_factor * lam
+            at, gens = state['dispatched'], 0
+            while (not es.stop() and not state['cancel']
+                   and state['dispatched'] < limit
+                   and not stalled(stall)):
+                X = [np.asarray(x, float) for x in es.ask()]
+                ev = SurrogatePopulation.EvaluationManager(X)
+                number = int(1 + max(
+                    len(X) * SP.min_evals_percent / 100,
+                    3 / model.settings.truncation_ratio - model.size))
+                tau = 0.0
+                while ev.remaining and state['dispatched'] < limit \
+                        and not state['cancel']:
+                    order = (np.argsort([model.eval(x) for x in X])
+                             if model.size > 1 else range(len(X)))
+                    todo = [i for i in order
+                            if not ev.evaluated[i]][:number - ev.evaluations]
+                    if not todo:
+                        break
+                    for i, c in zip(todo, run_batch([X[i] for i in todo]),
+                                    strict=True):
+                        if np.isfinite(c):
+                            ev.add_eval(i, c)
+                            model.add_data_row(X[i], c)
+                        else:
+                            ev.add_eval(i, 1e12)
+                    model.sort(number)
+                    tau = model.kendall(SP.n_for_tau(len(X), ev.evaluations))
+                    if tau >= SP.tau_truth_threshold:
+                        break
+                    number += int(np.ceil(number / 2))
+                if ev.evaluations == 0:          # budget ran out first
+                    break
+                model.sort(ev.evaluations)
+                model.adapt_max_relative_size(tau)
+                F = ev.surrogate_values(model.eval, True)
+                es.tell(X, [f if np.isfinite(f) else 1e12 for f in F])
+                es.countevals = state['dispatched']
+                if model.size > 2:
+                    es.inject([np.clip(model.xopt, 0.0, 1.0)])
+                gens += 1
+            n = state['dispatched'] - at
+            why = ', '.join(es.stop()) or (
+                'stall' if stalled(stall) else 'budget')
+            lines.append(
+                f'run {len(lines)}: popsize {lam}, {n} evaluations over '
+                f'{gens} generations ({n / max(1, gens * lam):.0%} of the '
+                f'population evaluated, model {model.size} points), best '
+                f'{state["best"]:.4f}, stopped on {why}')
+            restarts += 1
+            lam *= 2
+            start = rng.uniform(0.0, 1.0, dims)
+            sigma = 0.25
+        state['notes'] = '\n'.join(lines)
+
     def run_cmaes_llm_finish():
         from app.core import llm_sizing
         # the search keeps its budget while it is improving: it stops for
@@ -554,6 +641,8 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             run_de_constrained()
         elif algo == 'cmaes':
             run_cmaes()
+        elif algo == 'cmaes_surrogate':
+            run_cmaes_surrogate()
         elif algo == 'cmaes_llm_finish':
             run_cmaes_llm_finish()
         elif algo == 'llm':

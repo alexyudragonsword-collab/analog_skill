@@ -1200,6 +1200,39 @@ def test_cmaes_converges_and_restarts(monkeypatch):
     assert run.population is None                # not a DE population
 
 
+def test_cmaes_surrogate_solves_the_bowl_with_fewer_evaluations(
+        monkeypatch):
+    """lq-CMA-ES on a quadratic bowl: the model is exact once it has a
+    few points, so most of each population is ranked without an
+    evaluation and the optimum arrives in fewer than plain CMA-ES
+    needs.  Failed points must not reach the model (1e12 in a
+    least-squares fit predicts nothing)."""
+    pytest.importorskip('cma')
+    variables = _fake_bowl(monkeypatch)
+    run = sizing.optimize('skill_bootstrap', variables, budget=200,
+                          algo='cmaes_surrogate', workers=1)
+    assert run.best_cost < 1e-4, run.best_cost
+    assert run.evals <= 200 and run.algo == 'cmaes_surrogate'
+    assert 'of the population evaluated' in run.notes, run.notes
+    plain = sizing.optimize('skill_bootstrap', variables, budget=200,
+                            algo='cmaes', workers=1)
+
+    def first_below(r, tol=1e-4):
+        return next(n for n, c in r.history if c < tol)
+    assert first_below(run) < first_below(plain), (run.notes, plain.notes)
+    # a failing evaluation ranks last and the search still converges
+    good = sizing.optimizer.evaluate
+
+    def flaky(circuit, values, **kw):
+        if values['W.sw'] > 60.0:
+            raise RuntimeError('simulated failure')
+        return good(circuit, values, **kw)
+    monkeypatch.setattr(sizing.optimizer, 'evaluate', flaky)
+    run = sizing.optimize('skill_bootstrap', variables, budget=200,
+                          algo='cmaes_surrogate', workers=1)
+    assert run.best_cost < 1e-3, run.best_cost
+
+
 def test_de_powell_polishes_where_de_stopped(monkeypatch):
     variables = _fake_bowl(monkeypatch)
     run = sizing.optimize('skill_bootstrap', variables, budget=80,

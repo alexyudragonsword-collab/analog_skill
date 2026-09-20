@@ -59,6 +59,9 @@ class SizingTab(QWidget, JobTabMixin):
             self.algo_combo.addItem('CMA-ES + AI finish (CMA-ES searches, '
                                     'AI names the fix, line search lands it)',
                                     userData='cmaes_llm_finish')
+            self.algo_combo.addItem('CMA-ES + surrogate (lq-CMA-ES: a '
+                                    'quadratic model ranks the population; '
+                                    'pilot)', userData='cmaes_surrogate')
         self.algo_combo.addItem('Sobol + Powell (built-in)',
                                 userData='sobol_powell')
         self.algo_combo.addItem('Differential evolution (global, '

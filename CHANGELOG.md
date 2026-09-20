@@ -7,6 +7,17 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **`cmaes_surrogate` — lq-CMA-ES as a pilot algorithm.** CMA-ES whose
+  population is ranked by a linear-quadratic model of the evaluated
+  archive (pycma's `fitness_models`, Hansen 2019): each generation
+  evaluates points in the model's order until Kendall's tau between
+  model and truth reaches 0.85, and the model ranks the rest. pycma's
+  own loop is serial; this one batches each step's points across the
+  workers. Failed evaluations rank last and stay out of the model. In
+  the Sizing tab's algorithm menu as "CMA-ES + surrogate"; not the
+  default until measured against CMA-ES at equal budget — the
+  surrogate probe in `cairn/pitfalls.md` says why a whole-box model
+  was not built instead.
 - **The four LDO variants report their own numbers now.** Every vendored
   LDO deck prints its output error as `vout − 4·Vref` and its quiescent
   current off a 1.8 V supply and a 5 mA floor — Basic_LDO's arithmetic,
