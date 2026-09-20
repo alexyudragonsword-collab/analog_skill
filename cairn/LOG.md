@@ -2,6 +2,16 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-20 · GP pipeline evaluated: not worth building now
+
+- Asked to evaluate a Gaussian-process pipeline as such. Two numbers
+  added to the surrogate probe in pitfalls: CMA-ES + finish reaches 0
+  on amp_hoilee by 200 evaluations where the local GP loop's 184
+  reached 0.42; GP fit time 1.7 / 8.5 / 33 s at 100 / 200 / 400 points
+  per metric (n³). Verdict in the reply: not before lq-CMA-ES's
+  batch-fill fix is measured at equal wall clock; if ever, as a
+  cost-only or smooth-metrics model, not the full per-metric pipeline.
+
 ## 2026-09-20 · lq-CMA-ES measured: 2–1 per evaluation, 2× wall clock
 
 - Eight circuits at 600, seed 0: surrogate better on nmcf (0.85 vs

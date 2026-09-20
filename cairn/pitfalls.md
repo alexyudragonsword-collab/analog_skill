@@ -994,6 +994,19 @@ One more `algo` in `optimize()` behind the existing seam, measured on
 the eight-circuit protocol, decides whether model assistance earns
 its place; a Gaussian-process pipeline should wait for that number.
 
+Addendum (same day, asked to evaluate a Gaussian-process pipeline
+outright): two numbers the probe lacked. The equal-evaluation
+comparison exists now — on `amp_hoilee_affc` at the current spec,
+CMA-ES with the finish reaches cost 0 by 200 evaluations (sweep,
+`plan-h`), where the local GP loop's 184 evaluations reached 0.42 with
+three minutes of model fitting on top. And the fit cost, one metric,
+33 dimensions, no restarts: 1.7 s at 100 points, 8.5 s at 200, 33 s
+at 400 — the n³ that a per-metric, per-round refit of a 600-point
+archive turns into a quarter of an hour per round. A GP pipeline here
+would have to model one number (the cost, ρ ≈ 0.5 in the local box),
+or a rolling window, or the three smooth metrics only, and each of
+those gives up the thing it was proposed for.
+
 ### lq-CMA-ES: fewer evaluations to the same place, twice the wall clock
 
 The pilot `cmaes_surrogate` against `cmaes`, 2026-09-20, the
