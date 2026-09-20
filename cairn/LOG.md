@@ -2,6 +2,16 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-20 · lq-CMA-ES measured: 2–1 per evaluation, 2× wall clock
+
+- Eight circuits at 600, seed 0: surrogate better on nmcf (0.85 vs
+  1.28) and ldo_basic (0, all met, vs 1.05), worse on ramos (1.29 vs
+  0.58), five ties at 0. Every parallel run took twice the wall time:
+  the tau-check loop evaluates 1, 2, 3, 5 points at a time and idles
+  three of four workers. Stays a pilot in the menu; default unchanged.
+  Table and reading in `cairn/pitfalls.md`; ROADMAP has the batch-fill
+  fix as the next step if it is to go further.
+
 ## 2026-09-20 · lq-CMA-ES pilot: `cmaes_surrogate`
 
 - Maintainer said do it. Added `cmaes_surrogate` to `optimize()`: pycma's

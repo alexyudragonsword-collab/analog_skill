@@ -994,6 +994,57 @@ One more `algo` in `optimize()` behind the existing seam, measured on
 the eight-circuit protocol, decides whether model assistance earns
 its place; a Gaussian-process pipeline should wait for that number.
 
+### lq-CMA-ES: fewer evaluations to the same place, twice the wall clock
+
+The pilot `cmaes_surrogate` against `cmaes`, 2026-09-20, the
+eight-circuit protocol at 600 evaluations, seed 0, four workers,
+scratchpad `plan-s`. Costs at 100/200/300/600 evaluations, wall time,
+and for the surrogate the generations it got out of 600 and the share
+of each population it evaluated in SPICE.
+
+| circuit | algo | @100 | @200 | @300 | @600 | wall | gens / evaluated |
+|---|---|---|---|---|---|---|---|
+| amp_leung_nmcf | lq-CMA-ES | 1.627 | 1.272 | 1.272 | **0.851** | 21.0 min | 80 / 58 % |
+| | CMA-ES | 2.253 | 1.711 | 1.539 | 1.285 | 10.9 min | 46 / 100 % |
+| amp_peng_tcfc | lq-CMA-ES | 6.203 | 0.604 | 0 | 0 | 29.1 min | 73 / 63 % |
+| | CMA-ES | 0.424 | 0 | 0 | 0 | 14.9 min | |
+| amp_ramos_pfc | lq-CMA-ES | 1.760 | 1.760 | 1.741 | 1.291 | 22.4 min | 78 / 59 % |
+| | CMA-ES | 0.578 | 0.578 | 0.578 | **0.578** | 11.2 min | |
+| amp_fan_smc | lq-CMA-ES | 1.196 | 0.851 | 0 | 0 | 21.7 min | 80 / 58 % |
+| | CMA-ES | 1.034 | 0.706 | 0 | 0 | 11.5 min | |
+| studio_cm_ota | lq-CMA-ES | 0.222 | 0 | 0 | 0 | 8.2 min | 73 / 68 % |
+| | CMA-ES | 0 | 0 | 0 | 0 | 3.9 min | |
+| ldo_basic | lq-CMA-ES | 1.145 | 0.796 | 0.517 | **0, all 8 met** | 21.6 min | 78 / 64 % |
+| | CMA-ES | 1.929 | 1.060 | 1.060 | 1.048 | 10.0 min | |
+| skill_ota5t | both | 0 | 0 | 0 | 0 | 0.2 / 0.1 min | 24 / 89 % |
+| skill_opamp2 | both | 0 | 0 | 0 | 0 | 0.3 / 0.3 min | 28 / 60 % |
+
+Per evaluation the surrogate is a modest win: two circuits clearly
+better (nmcf 0.85 against 1.28; ldo_basic to all targets met where
+CMA-ES stalled at a GBW gap), one clearly worse (ramos 1.29 against
+0.58 — CMA-ES found its 0.58 inside the first hundred and never moved,
+the surrogate never found it), five ties at zero with the surrogate
+reaching zero later on two of them (peng_tcfc at 100: 6.2 against
+0.42). The mechanism works as advertised: 58–68 % of each population
+evaluated, 73–80 generations from 600 evaluations against 46. One
+seed per circuit; a 2–1 on six decided rows is not a ranking.
+
+Per minute it is a loss, and structurally so: the model ranks the
+population, then evaluates 1, 2, 3, 5 … points at a time and checks
+Kendall's tau after each step, so with four workers three sit idle
+most of the time — every parallel row took twice the wall clock, and
+the two serial skill circuits, where nothing is idle, took the same.
+This project's constraint is the wall clock, not an evaluation quota;
+"fewer evaluations" is a benefit only where each evaluation is dearer
+than the workers it leaves idle. The fix, if the pilot goes further,
+is to fill each surrogate step to at least `workers` points (the
+threshold check then runs on batches of 4, 6, 9 … instead of 1, 2, 3)
+and measure again — until then it stays in the menu as a pilot and
+the default stays CMA-ES.
+
+Same lesson as the finish and the seed portfolio: an evaluation-count
+win has to be re-read as a minute count before it means anything here.
+
 ### A ceiling is a guess about a cost; measure the cost instead
 
 The 90° phase-margin ceiling was put in because a 156° design met

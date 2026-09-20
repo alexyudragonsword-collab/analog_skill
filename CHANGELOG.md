@@ -14,10 +14,11 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   model and truth reaches 0.85, and the model ranks the rest. pycma's
   own loop is serial; this one batches each step's points across the
   workers. Failed evaluations rank last and stay out of the model. In
-  the Sizing tab's algorithm menu as "CMA-ES + surrogate"; not the
-  default until measured against CMA-ES at equal budget — the
-  surrogate probe in `cairn/pitfalls.md` says why a whole-box model
-  was not built instead.
+  the Sizing tab's algorithm menu as "CMA-ES + surrogate", not the
+  default: measured on eight circuits at 600 evaluations it is better
+  on two, worse on one and tied on five, and takes twice the wall
+  clock on every parallel circuit because its tau-check loop leaves
+  workers idle (`cairn/pitfalls.md`, ROADMAP for the fix).
 - **The four LDO variants report their own numbers now.** Every vendored
   LDO deck prints its output error as `vout − 4·Vref` and its quiescent
   current off a 1.8 V supply and a 5 mA floor — Basic_LDO's arithmetic,
