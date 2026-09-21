@@ -1007,6 +1007,74 @@ would have to model one number (the cost, ρ ≈ 0.5 in the local box),
 or a rolling window, or the three smooth metrics only, and each of
 those gives up the thing it was proposed for.
 
+### Pretrain once per circuit, reuse on new targets: the archive is half the win
+
+Asked 2026-09-21 whether a surrogate pays in the *amortised* form:
+sample a circuit's whole design box once, slowly and thoroughly, keep
+the metric models, and reuse them when the same circuit gets different
+targets. Measured on `amp_hoilee_affc` (33 variables, 2048 Sobol
+points, 36 min) and `ldo_basic` (20 variables, 1024 points, 15 min);
+scratchpad `surr_sample2.py`, `surr_curve.py`, `surr_transfer.py`,
+`big-*.json`.
+
+**Learning curves** (held-out R², gradient-boosted trees; the GP was
+matched or beaten by GBT from 512 points on and costs 100× the fit):
+amplifier at 1792 training points — power 0.94, PSR+ 0.65, GBW 0.63,
+gain 0.54, offset 0.42, phase margin 0.34, PSR− 0.30, CMRR 0.28,
+settling 0.25, tempco 0.09; from 256 to 1792 the hard ones gain about
+0.1 per doubling. LDO at 768 — Vout error 0.91, PSRR 0.84, LR 0.64,
+GBW 0.59, LNR 0.56, Iq 0.49, phase margins 0.1–0.2. A failure
+classifier (does the point simulate at all) reaches 93–94 %. So "an
+accurate model" is not on the table at any feasible sample size; a
+model that *ranks* candidates is.
+
+**Reuse on four target sets per circuit.** Per set: re-score the
+archive (instant, no model), CMA-ES on the models (9 s), verify the
+top 8 in SPICE (35 s), then 100 real evaluations of CMA-ES from the
+best verified point — against CMA-ES from the default sizing at 100
+and 200 evaluations on the same targets.
+
+| circuit / targets | archive lookup | model's best (8 SPICE) | warm start +100, σ 0.1 | cold CMA-ES @100 / @200 |
+|---|---|---|---|---|
+| amp default | 1.018 | 1.018 (the archive point) | **0** | 1.84 / 1.84 |
+| amp low power (0.25 mW) | 1.263 | **0.274** (model's own) | 0.253 | 3.52 / 1.60 |
+| amp fast (3 MHz, 1.2 µs) | 1.018 | 5.37 (missed the archive point) | 0.957 | 2.96 / **0.755** |
+| amp quiet (−80 dB ×3) | 1.018 | **0.272** (model's own) | **0** | 1.31 / 0.911 |
+| ldo default | 0.928 | 1.96 (predicted 0.0) | 1.082 (σ 0.25: 0.563) | 1.93 / 1.06 |
+| ldo low Iq (0.2 mA) | 0.928 | 1.216 | **0** | 1.93 / 1.06 |
+| ldo fast (5 MHz) | 1.271 | 1.271 (the archive point) | 1.136 | 2.10 / 1.39 |
+| ldo quiet (−55 dB, LNR 3e-3) | 1.404 | 2.28 | 1.063 | 3.08 / 2.57 |
+
+Seven of eight: pretrained assets plus 100 real evaluations (about
+three minutes) beat cold CMA-ES at 200 (four to five minutes), four
+of them to all targets met. The one loss is the amplifier's fast set.
+One seed, two circuits, target sets chosen by me.
+
+Three readings. First, **the credit splits, and the cheaper half is
+the larger**: re-scoring the stored evaluations under the new targets
+— no model at all — already beats cold CMA-ES at 200 on six of eight
+rows; the models add a genuine step on two (the amplifier's low-power
+and quiet sets, 0.27 where the archive had 1.0–1.3) and nothing on the
+LDO, where 65 % of the box fails to simulate and the model's "predicted
+0.0" verified at 1.96. Second, **the warm start is a seam of its own**:
+`run_cmaes` never evaluates its start point and σ 0.25 walks off a
+verified one (low-power: start 0.274, "best" after 100 evaluations
+0.730); with σ 0.1 and the point injected — the finish's resume
+settings — the same 100 evaluations reach 0 on three rows. Third,
+**the cost is once per circuit and it is sampling, not modelling**:
+36 minutes of simulator time, then 13 seconds of training and a
+few megabytes; the GP is the wrong tool (fits in minutes, no better),
+gradient boosting the right one, and it needs scikit-learn in the
+frozen build, which the archive-only half does not.
+
+What follows for the app, in order of return per effort: a
+per-circuit evaluation archive on disk (every point ever simulated,
+re-scored when targets change — the memo already does this within a
+run); a warm start from the archive's best point with σ 0.1 and the
+point injected; and only then a "characterise this circuit" sampling
+job with metric models and a failure classifier behind the same seam.
+ROADMAP has all three.
+
 ### lq-CMA-ES: fewer evaluations to the same place, twice the wall clock
 
 The pilot `cmaes_surrogate` against `cmaes`, 2026-09-20, the

@@ -40,6 +40,26 @@ like before touching anything.
   before it is a regulation one. Whether to keep Basic_LDO's targets on
   the variants, or give each its own (LNR window, GBW at 10 mA), is a
   design call to make with a sweep of the four at the new numbers.
+- A per-circuit evaluation archive, re-scored when targets change.
+  Measured 2026-09-21: the stored Sobol points of a circuit, re-scored
+  under new targets with no model at all, beat cold CMA-ES at 200
+  evaluations on six of eight target sets; a warm start from the
+  archive's best point plus 100 evaluations won seven of eight, four
+  to all targets met (`cairn/pitfalls.md`). Keep every evaluated point
+  of a circuit on disk (the memo does this within a run), re-score on
+  target change, offer "start from the best known point".
+- The warm start's settings. `run_cmaes` never evaluates its start
+  point and σ 0.25 walks off a good one (start 0.274, best after 100
+  evaluations 0.730); σ 0.1 with the point injected — the finish's
+  resume settings — reached 0 in the same 100. Evaluate or inject the
+  start point and use the tight step whenever the start is a known
+  good point, not the default sizing.
+- A "characterise this circuit" job: a Sobol sample of the whole box
+  (36 min for a 33-variable amplifier), gradient-boosted metric models
+  plus a failure classifier, proposals verified in SPICE, then the
+  warm start. Adds on two of eight target sets over the archive alone;
+  needs scikit-learn in the frozen build. After the archive, not
+  before.
 - Population size as a multiple of the worker count. Both CMA-ES and
   the lq-CMA-ES pilot run 13 points per generation on four workers:
   three full waves and one point alone, an idle last wave every

@@ -2,6 +2,19 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-21 · Amortised surrogate measured: 7 of 8 target sets, archive is half of it
+
+- Asked whether pretraining once per circuit and reusing on new targets
+  pays. Sampled amp_hoilee (2048, 36 min) and ldo_basic (1024, 15 min),
+  learning curves (GBT beats GP from 512 on; hard metrics gain ~0.1 R²
+  per doubling), then four target sets per circuit: pretrained assets
+  + 100 real evaluations beat cold CMA-ES @200 on 7 of 8, four to all
+  met. Re-scoring the archive alone (no model) wins 6 of 8; the models
+  add on 2. Found: `run_cmaes` never evaluates its start point and
+  σ 0.25 walks off a warm start — σ 0.1 + inject reaches 0 where 0.25
+  gave 0.40. Table and reading in `cairn/pitfalls.md`; ROADMAP: archive,
+  warm start, characterise job. No code changed.
+
 ## 2026-09-20 · Batch-fill measured: wall clock fixed, benefit gone
 
 - Filled lq-CMA-ES on the eight circuits: every parallel row now in
