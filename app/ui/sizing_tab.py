@@ -139,7 +139,9 @@ class SizingTab(QWidget, JobTabMixin):
         self._loading = False
 
         self.run_btn = QPushButton('Optimize')
-        self.run_btn.clicked.connect(self._run)
+        # clicked() carries a `checked` bool; _run's first parameter is the
+        # run to resume, so the button must not pass it through
+        self.run_btn.clicked.connect(lambda: self._run())
         self.cancel_btn = QPushButton('Cancel')
         self.cancel_btn.setEnabled(False)
         self.cancel_btn.clicked.connect(self._cancel.set)
@@ -401,6 +403,8 @@ class SizingTab(QWidget, JobTabMixin):
         its DE population for `budget` more evaluations."""
         if self.has_job('opt'):
             return
+        if not isinstance(resume, sizing.SizingRun):   # a stray signal arg
+            resume = None
         try:
             variables = self._read_table()
             overrides = self._read_targets()

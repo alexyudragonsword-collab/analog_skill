@@ -43,11 +43,14 @@ like before touching anything.
 - The metric models, end to end in the app. Shipped in vNext as two
   menu entries (Characterise, Model proposals) behind the existing
   Optimize button; measured only through the scratch scripts so far.
-  Left: run the flow once through the GUI on a fresh archive, and a
-  second seed on the eight target sets before the proposals are
-  offered by "Try next". (The frozen builds carry scikit-learn: build
-  run 104 on the shipping commit passed all six jobs, source-leak gate
-  included.)
+  Done through the GUI on a fresh archive (studio_cm_ota: warm 0.015
+  vs cold 0.189 at 100; `cairn/pitfalls.md`). Left: a second seed on
+  the eight target sets before the proposals are offered by "Try
+  next". (The frozen builds carry scikit-learn: build run 104 passed
+  all six jobs.)
+- A v1.6.1 patch release: v1.6's Optimize button raises on click
+  (CHANGELOG vNext, first entry). The fix is on main; whether to ship
+  it alone or with vNext is the maintainer's call.
 - Population size as a multiple of the worker count. Both CMA-ES and
   the lq-CMA-ES pilot run 13 points per generation on four workers:
   three full waves and one point alone, an idle last wave every

@@ -1075,6 +1075,29 @@ point injected; and only then a "characterise this circuit" sampling
 job with metric models and a failure classifier behind the same seam.
 ROADMAP has all three.
 
+### The button nobody pressed
+
+Driving the shipped Sizing tab end to end for the first time (below)
+crashed on the first click: Qt's `clicked(bool)` hands its `checked`
+flag to the slot, `_run(self, resume=None)` took it as the run to
+resume, and `resume.circuit` raised on a bool. The parameter was added
+for continuing runs the day before v1.6 shipped; every UI test called
+`tab._run()` directly, the parametrised button test monkeypatches the
+slot, and the release build's smoke test only constructs the tabs. So
+v1.6's Optimize button raises into the log and starts nothing, and no
+test noticed for two days. Fixed by not passing the flag through and
+by refusing anything that is not a run; the seed test now presses the
+real button. Rule: a test of a button presses the button.
+
+**The GUI flow, end to end** (studio_cm_ota, fresh archive, 4
+workers, the real tab driven offscreen): characterise 400 points
+(136 s, best sampled 0, all met) → power target halved → archive label
+re-scores to 0.099 without a simulation → model proposals (10, the
+budget spin's floor; 20 s, best verified 0.223) → warm CMA-ES 100
+from the best known point (0.099): **0.015**, 35 s → cold CMA-ES 100
+from the default: 0.189, 35 s. Every step through the Optimize
+button, every run saved, the archive at 610 rows at the end.
+
 ### lq-CMA-ES: fewer evaluations to the same place, twice the wall clock
 
 The pilot `cmaes_surrogate` against `cmaes`, 2026-09-20, the

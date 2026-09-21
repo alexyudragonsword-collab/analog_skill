@@ -489,9 +489,13 @@ def test_sizing_seed_reaches_the_search_and_try_next_applies_the_step(
                         lambda key, variables, **kw: seen.update(kw)
                         or fake_run())
     tab.seed_spin.setValue(5)
-    tab._run()
+    # the real button: clicked() hands _run a `checked` bool, which once
+    # arrived as the run to resume and broke Optimize in the GUI while
+    # every test called _run() directly
+    tab.run_btn.click()
     jobs[-1].fn()
     assert seen['seed'] == 5 and seen['budget'] == tab.budget_spin.value()
+    assert seen['resume'] is None
 
     # a run that ends far from feasible: the status names the misses and
     # the button offers the next seed

@@ -7,6 +7,14 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **Fixed: the Optimize button did nothing in v1.6.** Qt's `clicked`
+  signal carries a `checked` flag, and since the continue-runs change
+  (in v1.6) that flag arrived as the run to resume: pressing Optimize
+  raised `'bool' object has no attribute 'circuit'` in the log and no
+  search started. Every UI test called the run method directly, so
+  none pressed the button; one does now. Runs started from "Try next",
+  the Runs dialog's Continue and the AI advise path were unaffected.
+  **v1.6 users: press Try next after any run, or use vNext.**
 - **Metric models on the archive: characterise once, propose for any
   targets.** Two new entries in the Sizing tab's algorithm menu. *Characterise*
   is a scrambled-Sobol sample of the whole design box (`budget` points,

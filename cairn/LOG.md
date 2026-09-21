@@ -2,6 +2,18 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-21 · GUI end to end: flow works, Optimize button was dead in v1.6
+
+- Drove the real Sizing tab offscreen: characterise 400 → new target
+  → model proposals → warm CMA-ES 100 (0.015) vs cold 100 (0.189) on
+  studio_cm_ota. First click crashed: `clicked(bool)` passed `checked`
+  as `resume` since the continue-runs commit, inside v1.6 — the
+  Optimize button has raised and started nothing since the release.
+  Fixed (lambda + isinstance guard), the seed UI test presses the real
+  button. CHANGELOG says so; whether to cut v1.6.1 is the maintainer's
+  call. Second seed on the eight target sets running through the
+  shipped path (scratchpad `seed1`).
+
 ## 2026-09-21 · Metric models shipped (step 3)
 
 - Maintainer said start the metric models. New `models` module (after
