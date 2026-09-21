@@ -1075,6 +1075,59 @@ point injected; and only then a "characterise this circuit" sampling
 job with metric models and a failure classifier behind the same seam.
 ROADMAP has all three.
 
+### Second seed on the eight target sets: the warm start holds, the models are a lottery
+
+Same eight target sets, seed 1, through the shipped path this time
+(`optimize(algo='model_propose')` → best known point → `optimize(
+algo='cmaes', start=…)`, archive reset to the imported sample before
+each set; scratchpad `seed1.py`):
+
+| circuit / targets | archive lookup | models' best of 8 | warm start +100 | cold CMA-ES @100 / @200 |
+|---|---|---|---|---|
+| amp default | 1.018 | 7.09 | **0** | 4.93 / 0.611 |
+| amp low power | 1.263 | 1.45 | **0** | 0.506 / 0.506 |
+| amp fast | 1.018 | 3.86 | **0.563** | 6.95 / 2.34 |
+| amp quiet | 1.018 | 1.24 | **0** | 3.31 / 3.31 |
+| ldo default | 0.928 | 1.05 | **0.564** | 1.30 / 1.17 |
+| ldo low Iq | 0.928 | 1.05 | **0.564** | 1.30 / 1.17 |
+| ldo fast | 1.271 | 1.271 | 1.186 | 1.41 / **1.133** |
+| ldo quiet | 1.404 | **1.240** | **0.833** | 1.37 / 1.30 |
+
+Over both seeds: the archive's best point plus 100 evaluations beats
+cold CMA-ES at 200 on 14 of 16 rows (the two losses are narrow, each
+seed's "fast" set on a different circuit); the models' proposals beat
+the archive's own best on 3 of 16 (seed 0: amp low power 0.27, amp
+quiet 0.27; seed 1: ldo quiet 1.24), and their predicted optimum is
+still fiction where the archive is thin — "predicted 0" verified at
+7.09 on the amplifier's default set. So the robust half is the one
+without a model, and "Try next" should offer the warm start from the
+archive, not the proposals; the proposals stay a menu entry for the
+user who wants a lottery ticket at eight evaluations. ROADMAP has the
+wiring.
+
+### A raw fit of a metric with garbage rows predicts garbage everywhere
+
+The shipped metric models, run through the shipped path on the
+imported 1024-point LDO archive, predicted a cost of 31 for the
+archive's best row (true 0.93): line regulation predicted 5.7 for a
+true 0.004, load regulation −40 for 0.03, output error 2.2 V for
+−1 mV. The scratch scripts had fitted these in log |y|; the module's
+rule only logged metrics that were strictly positive and spanned two
+decades, and regulation numbers from failed simulations are negative
+and huge, so those three were fitted raw with squared error and the
+garbage rows set the scale. Same cause, smaller, on the amplifier's
+offset (predicted 6.8e-4 for 5.7e-5).
+
+Fix: metrics the score judges by magnitude ('absmin') and metrics
+spanning decades are fitted as log |y|; every fit target is
+winsorised at its 1st/99th percentiles. After it, the rank
+correlation between true and predicted cost over the archives' rows
+is 0.996 (amplifier) and 0.999 (LDO), and the archive's best row
+predicts 1.06 for a true 1.02. The lesson is the one from the LDO
+mapping: a model test that checks shape (keys present, k points
+returned) passes on wrong numbers; the test that catches it compares
+the model's answer at a known point with the known answer.
+
 ### The button nobody pressed
 
 Driving the shipped Sizing tab end to end for the first time (below)

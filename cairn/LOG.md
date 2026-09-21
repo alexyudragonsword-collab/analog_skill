@@ -2,6 +2,21 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-21 · Second seed through the shipped path; model fit defect fixed
+
+- Running the shipped `model_propose` on the imported LDO archive
+  predicted 31 for the archive's best row (true 0.93): regulation
+  metrics fitted raw, garbage rows from failed simulations set the
+  scale. Fix: 'absmin' and decade-spanning metrics fitted as log |y|,
+  targets winsorised at 1/99 %; rank correlation true vs predicted
+  cost 0.996–0.999 on the archives; regression test at a known point
+  with garbage rows. Gate 212 green.
+- Seed 1, eight target sets: archive + warm start 100 beats cold
+  CMA-ES 200 on 7 of 8 (14 of 16 over both seeds); model proposals
+  beat the archive on 1 of 8 (3 of 16). Table in `cairn/pitfalls.md`.
+  ROADMAP: wire the archive warm start into "Try next"; proposals stay
+  a menu entry.
+
 ## 2026-09-21 · GUI end to end: flow works, Optimize button was dead in v1.6
 
 - Drove the real Sizing tab offscreen: characterise 400 → new target

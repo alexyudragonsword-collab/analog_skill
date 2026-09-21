@@ -6,6 +6,7 @@ import shutil
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
+import numpy as np
 import pytest
 
 from app import paths
@@ -1361,9 +1362,18 @@ def test_metric_models_propose_near_the_optimum(monkeypatch, tmp_path):
     for i in range(20):
         sizing.archive.record('skill_bootstrap',
                               {'W.sw': 60.0 + i, 'FCLK': 2e8}, {})
+    # garbage rows, as a failed simulation leaves them: the fit must
+    # still answer right at a known good point (a raw fit predicted 5.7
+    # for a line regulation of 0.004 once the garbage set the scale)
+    for i in range(12):
+        sizing.archive.record('skill_bootstrap',
+                              {'W.sw': 5.0 + i, 'FCLK': 1e7}, {'q': 1e6})
     mm = sizing.models.train('skill_bootstrap', names)
-    assert mm.keys == ['q'] and mm.n == 256 and mm.clf is not None
+    assert mm.keys == ['q'] and mm.n == 268 and mm.clf is not None
     assert sizing.models.train('skill_bootstrap', names) is mm    # cached
+    best = sizing.archive_best('skill_bootstrap', names)
+    at_best = mm.cost(np.array([[best['values'][n] for n in names]]))[0]
+    assert at_best < 0.5, (at_best, best['cost'])
     pts, pred, _ = sizing.models.propose('skill_bootstrap', variables, k=4)
     assert len(pts) == 4 and pred == sorted(pred)
     assert abs(pts[0]['W.sw'] - 30.0) < 4 and abs(pts[0]['FCLK'] - 1e8) < 2e7
@@ -1375,7 +1385,7 @@ def test_metric_models_propose_near_the_optimum(monkeypatch, tmp_path):
     assert run.evals == 4 and sizing.archive_size('skill_bootstrap') == \
         before + 4
     assert run.best_cost < 0.05, run.best_cost
-    assert '4 proposals from metric models trained on 256' in run.notes
+    assert '4 proposals from metric models trained on 268' in run.notes
     assert 'predicted -> verified' in run.notes
 
 

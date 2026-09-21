@@ -28,9 +28,13 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   search. Models are trained on demand and cached in memory, never
   pickled. Measured (`cairn/pitfalls.md`): on two circuits and eight
   target sets the models beat the archive alone on two, and archive +
-  100 evaluations beat a cold search at 200 on seven. Metrics are
-  fitted in log where they span decades. scikit-learn is added to the
-  requirements, the PyInstaller spec and the three Nuitka jobs.
+  100 evaluations beat a cold search at 200 on seven. Metrics judged
+  by magnitude (offset, regulation) and metrics spanning decades are
+  fitted as log |y|, and every fit target is capped at its 1st/99th
+  percentiles, so a failed simulation's garbage numbers cannot pull the
+  fit: the first version fitted line regulation raw and predicted 5.7
+  where the truth was 0.004. scikit-learn is added to the requirements,
+  the PyInstaller spec and the three Nuitka jobs.
 - **Every evaluation is archived, and a search can start from the best
   known point.** The optimizer appends each evaluated point (values and
   metrics, failures included) to a per-circuit JSON-lines archive in the

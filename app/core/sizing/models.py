@@ -51,6 +51,8 @@ class MetricModels:
         from sklearn.ensemble import (HistGradientBoostingClassifier,
                                       HistGradientBoostingRegressor)
         self.circuit, self.names, self.keys = circuit, list(names), list(keys)
+        absmin = {m.key for m in SIZING[circuit].metrics
+                  if m.direction == 'absmin'}
         X = np.array([[r['values'][n] for n in names] for r in rows], float)
         ok = np.array([all(k in r['metrics'] and np.isfinite(r['metrics'][k])
                            for k in keys) for r in rows])
@@ -62,16 +64,26 @@ class MetricModels:
             y = np.array([r['metrics'][k] for r, h in zip(rows, has,
                                                           strict=True) if h],
                          float)
-            # metrics that span decades (GBW, power, settling) fit better
-            # in log; the sign-carrying ones (offset, PSRR in dB) do not
-            self.log[k] = bool(len(y) and y.min() > 0
-                               and y.max() / y.min() > 100)
+            # metrics that span decades (GBW, power, settling) and the
+            # magnitude-judged ones (offset, regulation) are fitted as
+            # log |y|: the score reads only |m| of an 'absmin' metric,
+            # and a raw fit of a metric whose garbage rows sit at 1e3
+            # predicted 5.7 for a line regulation that was 0.004.  The
+            # bounded sign-carrying ones (PSRR in dB, phase) stay raw.
+            # Either way the 1st/99th percentiles cap what a failed
+            # simulation's numbers can pull the fit towards.
+            a = np.abs(y)
+            self.log[k] = bool(len(y) and (k in absmin or (
+                y.min() > 0 and y.max() / max(y.min(), 1e-300) > 100)))
+            t = np.log10(a + 1e-15) if self.log[k] else y
+            if len(t) > 20:
+                t = np.clip(t, *np.percentile(t, [1, 99]))
             m = HistGradientBoostingRegressor(max_iter=500,
                                               learning_rate=0.05,
                                               random_state=0)
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
-                m.fit(X[has], np.log10(y) if self.log[k] else y)
+                m.fit(X[has], t)
             self.models[k] = m
         self.clf = None
         if 0 < ok.sum() < len(ok):
