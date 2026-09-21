@@ -530,8 +530,11 @@ class SizingTab(QWidget, JobTabMixin):
         # "Done: 1.50 -> 1.50" said nothing a user could act on.  Say
         # which targets are still short and, from the measured order —
         # finish when close, another seed, then more budget — what to try.
+        # _refresh_known ran first: the archive's best under the targets
+        # as edited, this run's own points included
         self._next = sizing.next_step(run, infos,
-                                      finish_available=llm_client.configured())
+                                      finish_available=llm_client.configured(),
+                                      known=self._known)
         self.next_btn.setEnabled(self._next['action'] is not None)
         self._status.setText(
             f'Done: cost {run.initial_cost:.3f} → {run.best_cost:.3f} '
@@ -551,6 +554,8 @@ class SizingTab(QWidget, JobTabMixin):
         idx = self.algo_combo.findData(nxt['algo'])
         if idx >= 0:
             self.algo_combo.setCurrentIndex(idx)
+        if nxt['action'] == 'warm':
+            self.known_chk.setChecked(True)
         self._run(resume=self._last_run if nxt.get('resume') else None)
 
     def _show_run(self, run: sizing.SizingRun):

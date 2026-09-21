@@ -7,6 +7,14 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **"Try next" offers the warm start.** When a run ends short and the
+  archive holds a better point under the targets as currently edited
+  (after a target change, or from an earlier run), the suggested next
+  step is now "start from the best known point" at the same seed and
+  budget, ahead of "try another seed": measured on two circuits, four
+  target sets and two seeds, that start plus 100 evaluations beat a
+  cold search at 200 on 14 of 16 rows. The button checks the box and
+  runs; a run that was itself the archive's best gets the old order.
 - **Fixed: the Optimize button did nothing in v1.6.** Qt's `clicked`
   signal carries a `checked` flag, and since the continue-runs change
   (in v1.6) that flag arrived as the run to resume: pressing Optimize

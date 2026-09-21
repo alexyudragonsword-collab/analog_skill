@@ -50,12 +50,6 @@ like before touching anything.
   3 of 16. Decision: the proposals stay a menu entry and are not
   offered by "Try next". (The frozen builds carry scikit-learn: build
   run 104 passed all six jobs.)
-- "Try next" offers the warm start. When a run ends short and the
-  archive holds a better point under the current targets than the
-  run found — or any point at all after a target change — the next
-  step should be "start from the best known point" before "seed",
-  since it won 14 of 16 rows against a cold search at twice the
-  evaluations. `runs.next_step` needs the archive's best as an input.
 - A v1.6.1 patch release: v1.6's Optimize button raises on click
   (CHANGELOG vNext, first entry). The fix is on main; whether to ship
   it alone or with vNext is the maintainer's call.

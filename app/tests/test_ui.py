@@ -287,6 +287,16 @@ def fake_run():
     return _fake_run
 
 
+@pytest.fixture(autouse=True)
+def _no_archive(monkeypatch):
+    """The tab reads the real archive, which earlier tests' ngspice runs
+    fill; a UI test's "next step" must not depend on what ran before
+    it.  Tests about the archive patch these again themselves."""
+    from app.core import sizing
+    monkeypatch.setattr(sizing, 'archive_best', lambda *a, **k: None)
+    monkeypatch.setattr(sizing, 'archive_size', lambda *a, **k: 0)
+
+
 def test_sizing_start_from_best_known_point(window, tmp_path, monkeypatch,
                                             fake_run):
     """The checkbox sends the archive's best point under the current
@@ -329,6 +339,17 @@ def test_sizing_start_from_best_known_point(window, tmp_path, monkeypatch,
     tab._run()
     jobs[-1].fn()
     assert seen['start'] is None
+    # a run that ends short while the archive holds a better point: Try
+    # next checks the box and starts from that point
+    run = fake_run(cost=1.5)
+    run.algo, run.seed, run.budget = 'diff_evolution', 0, 600
+    tab.on_job_finished('opt', run)
+    assert tab._next['action'] == 'warm', tab._next
+    assert 'archive holds a better point' in tab._status.text()
+    tab.next_btn.click()
+    jobs[-1].fn()
+    assert tab.known_chk.isChecked() and seen['start'] == point
+    tab.known_chk.setChecked(False)
 
 
 def test_sizing_menu_offers_characterise_and_model_proposals(window):

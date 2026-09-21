@@ -2,6 +2,16 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-21 · Try next offers the warm start
+
+- `runs.next_step(known=)` takes the archive's best under the current
+  targets; when it beats the run's result the action is 'warm' (same
+  seed and budget, start from the point), placed after the finish rule
+  and before the seed rule. The tab passes `_known` (refreshed before
+  the step is computed) and Try next checks the box. UI tests now run
+  with the archive patched out by default: earlier ngspice tests fill
+  the real archive and changed the suggested step. ROADMAP item closed.
+
 ## 2026-09-21 · Second seed through the shipped path; model fit defect fixed
 
 - Running the shipped `model_propose` on the imported LDO archive

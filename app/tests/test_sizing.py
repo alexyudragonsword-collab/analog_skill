@@ -1119,6 +1119,20 @@ def test_next_step_follows_the_measured_order(monkeypatch):
     assert nxt['action'] == 'seed' and nxt['seed'] == 1
 
     far = _run_with(dict(_PERFECT, dcgain=60.0, power=1e-3))
+    # the archive's best under the targets beats what the run found: the
+    # warm start comes before another seed — it won 14 of 16 rows against
+    # a cold search at twice the evaluations; a point no better than the
+    # run's own (the run's result is archived too) offers nothing new
+    nxt = sizing.next_step(far, [_info(0, far.best_cost)],
+                           known={'cost': far.best_cost * 0.5, 'n': 300,
+                                  'values': {}})
+    assert nxt['action'] == 'warm' and nxt['seed'] == far.seed
+    assert 'archive holds a better point' in nxt['text']
+    assert '300 archived' in nxt['text']
+    nxt = sizing.next_step(far, [_info(0, far.best_cost)],
+                           known={'cost': far.best_cost, 'n': 1,
+                                  'values': {}})
+    assert nxt['action'] == 'seed'
     nxt = sizing.next_step(far, [_info(0, far.best_cost)])
     assert nxt['action'] == 'seed' and nxt['seed'] == 1
     nxt = sizing.next_step(far, [_info(0, 2.0), _info(1, 0.9), _info(2, 1.4)])

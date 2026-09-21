@@ -79,7 +79,8 @@ CLOSE_MISSES, CLOSE_VIOLATION = 2, 0.10
 
 
 def next_step(run: SizingRun, infos: list[dict],
-              finish_available: bool = True) -> dict:
+              finish_available: bool = True,
+              known: dict | None = None) -> dict:
     """What to try next after `run`, from the evidence this project has.
 
     Sixteen runs over eight circuits at two seeds, plus one at twice the
@@ -89,13 +90,19 @@ def next_step(run: SizingRun, infos: list[dict],
     finish turns "close" into "done" but is not a rescue from far away.
     Hence the order — finish if close and not yet tried, another seed
     while fewer than SEEDS_BEFORE_MORE_BUDGET have been, then twice the
-    budget at the seed that did best.
+    budget at the seed that did best.  One step comes before the seed:
+    `known`, the archive's best point under the current targets
+    (archive.best), when it beats what this run found — a warm start
+    from it plus 100 evaluations beat a cold search at 200 on 14 of 16
+    circuit-target rows (cairn/pitfalls.md, "Second seed on the eight
+    target sets"), and it is the step that costs nothing to know.
 
     `infos` are run_info() dicts for saved runs (any circuit; filtered
     here).  Returns {'missed': str, 'text': str, 'action': None | 'finish'
-    | 'seed' | 'budget', 'algo': str, 'seed': int, 'budget': int,
-    'resume': bool}; the settings are what to run next, the text is for
-    the status line.  'resume' means: continue *this* run from its
+    | 'seed' | 'budget' | 'warm', 'algo': str, 'seed': int, 'budget':
+    int, 'resume': bool}; the settings are what to run next, the text
+    is for the status line.  'warm' means: same settings, started from
+    the known point.  'resume' means: continue *this* run from its
     population for `budget` more evaluations rather than start over —
     a DE run that kept its population never replays its first half.
     These are suggestions from a small sample, and the text says so.
@@ -118,6 +125,13 @@ def next_step(run: SizingRun, infos: list[dict],
                 'text': missed + '. Close — try the AI finish at the same '
                 'seed and budget; that is the step measured to turn close '
                 'into done.'}
+    if known and known['cost'] < run.best_cost - 1e-9:
+        return {**out, 'action': 'warm',
+                'text': missed + f'. The archive holds a better point under '
+                f'these targets (cost {known["cost"]:.4g}, {known["n"]} '
+                'archived) — start from it at the same seed and budget; '
+                'that beat a cold search at twice the evaluations on 14 '
+                'of 16 rows.'}
     same = [i for i in infos
             if i['circuit'] == run.circuit and not i['cancelled']
             and i.get('budget', 0) >= out['budget']]
