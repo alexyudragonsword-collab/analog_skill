@@ -135,6 +135,7 @@ jobs:
             --include-module=scipy.stats `
             --include-module=scipy.signal `
             --include-package=cma `
+            --include-package=sklearn `
             --nofollow-import-to=optuna `
             --nofollow-import-to=sqlalchemy `
             --nofollow-import-to=greenlet `
@@ -305,6 +306,7 @@ jobs:
             --include-module=scipy.stats `
             --include-module=scipy.signal `
             --include-package=cma `
+            --include-package=sklearn `
             --nofollow-import-to=optuna `
             --nofollow-import-to=sqlalchemy `
             --nofollow-import-to=greenlet `
@@ -456,6 +458,7 @@ jobs:
             --include-module=scipy.stats \
             --include-module=scipy.signal \
             --include-package=cma \
+            --include-package=sklearn \
             --nofollow-import-to=optuna \
             --nofollow-import-to=sqlalchemy \
             --nofollow-import-to=greenlet \

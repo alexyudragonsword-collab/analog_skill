@@ -7,3 +7,4 @@ matplotlib>=3.7,<4
 scipy>=1.10,<2
 PySide6>=6.6,<7
 cma>=3.3,<5          # CMA-ES for the Sizing tab; pure Python
+scikit-learn>=1.4,<2 # metric models on the sizing archive (optional at runtime)

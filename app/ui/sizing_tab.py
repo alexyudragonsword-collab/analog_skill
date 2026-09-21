@@ -81,6 +81,17 @@ class SizingTab(QWidget, JobTabMixin):
                                 userData='llm')
         self.algo_combo.addItem('LLM agent (AI drives, Claude Code only)',
                                 userData='llm_agent')
+        # the amortised surrogate: characterise once (Sobol over the whole
+        # box, hours are fine), then metric models trained on the archive
+        # propose candidates for any new targets in seconds and `budget`
+        # of them are verified; start the next search from the best
+        self.algo_combo.addItem('Characterise: Sobol sample of the whole '
+                                'box (no search; feeds the metric models)',
+                                userData='sobol')
+        if sizing.models_available():
+            self.algo_combo.addItem('Model proposals: metric models on the '
+                                    'archive pick `budget` points, verified '
+                                    'here', userData='model_propose')
         # the default is the measured winner — CMA-ES, feasible on 12 of
         # 18 circuit-seed rows against DE's 6 — with the finish when a
         # model is configured, and DE when the cma package is absent.
@@ -335,6 +346,10 @@ class SizingTab(QWidget, JobTabMixin):
                 effort=FINISH_EFFORT)
             note = (f'  (+ up to {FINISH_ROUNDS} AI rounds of '
                     f'{FINISH_PROPOSALS} calls)')
+        elif self.algo_combo.currentData() == 'model_propose':
+            secs = spec.eval_seconds * budget / workers + 15
+            note = ('  (training on the archive ~15 s; budget = proposals '
+                    'verified)')
         elif self.algo_combo.currentData() == 'llm':
             # The simulations are the small half here.  One round is one LLM
             # call plus min(workers, 4) evaluations, and the call can be a

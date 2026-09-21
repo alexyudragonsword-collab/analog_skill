@@ -40,12 +40,14 @@ like before touching anything.
   before it is a regulation one. Whether to keep Basic_LDO's targets on
   the variants, or give each its own (LNR window, GBW at 10 mA), is a
   design call to make with a sweep of the four at the new numbers.
-- A "characterise this circuit" job: a Sobol sample of the whole box
-  (36 min for a 33-variable amplifier), gradient-boosted metric models
-  plus a failure classifier, proposals verified in SPICE, then the
-  warm start. Adds on two of eight target sets over the archive alone;
-  needs scikit-learn in the frozen build. The archive and the warm
-  start it plugs into shipped in vNext; the models are what is left.
+- The metric models, end to end in the app. Shipped in vNext as two
+  menu entries (Characterise, Model proposals) behind the existing
+  Optimize button; measured only through the scratch scripts so far.
+  Left: run the flow once through the GUI on a fresh archive; confirm
+  the frozen builds carry scikit-learn (next release CI: the Nuitka
+  jobs now `--include-package=sklearn`, untested until then); and a
+  second seed on the eight target sets before the proposals are
+  offered by "Try next".
 - Population size as a multiple of the worker count. Both CMA-ES and
   the lq-CMA-ES pilot run 13 points per generation on four workers:
   three full waves and one point alone, an idle last wave every

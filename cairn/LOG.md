@@ -2,6 +2,21 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-21 · Metric models shipped (step 3)
+
+- Maintainer said start the metric models. New `models` module (after
+  `archive` in the import order): per-metric HistGradientBoosting +
+  failure classifier trained on the archive on demand (cached, never
+  pickled), `propose()` runs CMA-ES on the models from the archive's
+  best under the targets and returns k distinct candidates. Two new
+  `optimize` algos: `sobol` (characterise the whole box into the
+  archive) and `model_propose` (verify k proposals in one batch, best
+  verified = result). Menu entries in the Sizing tab; scikit-learn in
+  requirements, app.spec and the three Nuitka jobs (frozen build
+  unverified until the next release CI). Tests on the bowl: the models
+  propose within 4 of (30, 100 MHz) from a 256-point sample; gate 212
+  green. ROADMAP: GUI end-to-end run, frozen build, second seed.
+
 ## 2026-09-21 · Archive and warm start shipped (steps 1 and 2)
 
 - Maintainer said do 1 and 2 first. New `archive` module (between

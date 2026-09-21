@@ -331,6 +331,25 @@ def test_sizing_start_from_best_known_point(window, tmp_path, monkeypatch,
     assert seen['start'] is None
 
 
+def test_sizing_menu_offers_characterise_and_model_proposals(window):
+    """The amortised surrogate is two menu entries behind the existing
+    seam: a Sobol characterisation and, with scikit-learn present, the
+    models' proposals; both run through the same Optimize button."""
+    from app.core import sizing
+    tab = window.sizing_tab
+    assert tab.algo_combo.findData('sobol') >= 0
+    assert (tab.algo_combo.findData('model_propose') >= 0) == \
+        sizing.models_available()
+    tab.algo_combo.setCurrentIndex(tab.algo_combo.findData('sobol'))
+    tab._update_estimate()
+    if sizing.models_available():
+        tab.algo_combo.setCurrentIndex(
+            tab.algo_combo.findData('model_propose'))
+        tab._update_estimate()
+        assert 'proposals verified' in tab._estimate.text()
+    tab.algo_combo.setCurrentIndex(tab.algo_combo.findData('diff_evolution'))
+
+
 def test_sizing_run_round_trip(window, tmp_path, monkeypatch, fake_run):
     """Press Run, then hand the tab the reply it would have got: buttons and
     report have to come back consistent, and the run has to be saved."""

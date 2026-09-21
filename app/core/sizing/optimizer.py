@@ -12,7 +12,7 @@ import time
 
 import numpy as np
 
-from app.core.sizing import archive
+from app.core.sizing import archive, models
 from app.core.sizing.evaluation import evaluate
 from app.core.sizing.registry import SIZING
 from app.core.sizing.report import DE_ALGOS, SizingRun
@@ -130,6 +130,18 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                         the right variables and the wrong amounts; the
                         line search supplies the amounts.
       'optuna'          TPE via batch ask/tell (if optuna is installed).
+      'sobol'           no search: a scrambled-Sobol sample of the whole
+                        box, `budget` points, the default sizing first.
+                        Characterises the circuit for the metric models
+                        (every point lands in the archive); the best
+                        sampled point is the run's result.
+      'model_propose'   models.propose: gradient-boosted metric models
+                        trained on the archive pick `budget` candidates
+                        under the current targets (CMA-ES on the models,
+                        seconds), all verified here in one batch.  The
+                        best verified point is the result and the
+                        natural start for a warm-started search.  Needs
+                        scikit-learn and MIN_ROWS complete archive rows.
       'llm'             LLM-in-the-loop (needs an API key in Settings):
                         the model proposes candidates in physical units,
                         every candidate is measured by ngspice, costs are
@@ -636,6 +648,35 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                               else ' (finish found nothing)'))
         run_cmaes(budget, start=state['best_xn'], sigma=0.1)
 
+    def run_sobol():
+        import warnings
+        sob = qmc.Sobol(dims, scramble=True, seed=seed)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            pts = [x0] + list(sob.random(max(budget - 1, 0)))
+        # batches of a few waves: cancellation lands within seconds and
+        # the archive fills as it goes
+        step = max(workers * 4, 1)
+        for i in range(0, len(pts), step):
+            if state['cancel']:
+                break
+            run_batch(pts[i:i + step])
+        state['notes'] = (f'Sobol sample of the whole box, {state["done"]} '
+                          'points archived')
+
+    def run_model_propose():
+        points, predicted, mm = models.propose(
+            circuit, variables, overrides, k=budget, seed=seed)
+        xs = [np.clip((np.array([p[n] for n in names]) - lo) / span, 0, 1)
+              for p in points]
+        costs = run_batch(xs)
+        pairs = sorted(zip(predicted, costs, strict=True))
+        state['notes'] = (
+            f'{len(points)} proposals from metric models trained on '
+            f'{mm.n} archived evaluations ({", ".join(mm.keys)}); '
+            'predicted -> verified: '
+            + ', '.join(f'{p:.3g} -> {c:.4g}' for p, c in pairs))
+
     def run_optuna():
         import optuna
         optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -699,6 +740,10 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             run_cmaes()
         elif algo == 'cmaes_surrogate':
             run_cmaes_surrogate()
+        elif algo == 'sobol':
+            run_sobol()
+        elif algo == 'model_propose':
+            run_model_propose()
         elif algo == 'cmaes_llm_finish':
             run_cmaes_llm_finish()
         elif algo == 'llm':

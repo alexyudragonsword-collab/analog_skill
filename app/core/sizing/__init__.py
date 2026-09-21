@@ -22,6 +22,7 @@ ones above it:
     scoring        metrics -> single cost
     evaluation     render testbench -> run ngspice -> metrics / waves
     archive        every evaluated point of a circuit, on disk, re-scored
+    models         metric models trained on the archive; proposals
     user_circuits  import the user's own designs into the registry
     report         the completed-run record and its report text
     optimizer      evaluate/score loop under a budget (4 algorithms)
@@ -41,6 +42,7 @@ import.  Patch the call site's module instead —
 # ruff: noqa: F401  (this module exists to re-export)
 
 from app.core.sizing.archive import best as archive_best, size as archive_size
+from app.core.sizing.models import MIN_ROWS, available as models_available
 from app.core.sizing.assets import (
     _pkg_root, parse_param_file, parse_variables, schematic_path,
     user_circuits_dir,

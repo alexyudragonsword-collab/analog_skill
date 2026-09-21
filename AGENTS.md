@@ -51,7 +51,7 @@ A PySide6 desktop workbench for analog IC design, driving ngspice locally — gm
 ```bash
 python -m app.main                      # run (QT_QPA_PLATFORM=offscreen if headless)
 python -m app.main --smoke              # build every tab, exit 0
-python -m pytest app/tests/ -v          # ~205 tests, ~3 min, real ngspice
+python -m pytest app/tests/ -v          # ~210 tests, ~3.5 min, real ngspice
 python -m ruff check .                  # must be clean; config in ruff.toml
 python tools/gen_sizing_schematics.py   # redraw the 20 Sizing schematics
 ```
@@ -62,7 +62,8 @@ python tools/gen_sizing_schematics.py   # redraw the 20 Sizing schematics
 app/core/sizing/   the Sizing engine, split by responsibility; import graph is
                    strictly one-directional and verified acyclic:
                    spec -> registry -> assets -> scoring -> evaluation ->
-                   user_circuits -> report -> optimizer -> runs -> plots
+                   archive -> models -> user_circuits -> report ->
+                   optimizer -> runs -> plots
 app/core/          worker (single background thread), circuits, gm/ID services,
                    LLM client (HTTP + Claude Code CLI), ngspice and Claude
                    Code locators, model registry

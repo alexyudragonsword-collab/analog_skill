@@ -73,6 +73,8 @@ a = Analysis(
         # imported inside optimize() so the Sizing tab loads without it;
         # PyInstaller does not see a function-level import
         'cma',
+        'sklearn', 'sklearn.ensemble', 'sklearn.utils._typedefs',
+        'sklearn.utils._cython_blas', 'sklearn.neighbors._partition_nodes',
     ],
     hookspath=[],
     runtime_hooks=[],

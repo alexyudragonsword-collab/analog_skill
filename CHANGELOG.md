@@ -7,6 +7,22 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **Metric models on the archive: characterise once, propose for any
+  targets.** Two new entries in the Sizing tab's algorithm menu. *Characterise*
+  is a scrambled-Sobol sample of the whole design box (`budget` points,
+  the default sizing first, every point archived, no search). *Model
+  proposals* trains one gradient-boosted regressor per metric plus a
+  "does it simulate" classifier on the circuit's archive (about 15 s
+  for 2000 points; scikit-learn, optional at runtime), runs CMA-ES on
+  the models under the targets as edited (seconds), and verifies
+  `budget` distinct candidates in one batch; the best verified point is
+  the run's result and the natural "best known point" for the next
+  search. Models are trained on demand and cached in memory, never
+  pickled. Measured (`cairn/pitfalls.md`): on two circuits and eight
+  target sets the models beat the archive alone on two, and archive +
+  100 evaluations beat a cold search at 200 on seven. Metrics are
+  fitted in log where they span decades. scikit-learn is added to the
+  requirements, the PyInstaller spec and the three Nuitka jobs.
 - **Every evaluation is archived, and a search can start from the best
   known point.** The optimizer appends each evaluated point (values and
   metrics, failures included) to a per-circuit JSON-lines archive in the

@@ -1315,6 +1315,70 @@ def test_warm_start_searches_from_the_known_point(monkeypatch, tmp_path):
                         algo='cmaes', start={'W.sw': 31.0})
 
 
+def test_characterise_samples_the_box_into_the_archive(monkeypatch,
+                                                       tmp_path):
+    """'sobol' is not a search: budget points over the whole box, the
+    default sizing first, every one archived; the best sampled point is
+    the run's result."""
+    monkeypatch.setattr(sizing.archive, 'archive_dir', lambda: tmp_path)
+    monkeypatch.setattr(sizing.archive, 'score',
+                        lambda c, m, ov=None: m.get('q', 1e9))
+    variables = _fake_bowl(monkeypatch)
+    run = sizing.optimize('skill_bootstrap', variables, budget=64,
+                          algo='sobol', workers=1, seed=3)
+    assert run.evals == 64 and sizing.archive_size('skill_bootstrap') == 64
+    assert 'Sobol sample of the whole box, 64 points' in run.notes
+    rows = sizing.archive.load('skill_bootstrap')
+    defaults = {v.name: v.default for v in variables}
+    assert rows[0]['values'] == defaults              # the default first
+    assert run.best_cost == min(r['metrics']['q'] for r in rows)
+    # the sample spans the box, not the default's neighbourhood
+    ws = [r['values']['W.sw'] for r in rows]
+    lo, hi = next(v for v in variables if v.name == 'W.sw').lo, \
+        next(v for v in variables if v.name == 'W.sw').hi
+    assert min(ws) < lo + 0.1 * (hi - lo) and max(ws) > hi - 0.1 * (hi - lo)
+
+
+def test_metric_models_propose_near_the_optimum(monkeypatch, tmp_path):
+    """Models trained on a characterised archive propose points under
+    the current targets in seconds; verified in one batch, the best of
+    them is the warm start.  On the bowl the models see the whole box
+    and their proposals land near (30, 100 MHz) without a search on the
+    real function."""
+    pytest.importorskip('sklearn')
+    pytest.importorskip('cma')
+    monkeypatch.setattr(sizing.archive, 'archive_dir', lambda: tmp_path)
+    fake_score = lambda c, m, ov=None: m.get('q', 1e9)   # noqa: E731
+    monkeypatch.setattr(sizing.archive, 'score', fake_score)
+    monkeypatch.setattr(sizing.models, 'score', fake_score)
+    variables = _fake_bowl(monkeypatch)
+    names = [v.name for v in variables]
+    with pytest.raises(ValueError, match='characterise'):
+        sizing.models.train('skill_bootstrap', names)
+    sizing.optimize('skill_bootstrap', variables, budget=256, algo='sobol',
+                    workers=1)
+    # a few failed rows: the classifier learns where the box breaks
+    for i in range(20):
+        sizing.archive.record('skill_bootstrap',
+                              {'W.sw': 60.0 + i, 'FCLK': 2e8}, {})
+    mm = sizing.models.train('skill_bootstrap', names)
+    assert mm.keys == ['q'] and mm.n == 256 and mm.clf is not None
+    assert sizing.models.train('skill_bootstrap', names) is mm    # cached
+    pts, pred, _ = sizing.models.propose('skill_bootstrap', variables, k=4)
+    assert len(pts) == 4 and pred == sorted(pred)
+    assert abs(pts[0]['W.sw'] - 30.0) < 4 and abs(pts[0]['FCLK'] - 1e8) < 2e7
+    # through optimize: the proposals are verified, archived, and the
+    # best verified point is the result
+    before = sizing.archive_size('skill_bootstrap')
+    run = sizing.optimize('skill_bootstrap', variables, budget=4,
+                          algo='model_propose', workers=1)
+    assert run.evals == 4 and sizing.archive_size('skill_bootstrap') == \
+        before + 4
+    assert run.best_cost < 0.05, run.best_cost
+    assert '4 proposals from metric models trained on 256' in run.notes
+    assert 'predicted -> verified' in run.notes
+
+
 def test_de_powell_polishes_where_de_stopped(monkeypatch):
     variables = _fake_bowl(monkeypatch)
     run = sizing.optimize('skill_bootstrap', variables, budget=80,
