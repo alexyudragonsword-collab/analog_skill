@@ -12,8 +12,9 @@ This file records substantive progress in reverse-chronological order — newest
   `optimize` algos: `sobol` (characterise the whole box into the
   archive) and `model_propose` (verify k proposals in one batch, best
   verified = result). Menu entries in the Sizing tab; scikit-learn in
-  requirements, app.spec and the three Nuitka jobs (frozen build
-  unverified until the next release CI). Tests on the bowl: the models
+  requirements, app.spec and the three Nuitka jobs — build run 104
+  on the push went green on all six jobs, so the frozen builds carry
+  scikit-learn; Tests run 129 green. Tests on the bowl: the models
   propose within 4 of (30, 100 MHz) from a 256-point sample; gate 212
   green. ROADMAP: GUI end-to-end run, frozen build, second seed.
 

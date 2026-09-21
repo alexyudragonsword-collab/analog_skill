@@ -43,11 +43,11 @@ like before touching anything.
 - The metric models, end to end in the app. Shipped in vNext as two
   menu entries (Characterise, Model proposals) behind the existing
   Optimize button; measured only through the scratch scripts so far.
-  Left: run the flow once through the GUI on a fresh archive; confirm
-  the frozen builds carry scikit-learn (next release CI: the Nuitka
-  jobs now `--include-package=sklearn`, untested until then); and a
+  Left: run the flow once through the GUI on a fresh archive, and a
   second seed on the eight target sets before the proposals are
-  offered by "Try next".
+  offered by "Try next". (The frozen builds carry scikit-learn: build
+  run 104 on the shipping commit passed all six jobs, source-leak gate
+  included.)
 - Population size as a multiple of the worker count. Both CMA-ES and
   the lq-CMA-ES pilot run 13 points per generation on four workers:
   three full waves and one point alone, an idle last wave every
