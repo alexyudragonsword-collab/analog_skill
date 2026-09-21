@@ -12,6 +12,7 @@ import time
 
 import numpy as np
 
+from app.core.sizing import archive
 from app.core.sizing.evaluation import evaluate
 from app.core.sizing.registry import SIZING
 from app.core.sizing.report import DE_ALGOS, SizingRun
@@ -61,7 +62,8 @@ def _fill(n: int, workers: int, cap: int) -> int:
 def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
              progress=None, should_cancel=None, overrides: dict | None = None,
              algo: str = 'sobol_powell', workers: int = 1,
-             seed: int = 0, resume: SizingRun | None = None) -> SizingRun:
+             seed: int = 0, resume: SizingRun | None = None,
+             start: dict | None = None) -> SizingRun:
     """Bounded search, ≤ budget evaluations, optionally parallel.
 
     algo:
@@ -155,6 +157,16 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
     must be the same circuit and variables and one of DE_ALGOS; the
     previous best is this run's starting point.  Raises ValueError
     otherwise.
+
+    start: a known point (variable name -> value) to search from instead
+    of the default sizing — the archive's best under the current targets,
+    typically.  CMA-ES then takes the finish's resume settings, σ 0.1
+    with the point injected: measured (cairn/pitfalls.md) σ 0.25 walked
+    off a verified 0.27 to a "best" of 0.73 in 100 evaluations and never
+    evaluated the point itself; σ 0.1 with the point in the first
+    population reached 0 in the same 100.  DE and Sobol+Powell already
+    evaluate their start point.  Every evaluation is appended to the
+    circuit's archive (archive.record).
     """
     import queue as _queue
     import threading
@@ -173,6 +185,13 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
     span = np.where(hi > lo, hi - lo, 1.0)
     is_int = np.array([v.is_int for v in variables])
     x0 = (np.array([v.default for v in variables], float) - lo) / span
+    warm = start is not None
+    if warm:
+        missing = [n for n in names if n not in start]
+        if missing:
+            raise ValueError(f'start point lacks {missing[:3]}')
+        x0 = np.clip((np.array([float(start[n]) for n in names]) - lo)
+                     / span, 0.0, 1.0)
 
     lock = threading.Lock()
     # 'cap' is the ceiling a phase may dispatch up to (<= budget); the
@@ -227,6 +246,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         finally:
             slots.put(slot)
         c = score(circuit, metrics, overrides)
+        archive.record(circuit, vals, metrics)
         with lock:
             state['done'] += 1
             if state['best'] is None or c < state['best']:
@@ -441,7 +461,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             state['notes'] = 'constrained: no feasible point found'
 
     def run_cmaes(limit: int = budget, stall: int | None = None,
-                  start=None, sigma: float = 0.25):
+                  start=None, sigma: float | None = None):
         """CMA-ES up to `limit` dispatches, restarting when a run stops
         on its own.  `stall` (evaluations without a new best) ends the
         whole search early — the finish's cue.  `start`/`sigma` resume
@@ -451,7 +471,10 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         lam = max(workers, 4 + int(3 * np.log(dims)))
         restarts = 0
         lines = state['notes'].splitlines() if state['notes'] else []
+        inject = start is None and warm      # the known point, once
         start = x0 if start is None else start
+        if sigma is None:
+            sigma = 0.1 if inject else 0.25
         while (not state['cancel'] and state['dispatched'] < limit
                and not stalled(stall)):
             es = cma.CMAEvolutionStrategy(start, sigma, {
@@ -460,6 +483,9 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                 'maxfevals': limit - state['dispatched'],
                 'tolfun': 1e-6, 'tolx': 1e-4,
                 'verbose': -9, 'verb_disp': 0, 'verb_log': 0})
+            if inject:
+                es.inject([start], force=True)
+                inject = False
             at = state['dispatched']
             while (not es.stop() and not state['cancel']
                    and state['dispatched'] < limit
@@ -508,7 +534,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         lam = max(workers, 4 + int(3 * np.log(dims)))
         restarts = 0
         lines = state['notes'].splitlines() if state['notes'] else []
-        start, sigma = x0, 0.25
+        start, sigma, inject = x0, (0.1 if warm else 0.25), warm
         while (not state['cancel'] and state['dispatched'] < limit
                and not stalled(stall)):
             es = cma.CMAEvolutionStrategy(start, sigma, {
@@ -517,6 +543,9 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                 'maxfevals': limit - state['dispatched'],
                 'tolfun': 1e-6, 'tolx': 1e-4,
                 'verbose': -9, 'verb_disp': 0, 'verb_log': 0})
+            if inject:
+                es.inject([start], force=True)
+                inject = False
             model = LQModel()
             model.settings.max_absolute_size = SP.model_max_size_factor * lam
             at, gens = state['dispatched'], 0
@@ -689,6 +718,11 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             verified = evaluate(spec.verify_key, state['best_x'])
         except Exception as exc:                 # keep the proxy result
             print(f'verification failed: {exc}')
+    if warm:
+        state['notes'] = ('warm start from a known point'
+                          + (' (σ 0.1, point injected)'
+                             if algo.startswith('cmaes') else '')
+                          + ('\n' + state['notes'] if state['notes'] else ''))
     initial_cost = state['history'][0][1] if state['history'] else float('inf')
     return SizingRun(circuit=circuit,
                      best_values=state['best_x'] or to_values(x0),

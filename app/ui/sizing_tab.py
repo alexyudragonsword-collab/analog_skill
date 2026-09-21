@@ -13,7 +13,7 @@ import threading
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QFontDatabase
 from PySide6.QtWidgets import (
-    QAbstractItemView, QComboBox, QDialog, QFileDialog, QFormLayout,
+    QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QFormLayout,
     QGroupBox, QHBoxLayout, QLabel, QMenu, QMessageBox, QPlainTextEdit,
     QPushButton, QSpinBox, QSplitter, QTableWidget, QTableWidgetItem,
     QTabWidget, QVBoxLayout, QWidget,
@@ -48,6 +48,7 @@ class SizingTab(QWidget, JobTabMixin):
 
         self._targets = QTableWidget(0, 3)
         self._targets.setHorizontalHeaderLabels(['metric', 'target', 'hard'])
+        self._targets.itemChanged.connect(lambda *_: self._refresh_known())
         self._targets.horizontalHeader().setStretchLastSection(True)
         self._targets.verticalHeader().setVisible(False)
         self._targets.setMaximumHeight(220)
@@ -113,6 +114,18 @@ class SizingTab(QWidget, JobTabMixin):
             'circuit-skills circuits always run serially).')
         self.workers_spin.valueChanged.connect(self._update_estimate)
         self._estimate = QLabel('')
+        # every evaluation of a circuit is archived; re-scored under the
+        # current targets, the best of them beat a cold search at 200
+        # evaluations on six of eight target sets (cairn/pitfalls.md)
+        self.known_chk = QCheckBox('Start from the best known point')
+        self.known_chk.setToolTip(
+            'Search from the archived evaluation that scores best under '
+            'the current targets instead of the default sizing.  CMA-ES '
+            'then takes a tight step (σ 0.1) with the point injected.')
+        self.known_chk.toggled.connect(self._refresh_known)
+        self._known_lbl = QLabel('')
+        self._known: dict | None = None
+        self._loading = False
 
         self.run_btn = QPushButton('Optimize')
         self.run_btn.clicked.connect(self._run)
@@ -193,6 +206,7 @@ class SizingTab(QWidget, JobTabMixin):
         sf.addRow('Seed', self.seed_spin)
         sf.addRow('Parallel evals', self.workers_spin)
         sf.addRow('', self._estimate)
+        sf.addRow(self.known_chk, self._known_lbl)
 
         tgt_box = QGroupBox('Targets (editable; hard = 10x weight)')
         tb = QVBoxLayout(tgt_box)
@@ -244,6 +258,7 @@ class SizingTab(QWidget, JobTabMixin):
         return self.circuit_combo.currentData()
 
     def _on_circuit(self, *_):
+        self._loading = True                 # target cells being filled
         variables = sizing.parse_variables(self._key())
         self._table.setRowCount(len(variables))
         for row, v in enumerate(variables):
@@ -268,10 +283,34 @@ class SizingTab(QWidget, JobTabMixin):
                                else Qt.CheckState.Unchecked)
             self._targets.setItem(row, 2, hard)
         self._targets.resizeColumnsToContents()
+        self._loading = False
         self._update_estimate()
+        self._refresh_known()
         sch = sizing.schematic_path(self._key())
         if sch is not None:
             self._viewer.show_pngs([sch])
+
+    def _refresh_known(self, *_):
+        """The archive's best point under the targets as edited now."""
+        if self._loading:
+            return
+        try:
+            names = [v.name for v in self._read_table()]
+            overrides = self._read_targets()
+        except ValueError:
+            self._known = None
+            self._known_lbl.setText('')
+            return
+        self._known = sizing.archive_best(self._key(), names, overrides)
+        if self._known is None:
+            n = sizing.archive_size(self._key())
+            self._known_lbl.setText(
+                'no archived evaluations yet' if not n
+                else f'{n} archived, none with these variables')
+        else:
+            self._known_lbl.setText(
+                f'{self._known["n"]} archived; best under these targets '
+                f'costs {self._known["cost"]:.4f}')
 
     def _update_estimate(self, *_):
         spec = sizing.SIZING[self._key()]
@@ -369,6 +408,15 @@ class SizingTab(QWidget, JobTabMixin):
             self._status.setText('<font color="red">That run cannot be '
                                  'continued here.</font>')
             return
+        start = None
+        if self.known_chk.isChecked() and resume is None:
+            self._refresh_known()
+            if self._known is None:
+                self._status.setText('<font color="red">No archived '
+                                     'evaluation of this circuit with these '
+                                     'variables to start from.</font>')
+                return
+            start = dict(self._known['values'])
         self._cancel.clear()
         origin = getattr(resume, '_saved_as', '') if resume else ''
 
@@ -381,7 +429,8 @@ class SizingTab(QWidget, JobTabMixin):
                                   progress=progress,
                                   should_cancel=self._cancel.is_set,
                                   overrides=overrides, algo=algo,
-                                  workers=workers, seed=seed, resume=resume)
+                                  workers=workers, seed=seed, resume=resume,
+                                  start=start)
             run.continued_from = origin
             return run
 
@@ -391,13 +440,17 @@ class SizingTab(QWidget, JobTabMixin):
         self.run_btn.setEnabled(False)
         self.next_btn.setEnabled(False)
         self.cancel_btn.setEnabled(True)
-        self._status.setText(f'Optimizing ({budget} evaluations)… '
-                             'progress in the log panel below.')
+        self._status.setText(
+            f'Optimizing ({budget} evaluations)'
+            + (f' from the best known point (cost '
+               f'{self._known["cost"]:.4f})' if start else '')
+            + '… progress in the log panel below.')
 
     def on_job_finished(self, slot, result):
         if slot == 'advise':
             self._show_advice(result)
             return
+        self._refresh_known()
         if slot == 'explain':
             self.explain_btn.setEnabled(True)
             self._report.appendPlainText('\n─── AI analysis ───\n'

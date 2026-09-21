@@ -7,6 +7,24 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **Every evaluation is archived, and a search can start from the best
+  known point.** The optimizer appends each evaluated point (values and
+  metrics, failures included) to a per-circuit JSON-lines archive in the
+  user-data store (`sizing_archive/<circuit>.jsonl`). The Sizing tab
+  shows how many points are archived and the best cost among them
+  *under the targets as currently edited*, and a checkbox starts the
+  search there instead of at the default sizing. Measured on two
+  circuits and four target sets each (`cairn/pitfalls.md`): the archive
+  re-scored under new targets beat a cold CMA-ES at 200 evaluations on
+  six of eight sets with no model at all, and a warm start from it plus
+  100 evaluations won seven, four to all targets met.
+- **Warm starts use the finish's resume settings.** CMA-ES never
+  evaluated its start point and took σ 0.25 from it; from a verified
+  0.27 that gave a "best" of 0.73 after 100 evaluations. With a start
+  point given, CMA-ES (plain and surrogate) now injects it into the
+  first population and steps at σ 0.1; DE and Sobol+Powell already
+  evaluated their start. `optimize(..., start=)` is the seam; the run
+  notes say when a search was warm-started.
 - **`cmaes_surrogate` — lq-CMA-ES as a pilot algorithm.** CMA-ES whose
   population is ranked by a linear-quadratic model of the evaluated
   archive (pycma's `fitness_models`, Hansen 2019): each generation

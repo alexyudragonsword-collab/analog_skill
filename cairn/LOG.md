@@ -2,6 +2,18 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-21 · Archive and warm start shipped (steps 1 and 2)
+
+- Maintainer said do 1 and 2 first. New `archive` module (between
+  evaluation and user_circuits in the import order): every evaluation
+  appended as a JSON line per circuit, `best(circuit, names, overrides)`
+  re-scores under the current targets. `optimize(start=)` takes a known
+  point; CMA-ES and the surrogate inject it and step at σ 0.1. Sizing
+  tab: archive count and best-under-these-targets label, refreshed on
+  circuit and target edits, checkbox "Start from the best known point".
+  Three tests (archive, warm start on the bowl for three algorithms,
+  UI plumbing); gate 209 green. Step 3 (metric models) stays on ROADMAP.
+
 ## 2026-09-21 · Amortised surrogate measured: 7 of 8 target sets, archive is half of it
 
 - Asked whether pretraining once per circuit and reusing on new targets

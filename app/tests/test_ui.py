@@ -287,6 +287,50 @@ def fake_run():
     return _fake_run
 
 
+def test_sizing_start_from_best_known_point(window, tmp_path, monkeypatch,
+                                            fake_run):
+    """The checkbox sends the archive's best point under the current
+    targets as the search's start; with nothing archived it refuses
+    rather than silently searching from the default."""
+    from app.core import sizing
+    monkeypatch.setattr(sizing.runs, 'runs_dir', lambda: tmp_path)
+    tab = window.sizing_tab
+    tab.circuit_combo.setCurrentIndex(
+        tab.circuit_combo.findData('amp_hoilee_affc'))
+    tab.algo_combo.setCurrentIndex(tab.algo_combo.findData('diff_evolution'))
+    monkeypatch.setattr(sizing, 'archive_best', lambda *a, **k: None)
+    monkeypatch.setattr(sizing, 'archive_size', lambda *a, **k: 0)
+    tab._refresh_known()
+    assert 'no archived' in tab._known_lbl.text()
+    jobs = []
+    monkeypatch.setattr(tab, 'submit_job', lambda slot, job: jobs.append(job))
+    monkeypatch.setattr(tab, 'has_job', lambda slot: False)
+    tab.known_chk.setChecked(True)
+    tab._run()
+    assert not jobs and 'No archived' in tab._status.text()
+
+    point = {v.name: v.default for v in
+             sizing.parse_variables('amp_hoilee_affc')}
+    monkeypatch.setattr(sizing, 'archive_best', lambda key, names, ov=None:
+                        {'cost': 1.2345, 'values': point, 'metrics': {},
+                         'n': 7})
+    tab._refresh_known()
+    assert '7 archived' in tab._known_lbl.text()
+    assert '1.2345' in tab._known_lbl.text()
+    seen = {}
+    monkeypatch.setattr(sizing, 'optimize',
+                        lambda key, variables, **kw: seen.update(kw)
+                        or fake_run())
+    tab._run()
+    jobs[-1].fn()
+    assert seen['start'] == point
+    assert 'best known point' in tab._status.text()
+    tab.known_chk.setChecked(False)
+    tab._run()
+    jobs[-1].fn()
+    assert seen['start'] is None
+
+
 def test_sizing_run_round_trip(window, tmp_path, monkeypatch, fake_run):
     """Press Run, then hand the tab the reply it would have got: buttons and
     report have to come back consistent, and the run has to be saved."""

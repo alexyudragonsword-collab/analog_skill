@@ -1254,6 +1254,67 @@ def test_cmaes_surrogate_solves_the_bowl_with_fewer_evaluations(
     assert run.best_cost < 1e-3, run.best_cost
 
 
+def test_archive_records_every_evaluation_and_rescores_on_new_targets(
+        monkeypatch, tmp_path):
+    """Every evaluated point goes to the circuit's archive; asked for the
+    best under other targets, the archive answers without a simulation.
+    Rows from another variable set (an imported circuit, an edited set)
+    are left out, and a torn last line is skipped."""
+    monkeypatch.setattr(sizing.archive, 'archive_dir', lambda: tmp_path)
+    variables = _fake_bowl(monkeypatch)
+    # the archive scores with the real scorer; the bowl's fake metrics
+    # need the same fake here (see the note on re-exports in __init__)
+    monkeypatch.setattr(sizing.archive, 'score',
+                        lambda c, m, ov=None: m.get('q', 1e9))
+    assert sizing.archive_size('skill_bootstrap') == 0
+    run = sizing.optimize('skill_bootstrap', variables, budget=30,
+                          algo='sobol_powell', workers=1)
+    assert sizing.archive_size('skill_bootstrap') == run.evals
+    names = [v.name for v in variables]
+    best = sizing.archive_best('skill_bootstrap', names)
+    assert best is not None and best['n'] == run.evals
+    assert best['cost'] == pytest.approx(run.best_cost)
+    assert best['values'] == run.best_values
+    # other targets, other winner: score is monkeypatched to m['q'], so
+    # score with overrides is the same here — assert the plumbing instead
+    assert sizing.archive_best('skill_bootstrap', names + ['extra']) is None
+    p = tmp_path / 'skill_bootstrap.jsonl'
+    p.write_text(p.read_text() + '{"values": {"W.sw": 1')   # torn line
+    assert sizing.archive_size('skill_bootstrap') == run.evals
+    # failures are archived with empty metrics (they say where the box
+    # does not simulate) and never win
+    sizing.archive.record('skill_bootstrap', {n: 1.0 for n in names}, {})
+    assert sizing.archive_best('skill_bootstrap', names)['cost'] == \
+        pytest.approx(run.best_cost)
+
+
+def test_warm_start_searches_from_the_known_point(monkeypatch, tmp_path):
+    """A start point replaces the default sizing.  CMA-ES used to sample
+    around its start without ever evaluating it, at σ 0.25 — measured, a
+    verified 0.27 became a "best" of 0.73 in 100 evaluations.  Now the
+    point is in the first population and the step is 0.1, so the first
+    generation is already no worse than the start."""
+    pytest.importorskip('cma')
+    monkeypatch.setattr(sizing.archive, 'archive_dir', lambda: tmp_path)
+    variables = _fake_bowl(monkeypatch)
+    near = {'W.sw': 31.0, 'FCLK': 1.05e8}      # cost ≈ 0.0034 on the bowl
+    start_cost = sizing.optimizer.score(
+        'skill_bootstrap', sizing.optimizer.evaluate('skill_bootstrap', near))
+    for algo in ('cmaes', 'cmaes_surrogate'):
+        run = sizing.optimize('skill_bootstrap', variables, budget=40,
+                              algo=algo, workers=1, start=near)
+        first_gen = min(c for _, c in run.history[:6])   # popsize 6
+        assert first_gen <= start_cost + 1e-12, (algo, run.history[:6])
+        assert 'warm start from a known point (σ 0.1' in run.notes
+        assert run.best_cost < 1e-3
+    run = sizing.optimize('skill_bootstrap', variables, budget=40,
+                          algo='diff_evolution', workers=1, start=near)
+    assert run.best_cost <= start_cost and 'warm start' in run.notes
+    with pytest.raises(ValueError):
+        sizing.optimize('skill_bootstrap', variables, budget=10,
+                        algo='cmaes', start={'W.sw': 31.0})
+
+
 def test_de_powell_polishes_where_de_stopped(monkeypatch):
     variables = _fake_bowl(monkeypatch)
     run = sizing.optimize('skill_bootstrap', variables, budget=80,
