@@ -5,7 +5,24 @@ development milestones and were never tagged — v1.4 is the first release;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
-## vNext — unreleased
+## v1.7 — 2026-09-22
+
+Two things first. **v1.6's Optimize button did not work** — pressing it
+raised in the log and started nothing (Try next, Continue and the AI
+advise path did) — and this release fixes it; every v1.6 user should
+move. And **the four LDO variants' numbers were wrong at every point**
+since they were registered in v1.4 (−5 V output errors at the shipped
+defaults); they are right now, with the vendored decks untouched.
+Then the release's own theme: **the search remembers**. Every
+evaluation of a circuit goes to a per-circuit archive; change the
+targets and the archive is re-scored on the spot, a checkbox (and now
+"Try next") starts the search from the best point it holds, and that
+start plus 100 evaluations beat a cold search at 200 on 14 of 16
+measured circuit-target rows. On top of the archive sit optional
+metric models — characterise a circuit once, get candidates for any
+new targets in seconds — measured as a smaller, less reliable gain and
+offered as menu entries, not defaults. Also here: lq-CMA-ES as a
+pilot algorithm, measured both ways and left a pilot.
 
 - **"Try next" offers the warm start.** When a run ends short and the
   archive holds a better point under the targets as currently edited
