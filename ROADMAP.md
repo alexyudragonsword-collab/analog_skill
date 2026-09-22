@@ -50,9 +50,6 @@ like before touching anything.
   3 of 16. Decision: the proposals stay a menu entry and are not
   offered by "Try next". (The frozen builds carry scikit-learn: build
   run 104 passed all six jobs.)
-- A v1.6.1 patch release: v1.6's Optimize button raises on click
-  (CHANGELOG vNext, first entry). The fix is on main; whether to ship
-  it alone or with vNext is the maintainer's call.
 - Population size as a multiple of the worker count. Both CMA-ES and
   the lq-CMA-ES pilot run 13 points per generation on four workers:
   three full waves and one point alone, an idle last wave every

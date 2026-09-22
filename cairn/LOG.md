@@ -2,6 +2,17 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-22 · v1.7 build green and release published
+
+- Released v1.7 (version bump, CHANGELOG section dated with its lead
+  paragraph, workflow dispatched with the release tag). Build run 109
+  green on all six jobs including the source-leak gate; Release
+  published 2026-09-22 04:34 UTC with five packages (Windows
+  PyInstaller / Nuitka / onefile exe, Linux PyInstaller / Nuitka),
+  scikit-learn inside the frozen builds. Contents: the v1.6
+  Optimize-button fix, the LDO variants' mapping, archive + warm
+  start, metric models, Try next's warm start, the lq-CMA-ES pilot.
+
 ## 2026-09-21 · Try next offers the warm start
 
 - `runs.next_step(known=)` takes the archive's best under the current
