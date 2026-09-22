@@ -1216,6 +1216,34 @@ def test_cmaes_converges_and_restarts(monkeypatch):
     assert run.population is None                # not a DE population
 
 
+def test_cmaes_population_fills_the_workers(monkeypatch):
+    """4 + 3 ln n is 14 on the 33-variable amplifier; on four workers that
+    is three full waves and two points alone each generation.  The
+    population is rounded up to whole waves (16), and doubles on a
+    restart to a multiple as well; one worker keeps pycma's number."""
+    pytest.importorskip('cma')
+    amp_vars = sizing.parse_variables('amp_hoilee_affc')
+    a, b = amp_vars[0], amp_vars[1]
+
+    def amp_bowl(circuit, values, **kw):
+        u = (values[a.name] - a.default) / (a.hi - a.lo)
+        v = (values[b.name] - b.default) / (b.hi - b.lo)
+        return {'q': 4 * u * u + v * v}
+    monkeypatch.setattr(sizing.optimizer, 'evaluate', amp_bowl)
+    monkeypatch.setattr(sizing.optimizer, 'score',
+                        lambda circuit, m, ov=None: m['q'])
+    assert sizing.optimizer._popsize(33, 4) == 16
+    assert sizing.optimizer._popsize(33, 1) == 14
+    assert sizing.optimizer._popsize(15, 4) == 12       # already whole
+    for algo in ('cmaes', 'cmaes_surrogate'):
+        run = sizing.optimize('amp_hoilee_affc', amp_vars, budget=64,
+                              algo=algo, workers=4)
+        assert 'popsize 16' in run.notes, run.notes
+        run = sizing.optimize('amp_hoilee_affc', amp_vars, budget=32,
+                              algo=algo, workers=1)
+        assert 'popsize 14' in run.notes, run.notes
+
+
 def test_cmaes_surrogate_solves_the_bowl_with_fewer_evaluations(
         monkeypatch):
     """lq-CMA-ES on a quadratic bowl: the model is exact once it has a

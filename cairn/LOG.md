@@ -2,6 +2,17 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-22 · CMA-ES population rounded to whole waves of workers
+
+- Maintainer picked the ROADMAP lever. `_popsize` rounds pycma's
+  4 + 3 ln n up to a multiple of `workers` (13 → 16 on four; restarts
+  double to a multiple too); both CMA-ES runners use it. Test on the
+  amp-kind bowl. Measured on the four affected amplifiers: 600
+  evaluations in 10–20 % less wall clock, equal-wave budget (740)
+  changes nothing, results 1–1–2 (CMA-ES) and 2–0–2 (surrogate) on
+  one seed. Kept as default; table in `cairn/pitfalls.md`; ROADMAP
+  item closed; CHANGELOG vNext opened.
+
 ## 2026-09-22 · v1.7 build green and release published
 
 - Released v1.7 (version bump, CHANGELOG section dated with its lead

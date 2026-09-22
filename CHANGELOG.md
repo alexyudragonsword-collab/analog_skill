@@ -5,6 +5,21 @@ development milestones and were never tagged — v1.4 is the first release;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
+## vNext — unreleased
+
+- **CMA-ES populations fill their workers.** pycma's 4 + 3 ln n gave
+  13 points per generation on the protocol amplifiers: on four workers
+  that is three full waves and one point alone, an idle last wave
+  every generation, for plain CMA-ES and the surrogate alike. The
+  population is now rounded up to whole waves of `workers` (16 on four;
+  unchanged on one worker and where it already divided, as the LDO's
+  12). Measured on the four affected amplifiers at seed 0: the same
+  600 evaluations take 10–20 % less wall clock, 140 more evaluations
+  in the time the old population took change nothing, and the results
+  are one better, one worse, two tied for CMA-ES and two better, two
+  tied for the surrogate — a wall-clock change, not a search change
+  (`cairn/pitfalls.md`).
+
 ## v1.7 — 2026-09-22
 
 Two things first. **v1.6's Optimize button did not work** — pressing it

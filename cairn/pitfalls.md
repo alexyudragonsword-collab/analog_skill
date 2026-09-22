@@ -1075,6 +1075,35 @@ point injected; and only then a "characterise this circuit" sampling
 job with metric models and a failure classifier behind the same seam.
 ROADMAP has all three.
 
+### Population 16, not 13: the idle wave, measured
+
+The ROADMAP lever from the lq-CMA-ES work: 13 points per generation on
+four workers is three full waves and one point alone. Rounded up to
+16 (`_popsize`: pycma's number, then whole waves of `workers`), the
+four affected protocol amplifiers at seed 0, 2026-09-22, scratchpad
+`plan-p16`; population 13 rows from `plan-s` / `plan-s2`:
+
+| circuit | CMA-ES 13 @600 (wall) | CMA-ES 16 @600 (wall) | CMA-ES 16 @740, equal waves | lq 13 filled @600 (wall) | lq 16 @600 (wall) |
+|---|---|---|---|---|---|
+| amp_leung_nmcf | 1.285 (10.9) | **0.808** (9.7) | 0.808 | 1.128 (10.3) | **1.009** (8.7) |
+| amp_peng_tcfc | 0 (14.9) | 0 (11.4) | 0 | 0 (14.7) | 0 (11.7) |
+| amp_ramos_pfc | **0.578** (11.2) | 1.034 (8.6) | 1.034 | 0.971 (10.3) | **0.717** (9.1) |
+| amp_fan_smc | 0 (11.5) | 0 (8.8) | 0 | 0 (12.0) | 0 (9.3) |
+
+Three readings. The wall clock is what moved: the same 600
+evaluations in 10–20 % less time (the first row's 9.7 ran alongside a
+test gate; the others are clean), and 140 more evaluations in the old
+population's time — 740 at 16 is the same wave count as 600 at 13 —
+changed no result at all on any of the four. The search itself is not
+separable from before on one seed: 1–1–2 for CMA-ES (ramos's 0.578
+was the first hundred evaluations' luck in the old run, and stayed;
+nmcf's 0.808 is the new run's), 2–0–2 for the surrogate, with the two
+searches reaching zero earlier or later than each other by circuit.
+And the change is free of the trade-offs the earlier levers had —
+no model, no idle worker, nothing to configure — so it stays as the
+default. One seed, four circuits; the note in the run report says
+which population a run used.
+
 ### Second seed on the eight target sets: the warm start holds, the models are a lottery
 
 Same eight target sets, seed 1, through the shipped path this time

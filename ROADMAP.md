@@ -50,14 +50,6 @@ like before touching anything.
   3 of 16. Decision: the proposals stay a menu entry and are not
   offered by "Try next". (The frozen builds carry scikit-learn: build
   run 104 passed all six jobs.)
-- Population size as a multiple of the worker count. Both CMA-ES and
-  the lq-CMA-ES pilot run 13 points per generation on four workers:
-  three full waves and one point alone, an idle last wave every
-  generation. Measure the default with `popsize` rounded up to 16 at
-  equal wall clock (not equal evaluations) before anything else is
-  done to the search. The lq-CMA-ES pilot is measured both ways (twice
-  the wall clock unfilled; filled, indistinguishable from CMA-ES at
-  equal wall clock) and stays in the menu as a pilot.
 - Whether the settling target should be 2 or 2.5 µs. Four amplifiers
   end within 0.5 µs of 2 µs with everything else met; 2.5 would make
   two of them feasible. Set on one circuit; the sweep table is the

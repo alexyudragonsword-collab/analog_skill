@@ -59,6 +59,15 @@ def _fill(n: int, workers: int, cap: int) -> int:
     return min(cap, int(np.ceil(n / workers)) * workers)
 
 
+def _popsize(dims: int, workers: int) -> int:
+    """CMA-ES population: pycma's 4 + 3 ln n, rounded up to whole waves
+    of `workers`.  The unrounded 13 on four workers ran three full waves
+    and one point alone every generation — an idle last wave for both
+    CMA-ES and the surrogate (cairn/pitfalls.md); 16 costs the same
+    wall clock per generation and evaluates three more points."""
+    return _fill(max(workers, 4 + int(3 * np.log(dims))), workers, 10 ** 9)
+
+
 def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
              progress=None, should_cancel=None, overrides: dict | None = None,
              algo: str = 'sobol_powell', workers: int = 1,
@@ -480,7 +489,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         from a point, as after a finish, with the notes continued."""
         import cma
         rng = np.random.default_rng(seed)
-        lam = max(workers, 4 + int(3 * np.log(dims)))
+        lam = _popsize(dims, workers)
         restarts = 0
         lines = state['notes'].splitlines() if state['notes'] else []
         inject = start is None and warm      # the known point, once
@@ -514,7 +523,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             # a fresh point; the larger population is what makes the next
             # basin reachable, the fresh point is what makes it different
             restarts += 1
-            lam *= 2
+            lam = _fill(lam * 2, workers, 10 ** 9)
             start = rng.uniform(0.0, 1.0, dims)
             sigma = 0.25
         state['notes'] = '\n'.join(lines)
@@ -543,7 +552,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         warnings.filterwarnings('ignore', message='x value already in')
         rng = np.random.default_rng(seed)
         steps = Counter()
-        lam = max(workers, 4 + int(3 * np.log(dims)))
+        lam = _popsize(dims, workers)
         restarts = 0
         lines = state['notes'].splitlines() if state['notes'] else []
         start, sigma, inject = x0, (0.1 if warm else 0.25), warm
@@ -616,7 +625,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                 + f'), best {state["best"]:.4f}, stopped on {why}')
             steps.clear()
             restarts += 1
-            lam *= 2
+            lam = _fill(lam * 2, workers, 10 ** 9)
             start = rng.uniform(0.0, 1.0, dims)
             sigma = 0.25
         state['notes'] = '\n'.join(lines)
