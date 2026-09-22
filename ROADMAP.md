@@ -50,6 +50,14 @@ like before touching anything.
   3 of 16. Decision: the proposals stay a menu entry and are not
   offered by "Try next". (The frozen builds carry scikit-learn: build
   run 104 passed all six jobs.)
+- The sensitivity-informed finish, split. `FINISH_SENSITIVITY` bundles
+  two changes — sensitivity lines in the prompt and a scan centred on
+  the local fit's amount — and lost to the plain finish as a bundle
+  (`cairn/pitfalls.md`). Before any retry: measure the prompt lines
+  alone (scan on the fixed grid) and the centred scan alone, more than
+  two runs per arm, on the eight-circuit protocol. The archive points
+  of a CMA-ES run cluster along the directions it moved; a fit that
+  is to predict a new direction's amount needs points along it.
 - Whether the settling target should be 2 or 2.5 µs. Four amplifiers
   end within 0.5 µs of 2 µs with everything else met; 2.5 would make
   two of them feasible. Set on one circuit; the sweep table is the

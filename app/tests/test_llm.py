@@ -2,6 +2,8 @@
 HTTP chokepoint (llm_client._post_json) or llm_client.chat is faked."""
 
 import json
+
+import numpy as np
 import os
 import shutil
 
@@ -818,6 +820,55 @@ def test_finish_treats_the_proposal_as_a_direction_and_lands():
         'a point was paid for twice'
     assert 'round 1: 1 proposals; best moved 1 of 1 variables (W_IN)' in note
     assert 'cost 2.3000 ->' in note and 'widen the input pair' in note
+
+
+def test_finish_uses_the_archive_around_the_best_point(monkeypatch,
+                                                       tmp_path):
+    """With archived evaluations around the search's best, the finish
+    tells the model what each missed target responds to, and centres
+    its first scan on the amount the local fit predicts: here dcgain
+    rises 17.4 dB per unit of W_IN and needs 100, so the fit says 7.3
+    and the first scan already lands there instead of walking a fixed
+    grid."""
+    from app.core import llm_sizing, sizing
+    monkeypatch.setattr(sizing.archive, 'archive_dir', lambda: tmp_path)
+    monkeypatch.setattr(llm_sizing, 'FINISH_SENSITIVITY', True)   # off by default
+    cost_of = lambda w: abs(w - 7.3)
+    variables, state, run_batch, evaluated = _finish_harness(
+        5.0, cost_of, llm_sizing.FINISH_EVALS)
+    for w in np.linspace(4.0, 6.0, 12):
+        sizing.archive.record('amp_hoilee_affc', {'W_IN': float(w)},
+                              {'dcgain': 60.0 + 17.4 * (w - 5.0)})
+    prompts = []
+
+    def fake_chat(messages, **kw):
+        prompts.append(messages[-1]['content'])
+        return json.dumps({'rationale': 'widen', 'candidates': [{'W_IN': 9.0}]})
+
+    note = llm_sizing.run_finish('amp_hoilee_affc', variables, None,
+                                 state=state, run_batch=run_batch,
+                                 budget=llm_sizing.FINISH_EVALS, workers=4,
+                                 chat=fake_chat)
+    assert 'per +10% of range' in prompts[0] and 'W_IN' in prompts[0]
+    assert 'dcgain (now 60' in prompts[0]
+    assert 'local fit on 10 points' in note and 'scan centred at' in note
+    # the proposal is 4 units away; the fit wants 2.3 of them (alpha
+    # 0.575, grid 0.6): the first scan's closest point is within the
+    # grid's 0.4 units of 7.3, where the fixed grid's closest is 7.0
+    first = evaluated[:len(llm_sizing.FINISH_ALPHA_SPREAD) + 1]
+    assert min(abs(w - 7.3) for w in first) <= 0.2, first
+    assert state['best'] < 0.1
+    # without the switch the old grid is walked
+    monkeypatch.setattr(llm_sizing, 'FINISH_SENSITIVITY', False)
+    variables, state, run_batch, evaluated = _finish_harness(
+        5.0, cost_of, llm_sizing.FINISH_EVALS)
+    prompts.clear()
+    llm_sizing.run_finish('amp_hoilee_affc', variables, None, state=state,
+                          run_batch=run_batch, budget=llm_sizing.FINISH_EVALS,
+                          workers=4, chat=fake_chat)
+    assert 'per +10% of range' not in prompts[0]
+    assert sorted(round(w, 6) for w in evaluated[:6]) == \
+        [round(5 + a * 4, 6) for a in llm_sizing.FINISH_ALPHAS]
 
 
 def test_finish_asks_several_times_and_keeps_the_best_line():

@@ -1431,6 +1431,52 @@ def test_metric_models_propose_near_the_optimum(monkeypatch, tmp_path):
     assert 'predicted -> verified' in run.notes
 
 
+def test_local_sensitivity_fit_recovers_slopes_and_centres_the_scan(
+        monkeypatch, tmp_path):
+    """A linear metric over an archived cloud around a point: the fit
+    returns its slopes, the prompt lines name the variable that moves
+    the missed target most, and the predicted best alpha along a
+    direction lands where the linear cost really is lowest."""
+    from app.core.sizing import sensitivity
+    monkeypatch.setattr(sizing.archive, 'archive_dir', lambda: tmp_path)
+    circuit = 'studio_cm_ota'
+    variables = sizing.parse_variables(circuit)
+    names = [v.name for v in variables]
+    lo = np.array([v.lo for v in variables]); hi = np.array([v.hi for v in variables])
+    span = np.where(hi > lo, hi - lo, 1.0)
+    keys = [m.key for m in sizing.SIZING[circuit].metrics]
+    rng = np.random.default_rng(0)
+    c = np.full(len(names), 0.5)
+    # metric 0 rises 40 per unit of variable 0 and 5 per unit of variable
+    # 1; every other metric sits at its target (met) except the last,
+    # which depends on variable 0 with the opposite sign
+    targets = {m.key: m.target for m in sizing.SIZING[circuit].metrics}
+    for _ in range(80):
+        xn = np.clip(c + rng.normal(0, 0.05, len(names)), 0, 1)
+        m = {k: targets[k] for k in keys}
+        m[keys[0]] = 30.0 + 40 * (xn[0] - 0.5) + 5 * (xn[1] - 0.5)
+        m[keys[-1]] = targets[keys[-1]] * (1 + 0.5 * (xn[0] - 0.5))
+        sizing.archive.record(circuit, dict(zip(names, (xn * span + lo).tolist(), strict=True)), m)
+    centre = dict(zip(names, (c * span + lo).tolist(), strict=True))
+    assert sensitivity.fit(circuit, variables, centre, rows=[]) is None
+    model = sensitivity.fit(circuit, variables, centre)
+    assert model is not None and model.n == 60         # 4 per dimension
+    k0 = keys[0]
+    assert abs(model.coef[k0][0] - 40) < 3 and abs(model.coef[k0][1] - 5) < 2
+    assert model.r2[k0] > 0.95 and not model.log[k0]
+    assert abs(model.effect(k0, 0) - 4.0) < 0.3           # +10 % of range
+    metrics = model.predict(c)
+    text = sensitivity.lines(model, circuit, metrics)
+    assert len(text) >= 1 and names[0] in text[0] and 'R²' in text[0]
+    assert text[0].startswith(f'  - {k0}')
+    # along +variable 0 the linear cost of the missed metric 0 falls
+    # until it meets its target; best_alpha finds that amount
+    d = np.zeros(len(names)); d[0] = 0.2
+    need = (targets[k0] - metrics[k0]) / 40          # units of variable 0
+    a = sensitivity.best_alpha(model, circuit, c, d)
+    assert abs(a * 0.2 - need) < 0.05, (a, need)
+
+
 def test_de_powell_polishes_where_de_stopped(monkeypatch):
     variables = _fake_bowl(monkeypatch)
     run = sizing.optimize('skill_bootstrap', variables, budget=80,

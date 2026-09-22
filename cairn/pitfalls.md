@@ -1075,6 +1075,53 @@ point injected; and only then a "characterise this circuit" sampling
 job with metric models and a failure classifier behind the same seam.
 ROADMAP has all three.
 
+### The local fit does not supply the amount: a negative result, kept
+
+The idea ranked first in the AI-capability review (2026-09-22): the
+finish gets the variables right and the amounts wrong, and the search
+that stalled left hundreds of archived evaluations near its endpoint,
+so fit each metric linearly over the archive's nearest points, tell
+the model the sensitivities, and centre the line search's first scan
+on the amount the fit predicts. Built as `sizing/sensitivity.py`
+(weighted ridge in the normalised box, per-column scaling, log for
+decade-spanning metrics) and `FINISH_SENSITIVITY` in the finish.
+
+Measured on three CMA-ES endpoints (510 evaluations, seed as shown)
+with their real archives, the finish alone with its 90-evaluation
+reserve, sonnet, two runs per arm, archive reset to the search's
+snapshot before every arm (scratchpad `sens_ab.py`):
+
+| case | search | plain finish | fit, narrow scan | fit, interior-only scan |
+|---|---|---|---|---|
+| amp_leung_nmcf s1 | 1.4565 | 1.185 · 1.212 | 1.151 · 1.189 | 1.268 · 1.306 |
+| amp_ramos_pfc s1 | 1.2844 | **0.718 · 0.688** | 0.868 · 0.908 | 0.832 · 0.841 |
+| ldo_basic s0 | 1.0597 | 0.934 · 0.880 | 0.930 · 0.904 | 0.908 · 0.858 |
+
+The first variant centred a 0.5–1.5× scan on the prediction whatever
+it was; the notes showed the prediction pinned at the grid's floor
+(0.1: "this line does not help") or ceiling on most proposals, which
+turned the scan into a narrow one near the start, and `amp_ramos_pfc`
+lost 20 % to the plain finish twice. The second variant keeps the
+fixed grid unless the prediction is interior (0.2–2.5×) — and lost the
+same way on ramos and on nmcf. Across the three cases no arm beats
+the plain finish beyond the 33 % run-to-run spread, and the one clear
+signal points the wrong way.
+
+Two readings. A linear fit of a metric over the last generations of a
+CMA-ES run is not a model of that metric along a *new* direction: the
+archive's points cluster along the directions the search moved in,
+the proposal moves others, and the fit extrapolates. Its "amount" is
+therefore no better than the grid, and a scan centred on it is
+narrower than the grid. Second, the experiment bundled two changes —
+the prompt lines and the scan — so it cannot say whether the lines
+alone helped or hurt; separating them is the next experiment, not
+this one. The seam ships off by default; the run notes record what
+the fit did, so a future run can be read.
+
+The methodological point is the one from the noise-floor section:
+n = 2 per arm on a 33 % spread rules out only large effects. It rules
+this one out as a *default*; it does not prove the fit useless.
+
 ### Population 16, not 13: the idle wave, measured
 
 The ROADMAP lever from the lq-CMA-ES work: 13 points per generation on

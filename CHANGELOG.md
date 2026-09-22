@@ -7,6 +7,27 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **The AI finish reads the archive around the search's best point.**
+  The finish's measured shape is "right variables, wrong amounts"; the
+  search that stalled has just spent hundreds of archived evaluations
+  near the point it stalled at. A weighted linear fit of every metric
+  over the archive's nearest points (`sizing/sensitivity.py`, numpy
+  only; metrics that span decades in log; ridge scaled per variable so
+  one the search never moved gets zero slope) now gives the finish
+  two things: sensitivity lines in the prompt — for each missed
+  target, the variables whose +10 % of range move it most, with the
+  size of the move and its largest side effect on a met target, fits
+  below R² 0.5 left out — and a predicted best amount along each
+  proposal, on which the first scan of the line search is centred
+  (0.5–1.5× the prediction, the proposal as written always kept)
+  instead of walking the fixed 0.25–2× grid — when the prediction is
+  interior (0.2–2.5×); pinned at the grid's edge it falls back to the
+  fixed grid. **Off by default** (`FINISH_SENSITIVITY = False`):
+  measured on three CMA-ES endpoints with their real archives, two
+  runs per arm, it beat the plain finish on no case and lost on
+  `amp_ramos_pfc` in all four runs (`cairn/pitfalls.md`). The seam,
+  the switch and the run notes (points the fit used, where each scan
+  was centred) stay for the next experiment.
 - **CMA-ES populations fill their workers.** pycma's 4 + 3 ln n gave
   13 points per generation on the protocol amplifiers: on four workers
   that is three full waves and one point alone, an idle last wave

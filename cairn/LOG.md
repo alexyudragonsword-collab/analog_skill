@@ -2,6 +2,19 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-22 · Sensitivity-informed finish built, measured negative, shipped off
+
+- Maintainer picked the review's first-ranked item: local linear fit
+  on the archive around the best point → sensitivity lines in the
+  finish prompt + scan centred on the predicted amount. Built
+  (`sizing/sensitivity.py`, `FINISH_SENSITIVITY`, tests on a synthetic
+  cloud and the one-variable finish harness). A/B on three real CMA-ES
+  endpoints, two runs per arm: no case better than the plain finish,
+  amp_ramos_pfc worse in all four runs, both scan variants. Ships off
+  by default with the seam and notes kept; table and reading in
+  `cairn/pitfalls.md`; ROADMAP: separate prompt lines from scan, more
+  seeds, before any retry. Gate 215 green.
+
 ## 2026-09-22 · CMA-ES population rounded to whole waves of workers
 
 - Maintainer picked the ROADMAP lever. `_popsize` rounds pycma's

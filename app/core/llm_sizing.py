@@ -21,6 +21,7 @@ from app import paths
 from app.core import llm_client
 from app.core.mcp_eval_server import TOOL_NAME as MCP_TOOL
 from app.core.sizing import SIZING, VarSpec, feedback_line
+from app.core.sizing import sensitivity
 
 #: cap on netlist text sent to the model (keeps prompts ~2k tokens)
 NETLIST_CHARS = 6000
@@ -394,6 +395,27 @@ FINISH_STOP_ON_STALL = False
 #: overshot by 2-4x or fell short, never landed, so both sides are covered.
 FINISH_ALPHAS = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0)
 
+#: use the archive's points around the current best (sensitivity.fit):
+#: measured sensitivities go into the prompt, and the first scan along
+#: each proposal is centred on the amount the local fit predicts
+#: instead of on FINISH_ALPHAS.  The finish's measured shape is "right
+#: variables, wrong amounts", and this was to be the amount from data
+#: the search already paid for.  Measured on three CMA-ES endpoints
+#: with their real archives, two runs per arm (cairn/pitfalls.md): no
+#: case better than the plain finish, amp_ramos_pfc worse in all four
+#: runs, so it ships off — the seam and the switch stay for the next
+#: experiment, which should separate the prompt lines from the scan.
+FINISH_SENSITIVITY = False
+#: the scan around the predicted amount, as multiples of it (1.0 = the
+#: proposal as written is always kept).  Used only when the prediction
+#: is interior to FINISH_ALPHA_INTERIOR: a prediction pinned at the
+#: grid's floor says "this line does not help" and one at its ceiling
+#: is an extrapolation past the fit's points — measured, centring a
+#: narrow scan on either lost to the fixed grid (cairn/pitfalls.md), so
+#: both fall back to FINISH_ALPHAS.
+FINISH_ALPHA_SPREAD = (0.5, 0.75, 1.0, 1.25, 1.5)
+FINISH_ALPHA_INTERIOR = (0.2, 2.5)
+
 
 def finish_reserve() -> int:
     return FINISH_EVALS * FINISH_ROUNDS
@@ -401,7 +423,8 @@ def finish_reserve() -> int:
 
 def finish_prompt(circuit: str, variables: list[VarSpec], overrides,
                   values: dict, metrics: dict | None,
-                  history: list[str] = ()) -> str:
+                  history: list[str] = (),
+                  sensitivities: list[str] = ()) -> str:
     """One question: what would fix what is still missed, from here.
 
     The prompt says what the app will do with the answer — search along
@@ -412,11 +435,20 @@ def finish_prompt(circuit: str, variables: list[VarSpec], overrides,
 
     `history` carries earlier rounds' proposals and what the line search
     made of them, so a second round is a second opinion, not a repeat.
+    `sensitivities` are sensitivity.lines(): what the archive's points
+    around this sizing say each missed metric responds to.
     """
     shown = ', '.join(f'{v.name}: {values[v.name]:.4g}' for v in variables)
     text = (describe_circuit(circuit, variables, overrides)
             + f'\n\nAn optimizer has reached this sizing:\n{{{shown}}}\n'
             + f'It measures: {metric_feedback(circuit, metrics, overrides)}')
+    if sensitivities:
+        text += ('\n\nMeasured around this sizing (a linear fit of nearby '
+                 'evaluations; the variables that move each missed '
+                 'target most, with the largest side effect on a met '
+                 'one):\n' + '\n'.join(sensitivities)
+                 + '\nUse these as evidence, not as orders: a variable '
+                 'the fit does not list may still be the right one.')
     if history:
         text += ('\n\nEarlier proposals from this point, and what a search '
                  'along each one found:\n' + '\n'.join(history)
@@ -432,7 +464,7 @@ def finish_prompt(circuit: str, variables: list[VarSpec], overrides,
 
 
 def _line_search(state: dict, run_batch, cap: int, xb, dirs: list,
-                 memo: list) -> tuple[int, dict]:
+                 memo: list, alphas: list | None = None) -> tuple[int, dict]:
     """Costs along xb + alpha*d for every direction in `dirs`, spending
     at most `cap` dispatches in total.  One coarse scan covers all the
     directions in a single batch; the best line is then bisected on both
@@ -441,8 +473,11 @@ def _line_search(state: dict, run_batch, cap: int, xb, dirs: list,
 
     `memo` is every (point, cost) this finish has paid for: a later round
     from a new best can land on one again (the proposal itself, often),
-    and clipping at the box folds distinct alphas onto one point."""
+    and clipping at the box folds distinct alphas onto one point.
+    `alphas`, per direction, replaces FINISH_ALPHAS for the coarse scan
+    (the local fit's centred grid)."""
     seen = [{0.0: state['best']} for _ in dirs]
+    alphas = alphas or [FINISH_ALPHAS] * len(dirs)
 
     def at(i, alpha):
         return np.clip(xb + alpha * dirs[i], 0.0, 1.0)
@@ -468,7 +503,7 @@ def _line_search(state: dict, run_batch, cap: int, xb, dirs: list,
                 seen[i][a] = c
                 memo.append((at(i, a), c))
 
-    scan([(i, a) for i in range(len(dirs)) for a in FINISH_ALPHAS])
+    scan([(i, a) for i in range(len(dirs)) for a in alphas[i]])
     best_i = min(range(len(dirs)), key=lambda i: min(seen[i].values()))
     for _ in range(3):
         s = seen[best_i]
@@ -540,8 +575,12 @@ def run_finish(circuit: str, variables: list[VarSpec], overrides,
         best_x, before = dict(state['best_x']), state['best']
         xb = np.clip((np.array([best_x[n] for n in names]) - lo) / span,
                      0, 1)
+        local = (sensitivity.fit(circuit, variables, best_x)
+                 if FINISH_SENSITIVITY else None)
+        sens = (sensitivity.lines(local, circuit, state['best_m'], overrides)
+                if local else [])
         prompt = finish_prompt(circuit, variables, overrides, best_x,
-                               state['best_m'], history)
+                               state['best_m'], history, sens)
         with ThreadPoolExecutor(max_workers=FINISH_PROPOSALS) as ex:
             futs = [ex.submit(_ask, chat, prompt, names, lo, hi)
                     for _ in range(FINISH_PROPOSALS)]
@@ -569,10 +608,26 @@ def run_finish(circuit: str, variables: list[VarSpec], overrides,
                          + ('; '.join(errors) if errors
                             else 'all proposed the current sizing') + ')')
             break
+        # the local fit names the amount each proposal is likely to
+        # need; the coarse scan is centred there (1.0 always kept)
+        alphas, centred = None, []
+        if local is not None:
+            alphas = []
+            lo_a, hi_a = FINISH_ALPHA_INTERIOR
+            for d, _m, _r in props:
+                a = sensitivity.best_alpha(local, circuit, xb, d, overrides)
+                if lo_a < a < hi_a:
+                    centred.append(f'{a:.2g}')
+                    alphas.append(tuple(sorted({round(a * f, 4)
+                                                for f in FINISH_ALPHA_SPREAD}
+                                               | {1.0})))
+                else:
+                    centred.append('grid')
+                    alphas.append(FINISH_ALPHAS)
         # this round's share of the reserve, never past the budget
         state['cap'] = min(budget, state['dispatched'] + FINISH_EVALS)
         win, seen = _line_search(state, run_batch, state['cap'], xb,
-                                 [q[0] for q in props], memo)
+                                 [q[0] for q in props], memo, alphas)
         state['cap'] = budget
         _d, moved, rationale = props[win]
         a_best = min(seen, key=seen.get)
@@ -585,6 +640,10 @@ def run_finish(circuit: str, variables: list[VarSpec], overrides,
                        f'that proposal ({len(seen) - 1} points on it)')
         else:
             outcome = (f'no point along any improved on {before:.4f}')
+        if local is not None:
+            what += (f'; local fit on {local.n} points, {len(sens)} '
+                     f'sensitivity lines shown, scan centred at '
+                     + ', '.join(centred))
         lines.append(f'round {rnd}: {what}; {outcome}'
                      + (f'. Rationale: {rationale[:300]}' if rationale
                         else ''))

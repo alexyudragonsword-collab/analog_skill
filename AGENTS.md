@@ -62,8 +62,8 @@ python tools/gen_sizing_schematics.py   # redraw the 20 Sizing schematics
 app/core/sizing/   the Sizing engine, split by responsibility; import graph is
                    strictly one-directional and verified acyclic:
                    spec -> registry -> assets -> scoring -> evaluation ->
-                   archive -> models -> user_circuits -> report ->
-                   optimizer -> runs -> plots
+                   archive -> sensitivity -> models -> user_circuits ->
+                   report -> optimizer -> runs -> plots
 app/core/          worker (single background thread), circuits, gm/ID services,
                    LLM client (HTTP + Claude Code CLI), ngspice and Claude
                    Code locators, model registry

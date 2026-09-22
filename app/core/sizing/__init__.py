@@ -22,6 +22,7 @@ ones above it:
     scoring        metrics -> single cost
     evaluation     render testbench -> run ngspice -> metrics / waves
     archive        every evaluated point of a circuit, on disk, re-scored
+    sensitivity    local linear model of the metrics from the archive
     models         metric models trained on the archive; proposals
     user_circuits  import the user's own designs into the registry
     report         the completed-run record and its report text
