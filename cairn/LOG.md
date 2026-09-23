@@ -2,6 +2,16 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-23 · Warm start at three seeds: 23 of 24
+
+- Maintainer asked for three runs per cell on the finish and the warm
+  start. Warm start done, all seeds through the shipped path: 23/24
+  rows beat cold CMA-ES at 200 with archive best + 100; archive
+  lookup alone 17/24; model proposals beat the archive 5/24. Table in
+  `cairn/pitfalls.md`. The finish tier (five amplifiers × three seeds
+  × two arms at the current population, plus seed 2 on the other
+  four circuits, 38 runs) is running; recorded when it lands.
+
 ## 2026-09-23 · Failure gate in CMA-ES: built, measured, off by default
 
 - Maintainer picked the review's third item. `models.failure_gate`

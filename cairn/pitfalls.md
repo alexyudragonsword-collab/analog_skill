@@ -1075,6 +1075,35 @@ point injected; and only then a "characterise this circuit" sampling
 job with metric models and a failure classifier behind the same seam.
 ROADMAP has all three.
 
+### Three seeds on the warm start: 23 of 24
+
+The maintainer asked for the two things that stood to be measured at
+three runs per cell. First the archive warm start, 2026-09-23, all
+three seeds through the shipped path this time (`model_propose` 8 →
+best known point → `cmaes` 100 with `start=`, against `cmaes` 200 from
+the default; archive reset to the imported sample before every set;
+scratchpad `warmseed.py`, `seed{0,1,2}-result.json`):
+
+| target set | s0 warm / cold@200 | s1 | s2 |
+|---|---|---|---|
+| amp default | **0** / 0.414 | **0** / 0.611 | **0** / 1.874 |
+| amp low power | **0.031** / 1.883 | **0** / 0.506 | **0.063** / 1.444 |
+| amp fast | **0.186** / 2.219 | **0.563** / 2.335 | **0.378** / 0.551 |
+| amp quiet | **0** / 1.722 | **0** / 3.307 | **0** / 1.664 |
+| ldo default | **0.833** / 1.060 | **0.564** / 1.173 | **0.774** / 1.222 |
+| ldo low Iq | **0.833** / 1.060 | **0.564** / 1.173 | **0.774** / 1.222 |
+| ldo fast | **1.209** / 1.389 | 1.186 / **1.133** | **1.219** / 1.387 |
+| ldo quiet | **0.749** / 2.572 | **0.833** / 1.301 | **0.642** / 1.136 |
+
+Warm start plus 100 evaluations beats the cold search at 200 on **23
+of 24** rows, the one loss by 5 % on the LDO's fast set at seed 1.
+Re-scoring the archive alone — no search, no model — beats the cold
+search at 200 on 17 of 24; the metric models' proposals beat the
+archive's own best on 5 of 24. The seed-0 numbers here replace the
+scratch-script ones above (7 of 8 then; 8 of 8 now through the app's
+own path), which is the difference between a harness and the shipped
+seam. This is the number the README can carry.
+
 ### The failure gate pushes the LDO off the edge its optimum sits on
 
 The third-ranked item of the capability review: the archive's failure
