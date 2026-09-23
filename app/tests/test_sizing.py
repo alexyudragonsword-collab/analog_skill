@@ -1244,6 +1244,50 @@ def test_cmaes_population_fills_the_workers(monkeypatch):
         assert 'popsize 14' in run.notes, run.notes
 
 
+def test_cmaes_failure_gate_redraws_points_the_archive_says_fail(
+        monkeypatch, tmp_path):
+    """A region of the box where the simulation dies (metrics empty):
+    with failures archived, the gate trained on them redraws points
+    headed there before they are paid for, so the search spends fewer
+    evaluations in the dead region and says so in its notes."""
+    pytest.importorskip('cma')
+    pytest.importorskip('sklearn')
+    monkeypatch.setattr(sizing.archive, 'archive_dir', lambda: tmp_path)
+    monkeypatch.setattr(sizing.archive, 'score',
+                        lambda c, m, ov=None: m.get('q', 50.0))
+    amp_vars = sizing.parse_variables('studio_cm_ota')
+    a, b = amp_vars[0], amp_vars[1]
+    dead = []
+
+    def bowl(circuit, values, **kw):
+        u = (values[a.name] - a.default) / (a.hi - a.lo)
+        v = (values[b.name] - b.default) / (b.hi - b.lo)
+        if u > 0.15:                      # the dead region: no metrics
+            dead.append(1)
+            return {}
+        return {'q': 4 * (u + 0.2) ** 2 + v * v}
+    monkeypatch.setattr(sizing.optimizer, 'evaluate', bowl)
+    monkeypatch.setattr(sizing.optimizer, 'score',
+                        lambda circuit, m, ov=None: m.get('q', 50.0))
+    # an archive that already knows the region: a Sobol characterisation
+    sizing.optimize('studio_cm_ota', amp_vars, budget=200, algo='sobol',
+                    workers=1)
+    assert sizing.models.failure_gate('studio_cm_ota',
+                                      [v.name for v in amp_vars]) is not None
+    dead.clear()
+    monkeypatch.setattr(sizing.optimizer, 'CMAES_FAIL_GATE', False)
+    off = sizing.optimize('studio_cm_ota', amp_vars, budget=120,
+                          algo='cmaes', workers=1, seed=3)
+    dead_off = len(dead)
+    dead.clear()
+    monkeypatch.setattr(sizing.optimizer, 'CMAES_FAIL_GATE', True)
+    on = sizing.optimize('studio_cm_ota', amp_vars, budget=120,
+                         algo='cmaes', workers=1, seed=3)
+    assert 'failure gate redrew' in on.notes and 'redrew' not in off.notes
+    assert len(dead) < dead_off, (len(dead), dead_off)
+    assert on.evals == off.evals == 120
+
+
 def test_cmaes_surrogate_solves_the_bowl_with_fewer_evaluations(
         monkeypatch):
     """lq-CMA-ES on a quadratic bowl: the model is exact once it has a

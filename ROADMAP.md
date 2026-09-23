@@ -50,6 +50,13 @@ like before touching anything.
   3 of 16. Decision: the proposals stay a menu entry and are not
   offered by "Try next". (The frozen builds carry scikit-learn: build
   run 104 passed all six jobs.)
+- The failure gate on a characterised circuit. `CMAES_FAIL_GATE` lost
+  from an empty archive (three seeds of four on ldo_basic: the LDO's
+  optimum sits at the edge of its dead region) and won once from a
+  1024-point archive (1.05 → 0.34). Measure the characterised case at
+  several seeds, and a threshold of 0.1 instead of 0.3, before it is
+  offered as a default or wired into "Try next" after a Characterise
+  run.
 - The sensitivity-informed finish, split. `FINISH_SENSITIVITY` bundles
   two changes — sensitivity lines in the prompt and a scan centred on
   the local fit's amount — and lost to the plain finish as a bundle

@@ -7,6 +7,23 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **CMA-ES asks the archive's failure classifier before it simulates.**
+  On the LDO 63 % of the design box does not simulate at all and each
+  such point costs a full evaluation. When the circuit's archive holds
+  at least ten failed and ten successful evaluations with the current
+  variables (and scikit-learn is present), the search trains a
+  classifier on them — a second or two, refitted every ten generations
+  as the run's own points land — and a point it gives under 30 % of
+  simulating is redrawn from the same distribution up to three times;
+  the last draw is kept whatever it says, so a wrong classifier costs
+  one evaluation, not a slot. The run notes count the redraws.
+  **Off by default** (`CMAES_FAIL_GATE = False`): measured on
+  `ldo_basic` from an empty archive over four seeds it cut failed
+  evaluations from 72 to 60 of 600 but ended worse on three seeds of
+  four — the LDO's good points sit next to its dead region, and a
+  classifier trained on the run's first failures pushes the search off
+  that edge. From a 1024-point archive one seed went 1.05 → 0.34, which
+  is the case to measure next (`cairn/pitfalls.md`).
 - **The AI finish reads the archive around the search's best point.**
   The finish's measured shape is "right variables, wrong amounts"; the
   search that stalled has just spent hundreds of archived evaluations

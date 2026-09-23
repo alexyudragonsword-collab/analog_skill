@@ -110,6 +110,34 @@ class MetricModels:
 
 _cache: dict[tuple, MetricModels] = {}
 
+#: failures the archive must hold before the gate is trained: below this
+#: the classifier has nothing to learn the dead region from
+GATE_MIN_FAILURES = 10
+
+
+def failure_gate(circuit: str, names: list[str]):
+    """A callable p_ok(points) -> array over rows of physical values, or
+    None when scikit-learn is absent or the archive holds fewer than
+    GATE_MIN_FAILURES failed and as many successful evaluations with
+    these variables.  Trained on demand (a second or two); the search
+    refits it as its own evaluations land in the archive."""
+    if not available():
+        return None
+    from sklearn.ensemble import HistGradientBoostingClassifier
+    rows = [r for r in archive.load(circuit) if set(r['values']) == set(names)]
+    keys = metric_keys(circuit, rows) if rows else []
+    if not keys:
+        return None
+    ok = np.array([all(k in r['metrics'] for k in keys) for r in rows])
+    if ok.sum() < GATE_MIN_FAILURES or (~ok).sum() < GATE_MIN_FAILURES:
+        return None
+    X = np.array([[r['values'][n] for n in names] for r in rows], float)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        clf = HistGradientBoostingClassifier(max_iter=200,
+                                             random_state=0).fit(X, ok)
+    return lambda pts: clf.predict_proba(np.atleast_2d(pts))[:, 1]
+
 
 def metric_keys(circuit: str, rows: list[dict]) -> list[str]:
     """The spec's metric keys that the archive actually carries; a circuit

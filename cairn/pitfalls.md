@@ -1075,6 +1075,49 @@ point injected; and only then a "characterise this circuit" sampling
 job with metric models and a failure classifier behind the same seam.
 ROADMAP has all three.
 
+### The failure gate pushes the LDO off the edge its optimum sits on
+
+The third-ranked item of the capability review: the archive's failure
+classifier (93 % accurate) as a gate inside CMA-ES — a point it gives
+under 30 % of simulating is redrawn, up to three times, before it is
+paid for. Built (`models.failure_gate`, `CMAES_FAIL_GATE`, refit every
+ten generations from the run's own archive); measured 2026-09-23,
+600 evaluations, four workers, scratchpad `gate_ab.py`:
+
+| run | gate | final | failed evaluations | redrawn |
+|---|---|---|---|---|
+| ldo_basic s0, empty archive | on | 0.679 | 75 | 53 |
+| | off | 1.048 | 50 | — |
+| ldo_basic s1, empty | on | 0.759 | 43 | 7 |
+| | off | **0, all met** | 104 | — |
+| ldo_basic s2, empty | on | 0.874 | 52 | 1 |
+| | off | 0.532 | 79 | — |
+| ldo_basic s3, empty | on | 0.713 | 68 | 44 |
+| | off | 0.569 | 56 | — |
+| ldo_basic s0, 1024-point archive | on | **0.340** | 24 | 137 |
+| | off | 1.048 | 50 | — |
+| amp_leung_nmcf s0, empty | on | 0.808 (gate never trained: 19 failures) | 19 | — |
+
+From an empty archive the gate does what it says — failed evaluations
+60 a run against 72 — and loses the search anyway: worse endpoint on
+three seeds of four, means 0.76 against 0.54. The mechanism is the
+LDO's geometry: its good sizings sit next to the region that does not
+simulate (dropout, headroom), and a classifier trained on a run's
+first ten failures draws its boundary conservatively, so the redraws
+pull the population away from exactly the edge the optimum is on.
+With a characterised archive (1024 points, boundary well sampled) the
+one seed measured went 1.05 → 0.34 with half the failures — the
+opposite sign, at n = 1.
+
+So: off by default. The switch stays; the measurement that would turn
+it on is the characterised case at several seeds, and the design
+change worth trying first is a lower threshold (redraw only what the
+classifier is sure of, p_ok < 0.1) so the boundary is left alone.
+Same lesson as the sensitivity finish, from the other side: a model
+of where the search *has been* is not a model of where it should go,
+and on a circuit whose optimum lives at a constraint edge, keeping
+the search away from failures keeps it away from the answer.
+
 ### The local fit does not supply the amount: a negative result, kept
 
 The idea ranked first in the AI-capability review (2026-09-22): the

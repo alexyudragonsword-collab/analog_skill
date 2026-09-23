@@ -48,6 +48,26 @@ def cmaes_available() -> bool:
 #: reached 1.05.  Now the search keeps its budget while it is improving.
 STALL_EVALS = 60
 
+#: CMA-ES asks the archive's failure classifier before it simulates: a
+#: point the classifier gives less than GATE_P_OK of simulating at all
+#: is redrawn up to GATE_REDRAWS times (the last draw is kept whatever
+#: it says, so no slot is lost and a wrong classifier costs one
+#: evaluation, not a generation).  On the LDO 63 % of the whole box
+#: fails to simulate and each failure costs a full evaluation; the
+#: classifier reads those failures from the archive at 93 % (cairn/
+#: pitfalls.md).  Refitted every GATE_REFIT generations as the run's
+#: own evaluations land.  Measured on ldo_basic from an empty archive,
+#: four seeds: fewer failed evaluations (60 against 72 of 600) but a
+#: worse endpoint on three seeds of four (mean 0.76 against 0.54) —
+#: the LDO's good points sit next to its dead region and a classifier
+#: trained on the run's first failures pushes the search off that
+#: edge.  From a 1024-point archive one seed went 1.05 -> 0.34.  Off
+#: by default; on for a characterised circuit is the next measurement.
+CMAES_FAIL_GATE = False
+GATE_P_OK = 0.3
+GATE_REDRAWS = 3
+GATE_REFIT = 10
+
 #: share of the budget de_powell keeps for the polish.  Powell in 30
 #: dimensions spends ~4 evaluations per dimension per pass; a quarter of
 #: 600 is about one pass, serial.
@@ -492,6 +512,26 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         lam = _popsize(dims, workers)
         restarts = 0
         lines = state['notes'].splitlines() if state['notes'] else []
+        gate, gated, gens = None, 0, 0
+
+        def to_phys(pts):
+            x = np.clip(np.asarray(pts, float), 0, 1) * span + lo
+            return np.where(is_int, np.round(x), x)
+
+        def screen(es, X):
+            """Redraw the points the failure gate rejects."""
+            nonlocal gated
+            if gate is None:
+                return X
+            p = gate(to_phys(X))
+            for i in np.flatnonzero(p < GATE_P_OK):
+                for _ in range(GATE_REDRAWS):
+                    y = es.ask(1)[0]
+                    X[i] = y
+                    gated += 1
+                    if gate(to_phys([y]))[0] >= GATE_P_OK:
+                        break
+            return X
         inject = start is None and warm      # the known point, once
         start = x0 if start is None else start
         if sigma is None:
@@ -511,14 +551,20 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             while (not es.stop() and not state['cancel']
                    and state['dispatched'] < limit
                    and not stalled(stall)):
-                X = es.ask()
+                if CMAES_FAIL_GATE and gens % GATE_REFIT == 0:
+                    gate = models.failure_gate(circuit, names)
+                gens += 1
+                X = screen(es, es.ask())
                 costs = run_batch(X)
                 es.tell(X, [c if np.isfinite(c) else 1e12 for c in costs])
             why = ', '.join(es.stop()) or (
                 'stall' if stalled(stall) else 'budget')
             lines.append(f'run {len(lines)}: popsize {lam}, '
                          f'{state["dispatched"] - at} evaluations, best '
-                         f'{es.best.f:.4f}, stopped on {why}')
+                         f'{es.best.f:.4f}, stopped on {why}'
+                         + (f'; failure gate redrew {gated} points'
+                            if gated else ''))
+            gated = 0
             # IPOP: a stalled run restarts with twice the population from
             # a fresh point; the larger population is what makes the next
             # basin reachable, the fresh point is what makes it different

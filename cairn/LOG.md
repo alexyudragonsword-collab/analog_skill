@@ -2,6 +2,19 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-23 · Failure gate in CMA-ES: built, measured, off by default
+
+- Maintainer picked the review's third item. `models.failure_gate`
+  trains the archive's failure classifier on demand; `run_cmaes`
+  redraws points under 30 % p_ok up to three times, refits every ten
+  generations, counts redraws in the notes. Test: an archived dead
+  region, fewer evaluations land in it. A/B on ldo_basic, four seeds
+  from an empty archive: failed evaluations 60 vs 72 but endpoint
+  worse on three of four (means 0.76 vs 0.54); from a 1024-point
+  archive one seed 1.05 → 0.34. Ships off; table and the edge-of-
+  feasibility reading in `cairn/pitfalls.md`; ROADMAP: characterised
+  case at several seeds, lower threshold.
+
 ## 2026-09-22 · Sensitivity-informed finish built, measured negative, shipped off
 
 - Maintainer picked the review's first-ranked item: local linear fit
