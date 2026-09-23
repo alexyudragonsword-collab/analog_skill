@@ -1104,6 +1104,65 @@ scratch-script ones above (7 of 8 then; 8 of 8 now through the app's
 own path), which is the difference between a harness and the shipped
 seam. This is the number the README can carry.
 
+### Three seeds on the finish: 20 of 27 feasible against 18, and half of it is the restart
+
+The second thing at three runs per cell, 2026-09-23: `cmaes_llm_finish`
+as shipped (stall rule, three proposals a round, three rounds, then
+CMA-ES restarted from the finished point with the rest of the budget)
+against `cmaes` alone at the same budget and the same population
+(16; 12 on the LDO, 8 on the two skills). Nine circuits, seeds 0, 1
+and 2; the amplifiers and the LDO all rerun at the current population
+and the current LDO reader, so no row here is carried over from the
+two-seed table above. Scratchpad `plan-t3`, `plan-t3b`; the
+studio/skill rows at seeds 0 and 1 are the earlier tier's zeros, which
+the population does not change:
+
+| circuit | CMA s0 | + finish s0 | CMA s1 | + finish s1 | CMA s2 | + finish s2 |
+|---|---|---|---|---|---|---|
+| amp_leung_nmcf | **0.8084** | 1.0545 | **1.3695** | 1.4625 | 1.2173 | **0.9989** |
+| amp_peng_tcfc | 0 | 0 (210) | 0 | 0 (112) | 0 | 0 (112) |
+| amp_ramos_pfc | 1.0344 | **0.4866** | 1.2844 | **0.7411** | 0.6025 | **0.5410** |
+| amp_fan_smc | 0 | 0 (218) | 0 | 0 | 0 | 0 |
+| amp_hoilee_affc | 0 | 0 | 0.0954 | **0** | 0 | 0 |
+| ldo_basic | 1.0476 | **0.2425** | 0 | 0 | 0.5316 | **0** |
+| the other three | 0 | 0 | 0 | 0 | 0 | 0 |
+
+(A number in brackets is where the finish arm stopped early: every
+target met, nothing to finish.) CMA-ES alone leaves nine of 27 rows
+open. The finish arm is better on seven of them, closes two
+(`amp_hoilee_affc` seed 1, `ldo_basic` seed 2), and is worse on two —
+both `amp_leung_nmcf`, seeds 0 and 1. Feasible **20 of 27 against
+18**; sum of costs over the 27 rows 5.53 against 7.99. The 18 rows
+CMA-ES closes by itself cost the finish nothing, and on thirteen of
+them the arm returned early (60 to 310 evaluations: every target met,
+nothing to finish), which is the budget it gives back. Wall clock over the 21 rerun pairs: 340 min for the
+finish arm against 270 for CMA-ES alone, the difference being the
+model calls at two to three minutes a round.
+
+Two readings the notes force. **The finish is not the whole win.**
+The arm is stall → finish → restart, and the restart from the
+finished point with the tight step is a search change on its own:
+`amp_ramos_pfc` seed 0 (1.03 → 0.49) is a row where three rounds
+found nothing and the restarted CMA-ES did all of it, and
+`amp_leung_nmcf` seed 0 (0.81 → 1.05) is the same restart losing to
+the run that was never interrupted. Where the finish did move the
+point — the LDO at every seed (1.06 → 0.91, 1.30 → 0.81, 1.22 → 1.10),
+`amp_fan_smc` at every seed (0.998 → 0.035, 5.90 → 0.11, 0.58 → 0.51),
+`amp_hoilee_affc` at every seed (0.41 → 0.047, 1.55 → 0, 2.75 → 1.24),
+`amp_ramos_pfc` at seeds 1 and 2 — the restart then finished the job
+on five of those ten. **The stall fires early at this population.**
+`STALL_EVALS` is 60 evaluations, under four generations of 16; the
+searches stopped for the finish at 80 to 256 evaluations, long before
+the 552 the fixed reserve used to allow, and the runs that ended
+worse are the ones where the interrupted search was still descending:
+`amp_leung_nmcf` seed 0 stalled at 176 evaluations on 4.93, and the
+uninterrupted run — same seed, same trajectory to that point — was at
+2.18 by 300 and 0.81 by 500. A generation-based
+rule, or a longer window at larger populations, is the obvious thing
+to measure next; ROADMAP has it. The default stands on the tally as
+it is — 20 of 27, seven of nine open rows improved — but the claim
+belongs to the arm, not to the model call inside it.
+
 ### The failure gate pushes the LDO off the edge its optimum sits on
 
 The third-ranked item of the capability review: the archive's failure

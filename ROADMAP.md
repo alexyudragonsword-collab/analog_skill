@@ -44,10 +44,10 @@ like before touching anything.
   menu entries (Characterise, Model proposals) behind the existing
   Optimize button; measured only through the scratch scripts so far.
   Done through the GUI on a fresh archive (studio_cm_ota: warm 0.015
-  vs cold 0.189 at 100) and measured at a second seed through the
+  vs cold 0.189 at 100) and measured at three seeds through the
   shipped path (`cairn/pitfalls.md`): archive + warm start beats cold
-  CMA-ES at 200 on 14 of 16 rows, the proposals beat the archive on
-  3 of 16. Decision: the proposals stay a menu entry and are not
+  CMA-ES at 200 on 23 of 24 rows, the proposals beat the archive on
+  5 of 24. Decision: the proposals stay a menu entry and are not
   offered by "Try next". (The frozen builds carry scikit-learn: build
   run 104 passed all six jobs.)
 - The failure gate on a characterised circuit. `CMAES_FAIL_GATE` lost
@@ -87,7 +87,21 @@ like before touching anything.
   point, 37% and nothing). Three proposals a round now use that spread
   rather than suffer it (three of three cases improved); a comparison
   of opus against sonnet under the three-proposal finish has not been
-  run, and at one run per cell would not settle anything either.
+  run, and at one run per cell would not settle anything either. The
+  shipped arm now has three seeds on nine circuits (20 of 27 feasible
+  against CMA-ES alone's 18, `cairn/pitfalls.md`), which is the
+  baseline any model or prompt comparison should be run against.
+- The stall window is counted in evaluations (`STALL_EVALS` = 60),
+  which at population 16 is under four generations: the three-seed
+  finish tier shows the searches handed off at 80–256 evaluations,
+  and the two rows the finish arm lost are the ones where the
+  interrupted search was still descending (`amp_leung_nmcf` seed 0:
+  stalled on 4.93 at 176, the uninterrupted run at 0.81 by 500). The
+  same tier shows the restart from the finished point doing half the
+  arm's work on its own. Measure a generation-based window (say four
+  generations without a new best) or a window that scales with the
+  population before touching the default; and measure the restart
+  without the finish, to know what each part is worth.
 - CMA-ES's IPOP restarts never fire: four runs at 1200 evaluations,
   none stopped on pycma's tolerances, and the budget alone closed both
   LDO seeds (`cairn/pitfalls.md`). Either drop the restart code as

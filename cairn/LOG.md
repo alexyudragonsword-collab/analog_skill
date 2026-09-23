@@ -2,6 +2,20 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-23 · Finish at three seeds: 20 of 27 feasible against 18
+
+- The finish tier landed: nine circuits × seeds 0–2, `cmaes_llm_finish`
+  against `cmaes` at the same budget and population, amplifiers and
+  LDO rerun at population 16 / the fixed LDO reader (42 runs). CMA-ES
+  alone leaves 9 of 27 rows open; the finish arm improves 7, closes 2,
+  loses 2 (both amp_leung_nmcf); feasible 20 vs 18, cost sum 5.53 vs
+  7.99. The notes show half the win is the restart from the finished
+  point, not the model call (amp_ramos_pfc s0: finish found nothing,
+  restart 1.03 → 0.49), and the stall rule fires at 80–256 evaluations
+  at population 16 — under four generations. Table and reading in
+  `cairn/pitfalls.md`; ROADMAP: generation-based stall window; README
+  carries 20/27 and 23/24. Docs only, no code.
+
 ## 2026-09-23 · Warm start at three seeds: 23 of 24
 
 - Maintainer asked for three runs per cell on the finish and the warm
