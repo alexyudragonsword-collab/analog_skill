@@ -1163,6 +1163,96 @@ to measure next; ROADMAP has it. The default stands on the tally as
 it is — 20 of 27, seven of nine open rows improved — but the claim
 belongs to the arm, not to the model call inside it.
 
+*Correction, 2026-09-24:* "half of it is the restart" was a reading of
+the notes; measured apart (next section) the restart alone reaches the
+arm's feasible count, and the model's contribution is a lower summed
+cost, not more rows closed. The early hand-off did cost the finish
+arm — at eight generations its summed cost fell by a point — but the
+plain search did *not* benefit from the longer window.
+
+### The restart apart from the finish, and the window apart from both
+
+The two things the section above left to measure, 2026-09-24, on the
+sixteen circuit-seed rows the plain search does not close outright
+(the other eleven reach zero before any stall and are identical in
+every arm). Restart-only is the shipped arm with the model call
+removed (`FINISH_ROUNDS = 0`: the search stalls, nothing happens, the
+restart from the best point with σ 0.1 spends the rest); the eight-
+generation window is `STALL_EVALS` set to 8 × population (128 on the
+amplifiers, 96 on the LDO). Scratchpad `plan-t4`, `plan-t5`;
+`tab_t4.py` prints the table:
+
+| circuit | seed | CMA-ES | finish @60 | restart @60 | finish @8 gen | restart @8 gen |
+|---|---|---|---|---|---|---|
+| amp_leung_nmcf | 0 | 0.8084 | 1.0545 | 0.9342 | **0.5034** | 0.8084 |
+| amp_leung_nmcf | 1 | 1.3695 | 1.4625 | 1.4941 | 1.1820 | **1.0809** |
+| amp_leung_nmcf | 2 | 1.2173 | 0.9989 | 0.8600 | **0.8005** | 0.8951 |
+| amp_peng_tcfc | 0 | 0 | 0 | 0 | 0 | 0 |
+| amp_ramos_pfc | 0 | 1.0344 | **0.4866** | 0.8096 | 0.8096 | 0.8096 |
+| amp_ramos_pfc | 1 | 1.2844 | 0.7411 | 0.8016 | **0.2007** | 0.4141 |
+| amp_ramos_pfc | 2 | 0.6025 | 0.5410 | 0.5071 | **0.4119** | 0.5071 |
+| amp_fan_smc | 0 | 0 | 0 | 0 | 0 | 0 |
+| amp_fan_smc | 1 | 0 | 0 | 0 | 0 | 0.0061 |
+| amp_fan_smc | 2 | 0 | 0 | 0 | 0 | 0 |
+| amp_hoilee_affc | 0 | 0 | 0 | 0 | 0 | 0 |
+| amp_hoilee_affc | 1 | 0.0954 | 0 | 0 | 0 | 0 |
+| amp_hoilee_affc | 2 | 0 | 0 | 0 | 0 | 0 |
+| ldo_basic | 0 | 1.0476 | 0.2425 | 0 | 0.6250 | 0.4845 |
+| ldo_basic | 1 | 0 | 0 | 0 | 0 | 0 |
+| ldo_basic | 2 | 0.5316 | 0 | 0.2324 | 0 | 0.2353 |
+| **feasible** | | 7 | 9 | 9 | 9 | 7 |
+| **sum** | | 7.99 | 5.53 | 5.64 | 4.53 | 5.24 |
+
+**The restart is the feasibility.** With no model call at all the
+restart closes the same nine rows the finish arm closes, and its
+summed cost is within 2 % of the arm's. Every row the model was
+credited with closing — `amp_hoilee_affc` seed 1, the LDO at seeds 0
+and 2 — the restart closes or nearly closes on its own, and it closes
+the LDO's seed 0 (1.05 → 0) where the finish arm stopped at 0.24.
+The mechanism is what the notes suggested: CMA-ES from the stalled
+best with σ 0.1 is a different search from the one that stalled — a
+small population around a good point with the covariance reset —
+and on these rows that is what was missing, not a diagnosis. Plain
+`cmaes` now does this, and a user without a model gets 9 of 16 where
+they got 7.
+
+**The window matters only with the model.** With the finish, eight
+generations against 60 evaluations: the same nine rows feasible, the
+summed cost 5.53 → 4.53, `amp_leung_nmcf` better at every seed and
+`amp_ramos_pfc` at two of three; `ldo_basic` seed 0 worse (0.24 →
+0.63) and `amp_ramos_pfc` seed 0 the same. `amp_leung_nmcf` seed 0 is
+the row that explains it: at the long window the search never
+stalled, ran to its cap at 0.81 — the plain search's own endpoint —
+and the finish took that converged point to 0.50 in one round, where
+from the 4.93 the short window handed it, three rounds found nothing.
+The model diagnoses a converged point better than a half-converged
+one. Without the model the long window went the other way: 7 of 16
+feasible against 9, `amp_fan_smc` seed 1 left at 0.0061 and both open
+LDO seeds left open, because a later stall leaves the σ-0.1 restart
+fewer evaluations and nothing in between to spend them better. So the
+two paths keep different windows — 60 for the plain restart, eight
+generations ahead of the finish — which is an awkward rule and the
+measured one.
+
+**What the model is now worth**, restart against restart-plus-finish
+at their shipped windows: 5.64 → 4.53 on the open rows, six rows
+better (three `amp_leung_nmcf`, two `amp_ramos_pfc`, the LDO's seed
+2), one worse (the LDO's seed 0), nine the same, and the same feasible
+count. That is the claim the README carries for the finish now: not
+rows closed, a lower cost on the rows that stay open. Wall clock for
+it: the model calls, two to three minutes a round.
+
+**A reconstruction that paid for itself.** The window was chosen from
+the plain runs' best-so-far curves rebuilt from the archive rows
+(`stall_an.py`, every rebuilt endpoint matched the recorded one): the
+curves are flat for a hundred evaluations and then drop, so 60
+evaluations fires inside the flats and eight generations was the
+smallest window that moved the hand-off on most rows. One rebuilt
+prediction was wrong — `amp_leung_nmcf` seed 0 was predicted to hand
+off at 229 and never stalled — because the archive records
+completions, not dispatches, and a wave's order differs; the rule
+fires on the dispatch count.
+
 ### The failure gate pushes the LDO off the edge its optimum sits on
 
 The third-ranked item of the capability review: the archive's failure

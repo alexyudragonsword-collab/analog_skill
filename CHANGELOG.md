@@ -7,6 +7,34 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **CMA-ES restarts from its best point when it stalls, with or without
+  a model.**  Three seeds on nine circuits had shown the AI finish arm
+  feasible on 20 of 27 rows against CMA-ES alone's 18, and the notes
+  showed the arm's *restart* — CMA-ES again from the finished point
+  with a tight step — doing much of that on rows where the model found
+  nothing.  Measured apart on the sixteen rows the search does not
+  close outright: the restart alone, no model call, is feasible on 9
+  of 16 against the uninterrupted search's 7, the same 9 as the finish
+  arm, summed cost 5.64 against the finish's 5.53 and the search's
+  7.99.  Plain `cmaes` now does this: it runs until no new best
+  arrives for `STALL_EVALS` (60) evaluations, then runs again from its
+  best point with σ 0.1 for what is left; a run that has met every
+  target stops at the stall, its cost already zero.
+- **The finish waits longer before it is asked.**  Ahead of the finish
+  the stall window is now at least `STALL_GENERATIONS` (8) generations:
+  60 evaluations was under four generations of 16 and handed off at
+  80–256 evaluations while the searches were still descending in
+  bursts.  Eight generations against 60 on the same sixteen rows: with
+  the finish the summed cost fell from 5.53 to 4.53 at the same
+  feasible count (`amp_leung_nmcf` and `amp_ramos_pfc` better at every
+  seed but one, `ldo_basic` seed 0 worse) — the model diagnoses a
+  converged point better than a half-converged one.  Without the model
+  the longer window lost two feasible rows (7 of 16 against 9), so the
+  plain restart keeps 60.  With both changes the model's own
+  contribution, restart against restart-plus-finish, is 5.64 → 4.53 on
+  the open rows: six rows better, one worse, nine the same.  Tables
+  and the reconstructed curves in `cairn/pitfalls.md`.
+
 - **CMA-ES asks the archive's failure classifier before it simulates.**
   On the LDO 63 % of the design box does not simulate at all and each
   such point costs a full evaluation. When the circuit's archive holds

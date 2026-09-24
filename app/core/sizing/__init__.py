@@ -53,7 +53,8 @@ from app.core.sizing.evaluation import (
     _run_dir, capture_waves, evaluate, netlist_texts,
 )
 from app.core.sizing.optimizer import (
-    STALL_EVALS, cmaes_available, optimize, optuna_available,
+    STALL_EVALS, STALL_GENERATIONS, cmaes_available, optimize,
+    optuna_available,
 )
 from app.core.sizing.plots import (
     render_comparison, render_convergence, render_wave_comparison,

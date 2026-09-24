@@ -91,24 +91,26 @@ like before touching anything.
   shipped arm now has three seeds on nine circuits (20 of 27 feasible
   against CMA-ES alone's 18, `cairn/pitfalls.md`), which is the
   baseline any model or prompt comparison should be run against.
-- The stall window is counted in evaluations (`STALL_EVALS` = 60),
-  which at population 16 is under four generations: the three-seed
-  finish tier shows the searches handed off at 80–256 evaluations,
-  and the two rows the finish arm lost are the ones where the
-  interrupted search was still descending (`amp_leung_nmcf` seed 0:
-  stalled on 4.93 at 176, the uninterrupted run at 0.81 by 500). The
-  same tier shows the restart from the finished point doing half the
-  arm's work on its own. Measure a generation-based window (say four
-  generations without a new best) or a window that scales with the
-  population before touching the default; and measure the restart
-  without the finish, to know what each part is worth.
-- CMA-ES's IPOP restarts never fire: four runs at 1200 evaluations,
-  none stopped on pycma's tolerances, and the budget alone closed both
-  LDO seeds (`cairn/pitfalls.md`). Either drop the restart code as
-  unreachable, or retrigger it on the history's stall signal
-  (`STALL_EVALS`) the way the finish is — a restart from a fresh point
-  with a doubled population after 60 flat evaluations is the IPOP idea
-  with a criterion that actually happens here. Unmeasured either way.
+- The stall window and the restart, measured and shipped (vNext):
+  plain `cmaes` restarts from its best point when it stalls, which
+  alone gave most of the finish arm's gain, and ahead of the finish the
+  window is at least eight generations (`STALL_GENERATIONS`). Left
+  open by that tier: the two paths keep different windows because the
+  measurement said so (eight generations lost two feasible rows
+  without the model and gained a point of summed cost with it), and
+  one value was measured against 60, so a window between them or one
+  that scales with the population is untested; on `ldo_basic` seed 0
+  the longer window lost with the finish (0.24 → 0.63) — the LDO's
+  curve is the one the window fits least well. Tables in
+  `cairn/pitfalls.md`.
+- CMA-ES's IPOP restarts (twice the population from a fresh point) fire
+  only when pycma stops on its own, which four runs at 1200 evaluations
+  never did; the restart that does fire now is the stall-triggered one
+  from the best point with a tight step (vNext). Whether a fresh-point
+  IPOP restart on the stall signal would find a *different* basin where
+  the tight restart only descends the same one is unmeasured; the
+  amplifiers that stay open at every seed (`amp_leung_nmcf`,
+  `amp_ramos_pfc`) are the rows to try it on.
 - Whether *Try next*'s thresholds are right: three seeds before more
   budget, "close" as two misses none over 10%, budget doubling (or the
   same budget again when the run can be continued). They

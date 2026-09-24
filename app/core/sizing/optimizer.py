@@ -40,13 +40,24 @@ def cmaes_available() -> bool:
         return False
 
 
-#: evaluations without a new best after which a search is "stalled" and
-#: the finish may begin.  About five CMA-ES generations or two DE ones on
-#: the amplifiers.  The finish used to take its reserve from the end of
-#: the search regardless; on ldo_basic at seed 0 CMA-ES improved 1.08 to
+#: evaluations without a new best after which a search is "stalled":
+#: the finish's cue, and plain CMA-ES's cue to restart from its best
+#: point.  The finish used to take its reserve from the end of the
+#: search regardless; on ldo_basic at seed 0 CMA-ES improved 1.08 to
 #: 0.84 in exactly those evaluations and the finish, given them instead,
 #: reached 1.05.  Now the search keeps its budget while it is improving.
+#: Ahead of the finish the window is at least STALL_GENERATIONS
+#: generations: 60 evaluations is under four generations of 16, and at
+#: that window the searches handed off at 80–256 evaluations while
+#: still descending in bursts — flat for a hundred evaluations, then a
+#: drop (the reconstructed curves in cairn/pitfalls.md).  Eight
+#: generations against 60 on sixteen circuit-seed rows: with the
+#: finish the same feasible count and the summed cost 4.53 against
+#: 5.53 — the model diagnoses a converged point better than a half-
+#: converged one; without it (the plain restart) two feasible rows
+#: lost, so the plain restart keeps the 60-evaluation window.
 STALL_EVALS = 60
+STALL_GENERATIONS = 8
 
 #: CMA-ES asks the archive's failure classifier before it simulates: a
 #: point the classifier gives less than GATE_P_OK of simulating at all
@@ -77,6 +88,13 @@ POLISH_SHARE = 0.25
 def _fill(n: int, workers: int, cap: int) -> int:
     """`n` rounded up to whole waves of `workers`, at most `cap`."""
     return min(cap, int(np.ceil(n / workers)) * workers)
+
+
+def _stall_window(lam: int) -> int:
+    """Evaluations without a new best after which a CMA-ES of population
+    `lam` hands over to the finish: STALL_EVALS, or STALL_GENERATIONS
+    generations if longer."""
+    return max(STALL_EVALS, STALL_GENERATIONS * lam)
 
 
 def _popsize(dims: int, workers: int) -> int:
@@ -124,10 +142,17 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                         after the first feasible point.  Each generation
                         is one parallel batch; the objective reads the
                         metrics the constraint call cached.
-      'cmaes'           CMA-ES (pycma) with IPOP restarts: when a run
-                        stalls, restart with twice the population from a
-                        fresh point until the budget is spent.  Batches
-                        of max(workers, 4 + 3 ln dims) per generation.
+      'cmaes'           CMA-ES (pycma) until no new best arrives for
+                        STALL_EVALS evaluations, then CMA-ES again from
+                        its best point with a tight step for what is
+                        left — the finish's restart without the finish,
+                        which measured as most of the finish's gain
+                        (nine of sixteen open rows feasible against
+                        seven for the uninterrupted search; cairn/
+                        pitfalls.md).  A run pycma stops
+                        on its own restarts IPOP-style, twice the
+                        population from a fresh point.  Batches of
+                        max(workers, 4 + 3 ln dims) per generation.
                         The measured default: feasible on 12 of 18
                         circuit-seed rows against DE's 6, best or tied
                         on 16 (cairn/pitfalls.md).  A seed portfolio
@@ -145,9 +170,10 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                         same loop with each step's points batched.  A
                         pilot: measured against 'cmaes' at equal budget
                         before it earns a default (cairn/pitfalls.md).
-      'cmaes_llm_finish' 'cmaes' for all but the finish's reserve, then
-                        llm_sizing.run_finish — the finish behind the
-                        search that leaves the fewest gaps.
+      'cmaes_llm_finish' CMA-ES until it stalls, llm_sizing.run_finish,
+                        then CMA-ES from the finished point for what is
+                        left — the finish behind the search that leaves
+                        the fewest gaps.
       'de_llm_finish'   'diff_evolution' for all but the last few
                         evaluations, then up to FINISH_ROUNDS rounds of:
                         one LLM call to name the fix for whatever is
@@ -683,7 +709,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         # round left.  Whatever the finish leaves goes back to CMA-ES,
         # restarted from the finished point with a tight step.
         state['cap'] = max(budget - llm_sizing.FINISH_EVALS, budget // 2)
-        run_cmaes(state['cap'], stall=STALL_EVALS)
+        run_cmaes(state['cap'], stall=_stall_window(_popsize(dims, workers)))
         state['cap'] = budget
         if state['cancel'] or state['dispatched'] >= budget:
             return
@@ -701,6 +727,22 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                            f'{left} evaluations left'
                            + ('' if state['best'] < before
                               else ' (finish found nothing)'))
+        run_cmaes(budget, start=state['best_xn'], sigma=0.1)
+
+    def run_cmaes_restart():
+        # the finish's shape without the model: the search stops when it
+        # stalls and restarts from its best point with a tight step for
+        # what is left.  A run that has met every target stops at the
+        # stall instead — its cost is already zero.  The short window,
+        # not the finish's: at eight generations the restart lost two
+        # feasible rows of sixteen that it holds at 60 evaluations.
+        run_cmaes(budget, stall=STALL_EVALS)
+        left = budget - state['dispatched']
+        if (state['cancel'] or left < 4 + int(3 * np.log(dims))
+                or state['best'] == 0.0):
+            return
+        state['notes'] += (f'\nrestarted CMA-ES from its best point with '
+                           f'{left} evaluations left')
         run_cmaes(budget, start=state['best_xn'], sigma=0.1)
 
     def run_sobol():
@@ -792,7 +834,7 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         elif algo == 'de_constrained':
             run_de_constrained()
         elif algo == 'cmaes':
-            run_cmaes()
+            run_cmaes_restart()
         elif algo == 'cmaes_surrogate':
             run_cmaes_surrogate()
         elif algo == 'sobol':

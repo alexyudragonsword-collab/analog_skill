@@ -2,6 +2,22 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-24 · The restart apart from the finish: shipped in plain CMA-ES
+
+- Maintainer said do it. Two control arms on the sixteen open rows:
+  restart-only (finish arm, no model call) and the finish at an
+  eight-generation stall window, plus restart-only at that window for
+  the full square (48 runs). Restart alone: 9/16 feasible, sum 5.64 —
+  the finish arm's nine rows, no model. Finish at 8 gen: 9/16, sum
+  4.53 (was 5.53). Restart at 8 gen: 7/16. Shipped: plain `cmaes`
+  restarts from its best point on a 60-evaluation stall
+  (`run_cmaes_restart`); ahead of the finish the window is at least
+  `STALL_GENERATIONS` (8) generations (`_stall_window`). Tests extended
+  (restart note, zero-cost early stop, 128-evaluation hand-off on four
+  workers). Correction note on yesterday's "half of it is the
+  restart"; new table and reading in `cairn/pitfalls.md`; CHANGELOG
+  vNext, README, ROADMAP items rewritten (window, IPOP).
+
 ## 2026-09-23 · Finish at three seeds: 20 of 27 feasible against 18
 
 - The finish tier landed: nine circuits × seeds 0–2, `cmaes_llm_finish`

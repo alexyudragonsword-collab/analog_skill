@@ -1214,6 +1214,22 @@ def test_cmaes_converges_and_restarts(monkeypatch):
     assert 'run 1: popsize 12' in run.notes      # doubled on restart
     assert 'run 0: popsize 6' in run.notes and 'stopped on tol' in run.notes
     assert run.population is None                # not a DE population
+    # and once no new best arrives for a whole window the search stops
+    # and starts again from its best point with a tight step — the
+    # finish's restart without the finish, which measured as most of
+    # the finish's gain
+    assert 'stopped on stall' in run.notes
+    assert 'restarted CMA-ES from its best point' in run.notes
+    assert run.evals >= 400 - 8                  # the budget was spent
+
+    # a search whose best is zero has nothing to restart for
+    fake = sizing.optimizer.evaluate
+    monkeypatch.setattr(sizing.optimizer, 'evaluate',
+                        lambda c, v, **kw: {'q': max(fake(c, v)['q'] - 1, 0)})
+    run = sizing.optimize('skill_bootstrap', variables, budget=400,
+                          algo='cmaes', workers=1)
+    assert run.best_cost == 0.0
+    assert 'restarted' not in run.notes and run.evals < 400
 
 
 def test_cmaes_population_fills_the_workers(monkeypatch):
@@ -1572,6 +1588,27 @@ def test_cmaes_llm_finish_begins_when_the_search_stalls(monkeypatch):
     assert at < 200, at                          # stalled long before the cap
     assert 'stopped on stall' in run.notes
     assert run.evals >= 300 - 8                  # and the budget was spent
+
+    # the window is at least STALL_GENERATIONS generations: 60
+    # evaluations is under four generations of 16, and at that window
+    # the amplifiers handed off at 80–256 evaluations while still
+    # descending in bursts (cairn/pitfalls.md)
+    assert sizing.optimizer._stall_window(6) == sizing.STALL_EVALS
+    assert sizing.optimizer._stall_window(16) == 16 * sizing.STALL_GENERATIONS
+    amp_vars = sizing.parse_variables('amp_hoilee_affc')
+    a, b = amp_vars[0], amp_vars[1]
+
+    def flat_amp(circuit, values, **kw):
+        u = (values[a.name] - a.default) / (a.hi - a.lo)
+        v = (values[b.name] - b.default) / (b.hi - b.lo)
+        return {'q': max(4 * u * u + v * v, 0.05)}
+    monkeypatch.setattr(sizing.optimizer, 'evaluate', flat_amp)
+    seen.clear()
+    run = sizing.optimize('amp_hoilee_affc', amp_vars, budget=400,
+                          algo='cmaes_llm_finish', workers=4)
+    at = seen[0][0]
+    assert 128 <= at <= 128 + 32, at             # eight generations of 16
+    assert 'stopped on stall' in run.notes
 
 
 def test_signed_margin_and_slack():
