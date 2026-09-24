@@ -2,6 +2,22 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-24 · Loop and fresh restarts measured negative; v1.8 released
+
+- Maintainer took the three suggested steps. Saved curves: the single
+  restart sits idle 300–500 evaluations on amp_ramos_pfc, still
+  descends at 585 on amp_leung_nmcf. Restart-on-every-stall (16 rows):
+  8/16 feasible against 9, sum 5.71 vs 5.64 — wins the idle rows,
+  loses the bursty ones and the LDO. Fresh IPOP on the stall signal
+  (nmcf, ramos × 3 seeds): 0/6, never beat the point it left at
+  populations 32–128. Neither shipped; knobs `RESTART_CYCLES`,
+  `RESTART_FRESH` kept at the measured-off values. Shipped from it: a
+  CMA-ES run's stall is its own progress, not the search's best. First
+  loop version re-evaluated an identical population each cycle
+  (same seed, same point) — caught in the notes, fixed, rerun. Table
+  in `cairn/pitfalls.md`; ROADMAP IPOP item closed. v1.8 cut from
+  vNext (restart, window, gate off, sensitivity off, popsize 16).
+
 ## 2026-09-24 · The restart apart from the finish: shipped in plain CMA-ES
 
 - Maintainer said do it. Two control arms on the sixteen open rows:

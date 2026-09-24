@@ -1253,6 +1253,59 @@ off at 229 and never stalled — because the archive records
 completions, not dispatches, and a wave's order differs; the rule
 fires on the dispatch count.
 
+### Restarting again, and restarting fresh: both lose to one tight restart
+
+The two follow-ups the restart invited, 2026-09-24, same sixteen open
+rows (`plan-t6`; the loop and the fresh variant are `RESTART_CYCLES`
+and `RESTART_FRESH` in the optimizer, the harness sets them). First
+the saved curves said the single restart sits idle on some rows: after
+its last improvement `amp_ramos_pfc` seed 1 spent 501 evaluations flat,
+seed 0 313, while `amp_leung_nmcf` seeds 0 and 2 were still improving
+at 585. So a loop — restart from the best point again on every stall —
+should help the first kind and cut the second. It did exactly that:
+
+| circuit | seed | CMA-ES | restart once | restart on every stall | fresh IPOP on every stall |
+|---|---|---|---|---|---|
+| amp_leung_nmcf | 0 | 0.8084 | 0.9342 | 1.0573 | 3.6826 |
+| amp_leung_nmcf | 1 | 1.3695 | 1.4941 | **1.0876** | 4.5443 |
+| amp_leung_nmcf | 2 | 1.2173 | 0.8600 | 0.8625 | 2.4757 |
+| amp_ramos_pfc | 0 | 1.0344 | 0.8096 | **0.4457** | 1.0344 |
+| amp_ramos_pfc | 1 | 1.2844 | 0.8016 | **0.4918** | 1.4754 |
+| amp_ramos_pfc | 2 | 0.6025 | 0.5071 | 0.6309 | 0.7722 |
+| ldo_basic | 0 | 1.0476 | **0** | 0.4845 | |
+| ldo_basic | 2 | 0.5316 | **0.2324** | 0.6479 | |
+| the other eight | | 7 of 8 at 0 | all 0 | all 0 | |
+| **feasible, 16 rows** | | 7 | **9** | 8 | |
+| **sum, 16 rows** | | 7.99 | **5.64** | 5.71 | |
+
+The loop closes nothing new and reopens the LDO at seed 0; its wins
+are the idle rows and its losses are the bursty ones, which is the
+window problem again from the other side — a restarted search is as
+flat-then-drop as the first, and 60 evaluations without a new best is
+inside the flats. Not shipped; a loop with the long window would have
+one or two cycles in 600 evaluations, which is the single restart.
+
+**Fresh restarts find no second basin.** IPOP on the stall signal —
+a random point, twice the population, on every stall — on the two
+amplifiers open at every seed: no restarted run at population 32, 64
+or 128 ever beat the point the first run stalled at, and the rows end
+at the first run's number or worse. Six of six. Whatever keeps
+`amp_leung_nmcf` and `amp_ramos_pfc` open in 600 evaluations, it is
+not a basin a fresh start finds in that budget; the ROADMAP item that
+asked is closed, and the IPOP branch inside `run_cmaes` stays what it
+was — a restart for a run pycma stops on its own, which at 600
+evaluations it never does.
+
+A rule change shipped from this: a run's stall is now judged on the
+run's own best, not the search's. For the first run they are the same
+thing; for a restart from a fresh point the old rule fired within one
+window whatever the run was doing, because the search's best was the
+point it started behind. The first version of the loop had a second
+flaw worth writing down — every cycle restarted from the same point
+with the same pycma seed and re-evaluated the identical population,
+64 evaluations of nothing per cycle — caught in the first run's notes
+before the tier was allowed to finish.
+
 ### The failure gate pushes the LDO off the edge its optimum sits on
 
 The third-ranked item of the capability review: the archive's failure

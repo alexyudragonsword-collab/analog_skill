@@ -59,6 +59,19 @@ def cmaes_available() -> bool:
 STALL_EVALS = 60
 STALL_GENERATIONS = 8
 
+#: how many times plain CMA-ES restarts from its best point on a stall
+#: before the budget is simply spent, and whether a restart starts
+#: fresh (IPOP: a random point, twice the population) instead of from
+#: the best point with a tight step.  Both measured on the sixteen open
+#: rows and both lose to the single tight restart: restarting again on
+#: every stall 8 of 16 feasible against 9 (it wins where the first
+#: restart sat idle, loses where it was still descending in bursts),
+#: fresh restarts 0 of 6 on the two amplifiers open at every seed —
+#: no population up to 128 found a better basin in 600 evaluations
+#: (cairn/pitfalls.md).  Kept as the knobs the measurement used.
+RESTART_CYCLES = 1
+RESTART_FRESH = False
+
 #: CMA-ES asks the archive's failure classifier before it simulates: a
 #: point the classifier gives less than GATE_P_OK of simulating at all
 #: is redrawn up to GATE_REDRAWS times (the last draw is kept whatever
@@ -528,15 +541,21 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
             state['notes'] = 'constrained: no feasible point found'
 
     def run_cmaes(limit: int = budget, stall: int | None = None,
-                  start=None, sigma: float | None = None):
+                  start=None, sigma: float | None = None,
+                  popsize: int | None = None, seed_: int = seed):
         """CMA-ES up to `limit` dispatches, restarting when a run stops
-        on its own.  `stall` (evaluations without a new best) ends the
-        whole search early — the finish's cue.  `start`/`sigma` resume
-        from a point, as after a finish, with the notes continued."""
+        on its own.  `stall` (evaluations without a new best *of the
+        run*) ends the whole search early — the finish's cue, and the
+        restart's; for the first run that is the search's best, for a
+        restarted one its own progress, so a restart from a fresh point
+        is judged on what it finds, not on the best it started behind.
+        `start`/`sigma` resume from a point, as after a finish, with the
+        notes continued."""
         import cma
-        rng = np.random.default_rng(seed)
-        lam = _popsize(dims, workers)
+        rng = np.random.default_rng(seed_)
+        lam = popsize or _popsize(dims, workers)
         restarts = 0
+        flat = False                          # this run stalled
         lines = state['notes'].splitlines() if state['notes'] else []
         gate, gated, gens = None, 0, 0
 
@@ -563,10 +582,10 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         if sigma is None:
             sigma = 0.1 if inject else 0.25
         while (not state['cancel'] and state['dispatched'] < limit
-               and not stalled(stall)):
+               and not flat):
             es = cma.CMAEvolutionStrategy(start, sigma, {
                 'bounds': [0.0, 1.0], 'popsize': lam,
-                'seed': seed + restarts + 1,
+                'seed': seed_ + restarts + 1,
                 'maxfevals': limit - state['dispatched'],
                 'tolfun': 1e-6, 'tolx': 1e-4,
                 'verbose': -9, 'verb_disp': 0, 'verb_log': 0})
@@ -574,17 +593,21 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
                 es.inject([start], force=True)
                 inject = False
             at = state['dispatched']
+            run_best, run_at = np.inf, at
             while (not es.stop() and not state['cancel']
-                   and state['dispatched'] < limit
-                   and not stalled(stall)):
+                   and state['dispatched'] < limit and not flat):
                 if CMAES_FAIL_GATE and gens % GATE_REFIT == 0:
                     gate = models.failure_gate(circuit, names)
                 gens += 1
                 X = screen(es, es.ask())
                 costs = run_batch(X)
                 es.tell(X, [c if np.isfinite(c) else 1e12 for c in costs])
-            why = ', '.join(es.stop()) or (
-                'stall' if stalled(stall) else 'budget')
+                f = min((c for c in costs if np.isfinite(c)), default=np.inf)
+                if f < run_best:
+                    run_best, run_at = f, state['dispatched']
+                flat = (stall is not None
+                        and state['dispatched'] - run_at >= stall)
+            why = ', '.join(es.stop()) or ('stall' if flat else 'budget')
             lines.append(f'run {len(lines)}: popsize {lam}, '
                          f'{state["dispatched"] - at} evaluations, best '
                          f'{es.best.f:.4f}, stopped on {why}'
@@ -737,13 +760,29 @@ def optimize(circuit: str, variables: list[VarSpec], budget: int = 60,
         # not the finish's: at eight generations the restart lost two
         # feasible rows of sixteen that it holds at 60 evaluations.
         run_cmaes(budget, stall=STALL_EVALS)
-        left = budget - state['dispatched']
-        if (state['cancel'] or left < 4 + int(3 * np.log(dims))
-                or state['best'] == 0.0):
-            return
-        state['notes'] += (f'\nrestarted CMA-ES from its best point with '
-                           f'{left} evaluations left')
-        run_cmaes(budget, start=state['best_xn'], sigma=0.1)
+        rng = np.random.default_rng(seed + 7)
+        lam = _popsize(dims, workers)
+        for cycle in range(RESTART_CYCLES):
+            left = budget - state['dispatched']
+            if (state['cancel'] or left < 4 + int(3 * np.log(dims))
+                    or state['best'] == 0.0):
+                return
+            last = cycle == RESTART_CYCLES - 1
+            if RESTART_FRESH:
+                lam = _fill(lam * 2, workers, 10 ** 9)
+                state['notes'] += (f'\nrestarted CMA-ES from a fresh point '
+                                   f'with population {lam} and {left} '
+                                   'evaluations left')
+                run_cmaes(budget, start=rng.uniform(0.0, 1.0, dims),
+                          sigma=0.25, popsize=lam,
+                          stall=None if last else STALL_EVALS,
+                          seed_=seed + 100 * cycle)
+            else:
+                state['notes'] += (f'\nrestarted CMA-ES from its best point '
+                                   f'with {left} evaluations left')
+                run_cmaes(budget, start=state['best_xn'], sigma=0.1,
+                          stall=None if last else STALL_EVALS,
+                          seed_=seed + 100 * cycle)
 
     def run_sobol():
         import warnings

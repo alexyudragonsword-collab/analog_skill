@@ -5,7 +5,17 @@ development milestones and were never tagged — v1.4 is the first release;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
-## vNext — unreleased
+## v1.8 — 2026-09-24
+
+A search release. The measured change is in plain CMA-ES, which every
+user runs whether or not a model is configured: it now restarts from
+its best point when it stalls, and on the sixteen circuit-seed rows the
+uninterrupted search leaves open that alone closes nine where it closed
+seven. The AI finish keeps its place behind it with a longer window and
+a smaller, better-stated claim. Two things were measured and shipped
+off (a sensitivity-informed finish, a failure classifier gating the
+search), two more were measured and not shipped at all (restarting on
+every stall, restarting fresh); all four are in `cairn/pitfalls.md`.
 
 - **CMA-ES restarts from its best point when it stalls, with or without
   a model.**  Three seeds on nine circuits had shown the AI finish arm
@@ -34,6 +44,23 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   contribution, restart against restart-plus-finish, is 5.64 → 4.53 on
   the open rows: six rows better, one worse, nine the same.  Tables
   and the reconstructed curves in `cairn/pitfalls.md`.
+- **Restarting again, and restarting fresh, both measured and not
+  shipped.**  The restart is once; the natural follow-ups were to
+  restart on every stall and to restart IPOP-style from a fresh point
+  with twice the population.  On the same sixteen rows the loop is
+  feasible on 8 against the single restart's 9 (summed cost 5.71
+  against 5.64): it wins where the first restart sat idle for hundreds
+  of evaluations (`amp_ramos_pfc` seeds 0 and 1, 0.81 → 0.45 and 0.49)
+  and loses where the restarted search was still descending in bursts
+  and the 60-evaluation window cut it (`ldo_basic` seeds 0 and 2, 0 →
+  0.48 and 0.23 → 0.65).  Fresh restarts on the two amplifiers open at
+  every seed never beat the point they left, at populations 32, 64 and
+  128: whatever keeps those rows open in 600 evaluations is not a
+  second basin a fresh start finds.  Both stay as the knobs the
+  measurement used (`RESTART_CYCLES`, `RESTART_FRESH`), at 1 and off.
+  A CMA-ES run's stall is now judged on that run's own progress rather
+  than the search's best — the same thing for the first run, and the
+  rule a restart from a fresh point needs to be judged at all.
 
 - **CMA-ES asks the archive's failure classifier before it simulates.**
   On the LDO 63 % of the design box does not simulate at all and each

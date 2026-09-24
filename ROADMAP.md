@@ -101,16 +101,9 @@ like before touching anything.
   one value was measured against 60, so a window between them or one
   that scales with the population is untested; on `ldo_basic` seed 0
   the longer window lost with the finish (0.24 → 0.63) — the LDO's
-  curve is the one the window fits least well. Tables in
-  `cairn/pitfalls.md`.
-- CMA-ES's IPOP restarts (twice the population from a fresh point) fire
-  only when pycma stops on its own, which four runs at 1200 evaluations
-  never did; the restart that does fire now is the stall-triggered one
-  from the best point with a tight step (vNext). Whether a fresh-point
-  IPOP restart on the stall signal would find a *different* basin where
-  the tight restart only descends the same one is unmeasured; the
-  amplifiers that stay open at every seed (`amp_leung_nmcf`,
-  `amp_ramos_pfc`) are the rows to try it on.
+  curve is the one the window fits least well. Restarting on every
+  stall and restarting fresh were both measured after and both lost
+  (v1.8). Tables in `cairn/pitfalls.md`.
 - Whether *Try next*'s thresholds are right: three seeds before more
   budget, "close" as two misses none over 10%, budget doubling (or the
   same budget again when the run can be continued). They
@@ -245,6 +238,12 @@ Reopening these is fine, but start from the reasoning, not from zero.
   stops being a snapshot, and dated analyses in this repository cite these
   files as fetched. The discrepancy is noted in both READMEs instead, where
   a reader of *this* project will actually meet it.
+- **IPOP restarts from a fresh point on the stall signal** (asked in
+  this file, measured 2026-09-24, `cairn/pitfalls.md`). On the two
+  amplifiers open at every seed no fresh restart at population 32, 64
+  or 128 ever beat the point the first run stalled at, six of six.
+  The IPOP branch stays for a run pycma stops on its own; the restart
+  that fires is the tight one from the best point.
 - **Editing the vendored trees.** `analoggym/`, `circuit-skills/`, `gmoverid/`,
   `ngspice/` and `transistor-models/` are upstream snapshots that the app reads
   as shipped and that dated analyses in this repository cite. Behaviour changes
