@@ -2,6 +2,16 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-25 · New caps verified cold: Ramos at the edge, NMCF still seed-bound
+
+- Six runs (`plan-t8`). Ramos 0.49 / 0.22 / 0.002 (GBW 0.1 % short at
+  seed 2, identical to the 0.7 mW sweep cells); NMCF 1.00 / 1.44 /
+  1.11, all three seeds in the low-gain basin. Archive re-scored under
+  the new caps: cost 0 for both (NMCF 0.548 mW, Ramos 0.670 mW), so the
+  warm start closes them wherever an archive exists. CHANGELOG entry
+  now carries the measured numbers instead of "not re-run"; note
+  under the sweep section in `cairn/pitfalls.md`. No code.
+
 ## 2026-09-25 · Per-circuit power caps for NMCF and Ramos; Try next follows disagreeing seeds
 
 - Maintainer decided both: `_AMP_POWER_CAP` in the registry (NMCF

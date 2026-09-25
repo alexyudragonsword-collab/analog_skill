@@ -16,8 +16,15 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   the other thirteen keep AnalogGym's 0.5 mW, and every other target is
   unchanged.  The feasibility counts quoted in the README and the
   pitfalls tables were measured under the shared cap and stand as
-  measured; under the new caps those two circuits' rows are expected
-  to close at some seeds and were not re-run.
+  measured.  Re-run cold under the new caps (three seeds, 600
+  evaluations): Ramos 0.49 / 0.22 / 0.002 (seed 2 short by 0.1 % on
+  GBW), NMCF 1.00 / 1.44 / 1.11 — every NMCF seed still settled in the
+  low-gain basin, as the sweep said it would.  The archive, re-scored
+  under the new caps, already holds a cost-0 point for each (NMCF 127
+  dB, 1.22 MHz, 61°, 0.548 mW; Ramos 138 dB, 1.26 MHz, 61°, 0.670 mW),
+  so on an installation that has run these circuits before, "Try
+  next" offers the warm start first and closes both; a fresh archive
+  needs the seeds.
 - **"Try next" keeps offering seeds while the seeds disagree.**  Three
   seeds used to be the limit before "twice the budget".  On NMCF one
   target set gave 0, 0.23 and 0.77 at three seeds: the seed picks the

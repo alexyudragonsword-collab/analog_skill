@@ -1381,6 +1381,17 @@ now keeps offering seeds past three while the seeds tried disagree by
 a factor of two, up to six (vNext). The counts in the sections above
 were measured under the shared cap and stand as measured.
 
+*Verified cold under the new caps* (`plan-t8`, three seeds, 600
+evaluations): Ramos 0.490 / 0.221 / **0.002** (seed 2: 137 dB, 1.199
+MHz, 74°, 0.69 mW — GBW 0.1 % short), the same trajectories as the
+0.7 mW sweep cells; NMCF 1.00 / 1.44 / 1.11, every seed in the
+low-gain basin (76–83 dB, 33–46°). The cap alone closes neither in a
+cold run; the archive re-scored under the new caps holds a cost-0
+point for each (NMCF 0.548 mW, Ramos 0.670 mW), which is what *Try
+next*'s warm step starts from on any installation that has touched
+them. For NMCF this is the basin finding again, now under a cap the
+good basin satisfies — the seed, not the cap, decides a cold run.
+
 ### The failure gate pushes the LDO off the edge its optimum sits on
 
 The third-ranked item of the capability review: the archive's failure
