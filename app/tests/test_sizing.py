@@ -1071,6 +1071,21 @@ def test_device_variable_map_reads_the_netlist_not_a_guess():
     assert len(shared) > 1, 'a mirror bank shares one variable'
 
 
+def test_two_amplifiers_carry_their_own_power_cap():
+    """The shared 0.5 mW cap sits inside the measured feasible boundary
+    on Ramos (1.2 MHz into 500 pF costs 0.55-0.69 mW) and 4 % outside
+    NMCF's best point; those two carry their own, the other thirteen
+    keep AnalogGym's, and nothing else about the list changes."""
+    caps = {k: next(m.target for m in sp.metrics if m.key == 'power')
+            for k, sp in sizing.SIZING.items() if k.startswith('amp_')}
+    assert caps['amp_leung_nmcf'] == 0.55e-3
+    assert caps['amp_ramos_pfc'] == 0.7e-3
+    assert all(c == 0.5e-3 for k, c in caps.items()
+               if k not in ('amp_leung_nmcf', 'amp_ramos_pfc'))
+    keys = [m.key for m in sizing.SIZING['amp_ramos_pfc'].metrics]
+    assert keys == [m.key for m in sizing.SIZING['amp_hoilee_affc'].metrics]
+
+
 # ── what to try next, from the measured order ────────────────────────────────
 _PERFECT = {'dcgain': 120, 'gain_bandwidth_product': 2e6, 'phase_in_deg': 70,
             'dcpsrp': -80, 'dcpsrn': -80, 'cmrrdc': -80, 'power': 0.1e-3,
@@ -1135,9 +1150,21 @@ def test_next_step_follows_the_measured_order(monkeypatch):
     assert nxt['action'] == 'seed'
     nxt = sizing.next_step(far, [_info(0, far.best_cost)])
     assert nxt['action'] == 'seed' and nxt['seed'] == 1
-    nxt = sizing.next_step(far, [_info(0, 2.0), _info(1, 0.9), _info(2, 1.4)])
+    nxt = sizing.next_step(far, [_info(0, 2.0), _info(1, 1.5), _info(2, 1.4)])
     assert nxt['action'] == 'budget' and nxt['budget'] == 1200
-    assert nxt['seed'] == 1                    # the seed that did best
+    assert nxt['seed'] == 2                    # the seed that did best
+    assert 'agree' in nxt['text']
+    # seeds that disagree by a factor of two say the seed picks the basin
+    # (amp_leung_nmcf: 0, 0.23, 0.77 at one target set) — another seed,
+    # up to six, before more budget; a seed at zero counts as disagreeing
+    nxt = sizing.next_step(far, [_info(0, 2.0), _info(1, 0.9), _info(2, 1.4)])
+    assert nxt['action'] == 'seed' and nxt['seed'] == 3
+    assert 'disagree (0.9 to 2)' in nxt['text']
+    nxt = sizing.next_step(far, [_info(0, 2.0), _info(1, 0.0), _info(2, 1.4)])
+    assert nxt['action'] == 'seed' and nxt['seed'] == 3
+    six = [_info(s, c) for s, c in enumerate((2.0, 0.9, 1.4, 1.9, 0.8, 1.7))]
+    nxt = sizing.next_step(far, six)
+    assert nxt['action'] == 'budget' and nxt['seed'] == 4
     # runs at a smaller budget and on other circuits do not count as tries
     nxt = sizing.next_step(far, [_info(1, 0.9, budget=100),
                                  _info(2, 0.5, circuit='amp_fan_smc')])
@@ -1152,7 +1179,7 @@ def test_next_step_follows_the_measured_order(monkeypatch):
     assert nxt['action'] == 'budget' and nxt['resume'] is True
     assert nxt['budget'] == 600 and nxt['seed'] == 0
     # ...unless another seed did better, which is then the one to extend
-    nxt = sizing.next_step(far, [_info(0, 2.0), _info(1, 0.5), _info(2, 2.0)])
+    nxt = sizing.next_step(far, [_info(0, 2.0), _info(1, 1.5), _info(2, 2.0)])
     assert nxt['resume'] is False and nxt['seed'] == 1
 
 

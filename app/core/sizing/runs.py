@@ -74,6 +74,16 @@ def list_runs() -> list[Path]:
 #: seeds to try before concluding the budget is the problem
 SEEDS_BEFORE_MORE_BUDGET = 3
 
+#: ...and while the seeds tried disagree by this factor (worst against
+#: best cost at the same budget), keep offering seeds up to this many.
+#: On amp_leung_nmcf one target set gave 0, 0.23 and 0.77 at three
+#: seeds: the seed picks the basin, the low-cost points all share one
+#: shape and the losing seeds never leave theirs, so a fourth seed is
+#: worth more than twice the budget in the wrong basin (cairn/
+#: pitfalls.md, "Two amplifiers nobody closes").  Seeds that agree
+#: say the budget is the problem, as before.
+SEEDS_WHILE_DISAGREEING, DISAGREE_RATIO = 6, 2.0
+
 #: "close": this many misses or fewer, none further off than this
 CLOSE_MISSES, CLOSE_VIOLATION = 2, 0.10
 
@@ -89,8 +99,10 @@ def next_step(run: SizingRun, infos: list[dict],
     directions; more budget moved the one nothing else could; and the
     finish turns "close" into "done" but is not a rescue from far away.
     Hence the order — finish if close and not yet tried, another seed
-    while fewer than SEEDS_BEFORE_MORE_BUDGET have been, then twice the
-    budget at the seed that did best.  One step comes before the seed:
+    while fewer than SEEDS_BEFORE_MORE_BUDGET have been (or while the
+    seeds tried disagree by DISAGREE_RATIO, up to SEEDS_WHILE_DISAGREEING:
+    on amp_leung_nmcf the seed picks the basin), then twice the budget at
+    the seed that did best.  One step comes before the seed:
     `known`, the archive's best point under the current targets
     (archive.best), when it beats what this run found — a warm start
     from it plus 100 evaluations beat a cold search at 200 on 14 of 16
@@ -142,6 +154,17 @@ def next_step(run: SizingRun, infos: list[dict],
                 'text': missed + f'. Try seed {nxt} at the same budget — '
                 'seeds disagree on every circuit the search does not '
                 f'finish ({len(seeds)} of {SEEDS_BEFORE_MORE_BUDGET} tried).'}
+    costs = [i['best_cost'] for i in same] + [run.best_cost]
+    lo_c, hi_c = min(costs), max(costs)
+    if (len(seeds) < SEEDS_WHILE_DISAGREEING
+            and (lo_c <= 0.0 or hi_c / lo_c >= DISAGREE_RATIO)):
+        nxt = next(s for s in range(1000) if s not in seeds)
+        return {**out, 'action': 'seed', 'seed': nxt,
+                'text': missed + f'. Try seed {nxt} at the same budget — '
+                f'the {len(seeds)} seeds tried disagree ({lo_c:.3g} to '
+                f'{hi_c:.3g}); on a circuit where the seed picks the '
+                'basin another seed is worth more than more budget in '
+                f'the wrong one ({len(seeds)} of {SEEDS_WHILE_DISAGREEING}).'}
     best = min(same, key=lambda i: i['best_cost'], default=None)
     if run.continuable and not (best and best['best_cost'] < run.best_cost):
         return {**out, 'action': 'budget', 'resume': True,
@@ -153,6 +176,6 @@ def next_step(run: SizingRun, infos: list[dict],
         else run.seed
     return {**out, 'action': 'budget', 'seed': seed,
             'budget': 2 * out['budget'],
-            'text': missed + f'. {len(seeds)} seeds tried; try twice the '
+            'text': missed + f'. {len(seeds)} seeds tried and agree; try twice the '
             f'budget at seed {seed}, the best so far — on one circuit that '
             'was what moved it.'}

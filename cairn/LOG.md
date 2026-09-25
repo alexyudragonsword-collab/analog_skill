@@ -2,6 +2,19 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-25 · Per-circuit power caps for NMCF and Ramos; Try next follows disagreeing seeds
+
+- Maintainer decided both: `_AMP_POWER_CAP` in the registry (NMCF
+  0.55 mW, Ramos 0.7 mW; `dataclasses.replace` on the shared list, the
+  other thirteen unchanged); `next_step` keeps offering seeds past
+  three while worst/best cost at the budget ≥ 2 (a zero counts), up to
+  six (`SEEDS_WHILE_DISAGREEING`, `DISAGREE_RATIO`), status line says
+  "disagree" or "agree". Tests: caps on exactly those two, the
+  disagreement branch and its six-seed end. CHANGELOG opens vNext;
+  README notes the two caps; ROADMAP item removed; decision note under
+  the sweep section in `cairn/pitfalls.md`. Old counts stand as
+  measured under the shared cap.
+
 ## 2026-09-25 · NMCF and Ramos as a design question: boundaries found
 
 - Maintainer chose the target sweep (plus a PM 45° sweep on NMCF).

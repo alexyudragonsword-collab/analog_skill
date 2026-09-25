@@ -7,6 +7,8 @@ built once at import; user-imported circuits are added to it later by
 :mod:`app.core.sizing.user_circuits`.
 """
 
+from dataclasses import replace
+
 from app import paths
 from app.core.sizing.spec import LdoBench, MetricSpec, SizingSpec
 
@@ -108,6 +110,13 @@ def _ldo_metrics_spec(bench: LdoBench) -> list:
 # "could not find a valid modelname").  All share the 5-pin subckt contract
 # gnda vdda vinn vinp vout and the TB_Amplifier_ACDC testbench (DUT name
 # substituted at render time).
+#: power caps for the two amplifiers where the shared 0.5 mW sits inside
+#: the measured feasible boundary (cairn/pitfalls.md, "Two amplifiers
+#: nobody closes"): Ramos needs 0.55-0.69 mW for 1.2 MHz into 500 pF,
+#: and NMCF's best point meeting the other nine targets draws 0.522 mW.
+#: The maintainer's call, 2026-09-25; the other thirteen keep AnalogGym's.
+_AMP_POWER_CAP = {'Leung_NMCF_Pin_3': 0.55e-3, 'Ramos_PFC_Pin_3': 0.7e-3}
+
 _AMP_NETLISTS = [
     'HoiLee_AFFC_Pin_3', 'Leung_NMCF_Pin_3', 'Leung_NMCNR_Pin_3',
     'Leung_DFCFC1_Pin_3', 'Leung_DFCFC2_Pin_3', 'Peng_ACBC_Pin_3',
@@ -208,10 +217,14 @@ def _build_registry() -> dict[str, SizingSpec]:
         sch = f'{name}.png'
         if not (paths.analoggym_dir() / 'amp' / 'schematic' / sch).is_file():
             sch = None
+        metrics = _amp_metrics()
+        if name in _AMP_POWER_CAP:
+            metrics = [replace(m, target=_AMP_POWER_CAP[name])
+                       if m.key == 'power' else m for m in metrics]
         reg[key] = SizingSpec(
             title=f'3-stage op amp — {short} (SKY130, 1.8 V)',
             kind='amp', netlist=name, variables=name,
-            testbench='TB_Amplifier_ACDC.cir', metrics=_amp_metrics(),
+            testbench='TB_Amplifier_ACDC.cir', metrics=metrics,
             fixed=('CLOAD', 'VCM'), schematic=sch, eval_seconds=3.5,
             subckt=name)
     bench = _LDO_BENCH['ldo_basic']

@@ -31,17 +31,6 @@ like before touching anything.
 
 ## Open
 
-- The two amplifiers' power caps are a benchmark call. Sweeps at three
-  seeds (`cairn/pitfalls.md`) put `amp_ramos_pfc`'s 1.2 MHz at 0.55 to
-  0.69 mW against the shipped 0.5 mW cap, and `amp_leung_nmcf`'s best
-  all-but-power point at 0.522 mW; the targets are AnalogGym's, shared
-  by fifteen amplifiers, so the choices are: keep them and let the two
-  rows stand as "the benchmark's own edge" (the README's counts stay
-  as they are), or give those two circuits their own cap. For NMCF the
-  larger finding is that the seed picks the basin — 0, 0.23 and 0.77
-  at one target set — so *Try next* should keep offering seeds on it
-  past three, and a warm start from the archive reaches the good basin
-  in 200 evaluations once any run has touched it.
 - The LDO variants' benchmark conditions. Their mapping is fixed
   (vNext), and the honest defaults show what the vendored decks ask:
   the line-regulation sweep starts *at* the regulated output for

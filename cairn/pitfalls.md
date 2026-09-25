@@ -1375,6 +1375,12 @@ from the archive (0.044 at seed 2) is the cheapest way to reach the
 good basin once any run has touched it. Whether the 0.5 mW cap itself
 is right is the same benchmark call as Ramos's, at a smaller margin.
 
+*Decision, 2026-09-25:* the maintainer gave both their own cap — NMCF
+0.55 mW, Ramos 0.7 mW, the other thirteen unchanged — and *Try next*
+now keeps offering seeds past three while the seeds tried disagree by
+a factor of two, up to six (vNext). The counts in the sections above
+were measured under the shared cap and stand as measured.
+
 ### The failure gate pushes the LDO off the edge its optimum sits on
 
 The third-ranked item of the capability review: the archive's failure

@@ -5,6 +5,32 @@ development milestones and were never tagged — v1.4 is the first release;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
+## vNext — unreleased
+
+- **Two amplifiers carry their own power cap.**  Sweeps at three seeds
+  (`cairn/pitfalls.md`, "Two amplifiers nobody closes") put
+  `amp_ramos_pfc`'s 1.2 MHz into 500 pF at 0.55–0.69 mW against the
+  shared 0.5 mW cap — a gm-against-load trade no seed, budget or finish
+  moves — and `amp_leung_nmcf`'s best point meeting the other nine
+  targets at 0.522 mW.  Ramos's cap is now 0.7 mW and NMCF's 0.55 mW;
+  the other thirteen keep AnalogGym's 0.5 mW, and every other target is
+  unchanged.  The feasibility counts quoted in the README and the
+  pitfalls tables were measured under the shared cap and stand as
+  measured; under the new caps those two circuits' rows are expected
+  to close at some seeds and were not re-run.
+- **"Try next" keeps offering seeds while the seeds disagree.**  Three
+  seeds used to be the limit before "twice the budget".  On NMCF one
+  target set gave 0, 0.23 and 0.77 at three seeds: the seed picks the
+  basin, the low-cost points all share one shape and the losing seeds
+  never leave theirs, so more budget in the wrong basin buys nothing.
+  Now, once three seeds have run, another is offered while the worst
+  and best costs at that budget differ by a factor of two (a seed at
+  zero counts), up to six seeds; seeds that agree hand over to the
+  budget step as before, and the status line says which case it is.
+  The archive warm start still comes first whenever the archive holds
+  a better point — on NMCF it reached the good basin in 200
+  evaluations once any run had touched it.
+
 ## v1.8 — 2026-09-24
 
 A search release. The measured change is in plain CMA-ES, which every
