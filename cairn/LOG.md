@@ -2,6 +2,18 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-25 · NMCF and Ramos as a design question: boundaries found
+
+- Maintainer chose the target sweep (plus a PM 45° sweep on NMCF).
+  43 runs: power cap 0.5–1.0 mW × 3 seeds, GBW 0.8–1.2 MHz, PM 45°
+  power sweep, warm starts from the archive. Ramos: a pure gm/CL trade,
+  1.2 MHz costs 0.55–0.69 mW, the 0.5 mW cap is 10–40 % inside the
+  boundary — a benchmark decision, not a search one. NMCF: feasible
+  within 4 % of the cap (0.522 mW meets the other nine) but the seed
+  picks the basin (0 / 0.23 / 0.77 at one target set); relaxing PM or
+  GBW gains nothing. Tables and reading in `cairn/pitfalls.md`;
+  ROADMAP item for the two power caps. No code change.
+
 ## 2026-09-24 · Loop and fresh restarts measured negative; v1.8 released
 
 - Maintainer took the three suggested steps. Saved curves: the single

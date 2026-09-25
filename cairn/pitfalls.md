@@ -1306,6 +1306,75 @@ with the same pycma seed and re-evaluated the identical population,
 64 evaluations of nothing per cycle — caught in the first run's notes
 before the tier was allowed to finish.
 
+### Two amplifiers nobody closes: the targets sit just outside the box, and the seed picks the basin
+
+The maintainer agreed to treat `amp_leung_nmcf` and `amp_ramos_pfc` —
+open at every seed under every search — as a design question, 2026-09-
+25: sweep one target at a time with the shipped default (`cmaes`, 600
+evaluations) and find the boundary. Single seed first, then seeds 1
+and 2 on the boundary cells, then a warm start from the archive's best
+under the default targets (scratchpad `plan-t7`, `plan-t7b`,
+`plan-t7c`; 43 runs). Each cell: cost, then the best point's gain,
+GBW, phase margin, power.
+
+**NMCF, power cap swept, the other nine targets as shipped:**
+
+| cap | seed 0 | seed 1 | seed 2 |
+|---|---|---|---|
+| ≤ 0.5 mW (shipped) | 0.934 (92 dB, 1.25 M, 31°, 0.53 mW) | 1.494 | 0.860 |
+| ≤ 0.6 mW | 0.978 (103 dB, 1.20 M, 32°, 0.76 mW) | 1.180 (76 dB, 1.20 M, 35°, 0.64 mW) | 0.026 (117 dB, 1.29 M, 59°, 0.58 mW) |
+| ≤ 0.7 mW | **0** (127 dB, 1.22 M, 61°, 0.55 mW) | 0.229 (120 dB, 1.30 M, 58°, 0.80 mW) | 0.770 (112 dB, 1.17 M, 42°, 0.88 mW) |
+| ≤ 0.85 mW | 0.528 (87 dB, 1.29 M, 49°, 0.84 mW) | 0.053 (118 dB, 1.97 M, 61°, 0.89 mW) | 0.417 (119 dB, 1.30 M, 50°, 0.99 mW) |
+| ≤ 1.0 mW | 0.631 (83 dB, 1.20 M, 49°, 0.98 mW) | 0.470 (87 dB, 1.20 M, 52°, 0.86 mW) | 0.298 (103 dB, 1.18 M, 49°, 0.96 mW) |
+
+(The 0.5 mW seeds 1 and 2 are the restart-arm rows from the section
+above.) With phase margin relaxed to 45° the same sweep closed once
+(≤ 0.85 mW, seed 2: 138 dB, 1.59 M, 58°, 0.73 mW) and was otherwise
+0.17 to 0.81, no better than at 60°; with GBW relaxed to 0.8 MHz at
+0.5 mW, seed 0 still ended at 0.59 (89 dB, 46°). A warm start from
+the archive's best under the shipped targets, 200 evaluations: 0.357,
+0.270, **0.044** (135 dB, 1.36 M, 76°, **0.522 mW**).
+
+**Ramos, power cap swept:**
+
+| cap | seed 0 | seed 1 | seed 2 |
+|---|---|---|---|
+| ≤ 0.5 mW (shipped) | 0.810 (133 dB, 0.98 M, 52°, 0.62 mW) | 0.802 | 0.507 |
+| ≤ 0.55 mW | 0.560 (134 dB, 1.15 M, 56°, 0.76 mW) | | |
+| ≤ 0.6 mW | 0.245 (138 dB, 1.22 M, 55°, 0.67 mW) | 0.424 (108 dB, 1.17 M, 65°, 0.83 mW) | 0.117 (138 dB, 1.26 M, 61°, 0.67 mW) |
+| ≤ 0.65 mW | 0.471 (127 dB, 1.06 M, 60°, 0.80 mW) | 0.161 (136 dB, 1.21 M, 68°, 0.62 mW) | 0.369 (136 dB, 1.08 M, 58°, 0.72 mW) |
+| ≤ 0.7 mW | 0.490 (137 dB, 1.08 M, 60°, 0.90 mW) | 0.221 (137 dB, 1.20 M, 51°, 0.57 mW) | **0.002** (137 dB, 1.20 M, 74°, 0.69 mW) |
+
+Warm start under the shipped targets: 0.340, 0.404, 0.404 against the
+archive's 0.201 (137 dB, 1.15 M, 63°, 0.555 mW), nothing gained.
+
+**Two different answers.** Ramos is the trade the schematic says it
+is, gm₁ against the 500 pF load: every open cell misses GBW or power
+and nothing else, the points that meet 1.2 MHz sit at 0.55 to 0.69
+mW, and the shipped 0.5 mW cap is 10 to 40 % inside the boundary. No
+seed, budget or finish will close it; the cap or the GBW target has
+to move, and that is a benchmark decision, not a search one — the
+targets are AnalogGym's, shared by fifteen amplifiers, and moving one
+circuit's breaks the comparison the sweep exists for. ROADMAP has the
+call.
+
+NMCF is not a boundary problem, or only just: a point meeting the
+other nine at **0.522 mW** exists (4 % over the cap) and another at
+0.548 mW meets all ten under a looser cap, so the shipped set is
+within a few percent of feasible. What the table shows instead is
+that **the seed picks the basin**: the same target set gives 0, 0.23
+and 0.77 at three seeds (≤ 0.7 mW), and the low-cost points all share
+one shape (gain above 115 dB, phase margin near 60°) while the losing
+seeds settle in another (gain 75 to 95 dB, phase margin 30 to 50°)
+and never leave it — the restart from the best point, which is what
+closes the other rows, only descends the basin it is in. Relaxing
+phase margin or GBW does not change which basin a seed lands in, which
+is why those sweeps gained nothing. For this circuit "try another
+seed" is the right advice and three seeds is too few; the warm start
+from the archive (0.044 at seed 2) is the cheapest way to reach the
+good basin once any run has touched it. Whether the 0.5 mW cap itself
+is right is the same benchmark call as Ramos's, at a smaller margin.
+
 ### The failure gate pushes the LDO off the edge its optimum sits on
 
 The third-ranked item of the capability review: the archive's failure
