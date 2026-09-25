@@ -2,6 +2,20 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-25 · The default on all 27 circuits, settling relaxed to 3 µs on the sweep
+
+- Maintainer asked for the whole registry under the shipped default,
+  amplifiers' settling target 3 µs for the sweep only (registry
+  unchanged). 27 runs, seed 0 (`plan-t9`): **15 of 27 feasible**,
+  11 of 15 amplifiers (8 in the earlier finish-arm table at 2 µs);
+  nmcnr and qu2017_azc closed on the wider target (2.98, 2.67 µs),
+  sau_cfcc on the search; nmcf, dfcfc1, song_dacfc open; six best
+  points settle in 2–3 µs. Four LDO variants first measured under the
+  fixed reader: all far open on Basic LDO's targets (negative PM, GBW
+  orders short). skill_comparator: 228 min for 120 evaluations. Table
+  and readings in `cairn/pitfalls.md`; ROADMAP settling item carries
+  the numbers. No code.
+
 ## 2026-09-25 · New caps verified cold: Ramos at the edge, NMCF still seed-bound
 
 - Six runs (`plan-t8`). Ramos 0.49 / 0.22 / 0.002 (GBW 0.1 % short at

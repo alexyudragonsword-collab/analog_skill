@@ -1392,6 +1392,82 @@ next*'s warm step starts from on any installation that has touched
 them. For NMCF this is the basin finding again, now under a cap the
 good basin satisfies — the seed, not the cap, decides a cold run.
 
+### The default on every circuit, again: 15 of 27, and what 3 µs of settling buys
+
+The maintainer asked for the whole registry under the shipped default
+(plain `cmaes` with the stall restart, v1.8, the two new power caps)
+with the amplifiers' settling target relaxed from 2 µs to 3 µs for
+the sweep — the registry still says 2 µs. Seed 0, 600 evaluations
+(400 the OTA, 120 the skills, 60 the bootstrap switch), 2026-09-25,
+scratchpad `plan-t9`. Against it, the table of the same exercise on
+the finish arm at 2 µs (section above):
+
+| circuit | then (finish arm, 2 µs) | now (cmaes, 3 µs) | short now | settling now |
+|---|---|---|---|---|
+| amp_hoilee_affc | **0** | **0** | | 1.01 µs |
+| amp_leung_nmcf | 0.9573 | 1.3256 | PM 20°, power 0.73 of 0.55 mW | 2.81 µs |
+| amp_leung_nmcnr | 0.2305 | **0** | | 2.98 µs |
+| amp_leung_dfcfc1 | 0.5062 | 1.6442 | GBW 0.53 MHz, settling 4.36 µs, power 7 % | 4.36 µs |
+| amp_leung_dfcfc2 | **0** | **0** | | 1.78 µs |
+| amp_peng_acbc | **0** | **0** | | 1.22 µs |
+| amp_peng_iac | **0** | **0** | | 0.67 µs |
+| amp_peng_tcfc | **0** | **0** | | 0.94 µs |
+| amp_qu2017_azc | 0.0067 | **0** | | 2.67 µs |
+| amp_ramos_pfc | 0.5396 | 0.2557 | PM 50° | 2.90 µs |
+| amp_sau_cfcc | 0.5951 | **0** | | 1.07 µs |
+| amp_song_dacfc | 0.2581 | 1.2200 | GBW 0.75 MHz, offset 166 µV, gain 93 dB | 2.64 µs |
+| amp_yan_az | **0** | **0** | | 1.78 µs |
+| amp_fan_smc | **0** | **0** | | 2.63 µs |
+| amp_alfio_raffc | **0** | **0** | | 1.38 µs |
+| ldo_basic | **0** | **0** | | |
+| ldo_simple | — | 13.99 | load reg. 7.8 /A, line reg. 0.046, Vout error | |
+| ldo_1 | — | 4.42 | PM −0.3° at 1 mA, GBW 29 kHz at 100 mA | |
+| ldo_2 | — | 3.17 | GBW 124 kHz at 100 mA, line reg. 0.018, PM 39° | |
+| ldo_folded_cascode | — | 12.17 | load reg. 0.75 /A, Iq 3.9 mA, PM −10° | |
+| studio_cm_ota | **0** | **0** (96 evals) | | 1.37 µs |
+| skill_ota5t / opamp2 | **0** / **0** | **0** / **0** | | |
+| skill_ldo | 0.1270 | 0.1363 | loop gain 52 of 55 dB, PSRR 57 of 60 | |
+| skill_comparator | — | 0.0569 (228 min) | noise 155 of 150 µV, power 80.5 of 80 µW | |
+| skill_comparator_fast | 0.8994 | 1.0183 | width 30 of 18 µm, latch τ 7.0 of 6 ps | |
+| skill_bootstrap | 0.0683 | 0.0683 | Ron ratio 1.255 of 1.2 | |
+
+**Fifteen of twenty-seven feasible**, eleven of the fifteen amplifiers
+(eight then). Three amplifier rows closed that were open: `nmcnr`
+(settled at 2.98 µs, 2.46 then), `qu2017_azc` (2.67 µs, 2.013 then)
+and `sau_cfcc` (gain 85 dB then, closed now with settling at 1.07 µs —
+the search, not the target). Three got worse: `nmcf` (the basin, as
+every run of it), `dfcfc1` (GBW 0.53 MHz and 4.36 µs — the one
+amplifier where a wider settling target did not help because it is
+not close on anything) and `song_dacfc` (0.26 → 1.22, seed 0 landing
+somewhere worse; one run, so no more than that). The comparison is
+not a clean one — a different arm, a different settling target, one
+seed — and is recorded as what it is.
+
+**What 3 µs buys, read off the settling column.** Six of the fifteen
+best points settle between 2 and 3 µs (`nmcnr` 2.98, `ramos` 2.90,
+`nmcf` 2.81, `qu2017` 2.67, `song` 2.64, `fan` 2.63) and nine
+under 1.8 µs. Of the six, two are rows that closed only because of
+the wider target (`nmcnr`, `qu2017`), one closed at 2 µs before too
+(`fan`: 2.63 here is where an unconstrained search drifted, not what
+it needs), and three are open for other reasons. The honest reading:
+a 3 µs target closes two amplifiers that a 2 µs target leaves open by
+0.01 and 0.46 µs with everything else met, and the search does not
+exploit the slack elsewhere in a way that costs a target — it drifted
+to 2.6 µs on `fan` and still met all ten. Whether 2, 2.5 or 3 is the
+benchmark's number is the maintainer's call; ROADMAP has it with
+these numbers.
+
+**The four LDO variants, measured for the first time under the fixed
+reader.** All four are far open at their shipped defaults on
+`ldo_basic`'s targets: negative phase margins on two, GBW at 100 mA
+two orders short on `ldo_1`, load regulation 0.75 to 7.8 /A. These
+are numbers a 600-evaluation search could not move much, and they
+say what the ROADMAP item already says — the variants need targets
+of their own at their own loads, and the sweep to set them starts
+from here. **The slow comparator** (`skill_comparator`, 228 minutes
+for 120 evaluations, four workers) ended 3 % and 1 % short on two
+targets; it stays registered and stays out of any routine sweep.
+
 ### The failure gate pushes the LDO off the edge its optimum sits on
 
 The third-ranked item of the capability review: the archive's failure

@@ -80,8 +80,13 @@ like before touching anything.
 - Whether 2 µs is the right settling target across all fifteen
   AnalogGym amplifiers. It is ~15 time constants at the shared 1.2 MHz
   GBW target and was chosen on the reference amplifier's four
-  sizings; the 27-circuit sweep will show whether any well-compensated
-  amplifier misses it for a reason that is not a design fault.
+  sizings. The 27-circuit sweep at 3 µs (2026-09-25, `cairn/
+  pitfalls.md`) is the evidence: two amplifiers close at 3 µs that
+  2 µs leaves open by 0.01 and 0.46 µs with everything else met
+  (`amp_qu2017_azc`, `amp_leung_nmcnr`), six of the fifteen best
+  points settle between 2 and 3 µs, nine under 1.8 µs, and no row
+  traded another target for the slack. 2, 2.5 or 3 µs in the registry
+  is the maintainer's call; the registry still says 2.
 - Ranking models or prompts for the finish needs several runs per
   cell: the model call is not repeatable (two sonnet runs from one
   point, 37% and nothing). Three proposals a round now use that spread
