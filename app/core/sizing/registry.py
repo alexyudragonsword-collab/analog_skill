@@ -32,12 +32,17 @@ def _amp_metrics() -> list:
         MetricSpec('power', 'Power', 'W', 0.5e-3, 'min', 1.0),
         MetricSpec('vos25', 'Offset (25C)', 'V', 0.1e-3, 'absmin', 0.5),
         MetricSpec('tc', 'Temp. coeff.', 'V/°C', 10e-6, 'absmin', 0.5),
-        # 1% settling of a 100 mV unity-gain step, ~15 time constants at
-        # the 1.2 MHz GBW target.  Measured on the reference amplifier:
-        # 78-88 degree designs 0.9-1.0 us, a 40 degree one 1.4 us
-        # (ringing), the 156 degree one never.  The Analog Studio
-        # addition to AnalogGym's nine.
-        MetricSpec('tsettle', 'Settling (1%)', 's', 2e-6, 'min', 1.0),
+        # 1% settling of a 100 mV unity-gain step.  Measured on the
+        # reference amplifier: 78-88 degree designs 0.9-1.0 us, a 40
+        # degree one 1.4 us (ringing), the 156 degree one never.  The
+        # Analog Studio addition to AnalogGym's nine.  Was 2 us (~15
+        # time constants at the 1.2 MHz GBW target, chosen on one
+        # circuit); the 27-circuit sweep put two amplifiers' best
+        # points at 2.01 and 2.46 us with everything else met, six of
+        # fifteen between 2 and 3 us, and no row trading another target
+        # for the slack (cairn/pitfalls.md).  3 us, the maintainer's
+        # call, 2026-09-25.
+        MetricSpec('tsettle', 'Settling (1%)', 's', 3e-6, 'min', 1.0),
     ]
 
 

@@ -2,6 +2,28 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-26 · LDO variants characterised: ldo_2 and ldo_simple can take targets, ldo_1 and the folded cascode cannot yet
+
+- `plan-t10` done (12 runs; the first relaxed set had PSRR at 0 dB,
+  a divide-by-zero in the score, fixed and rerun). ldo_2 stable with
+  0.5 MHz, bound by LNR 0.044; ldo_simple stable with 7.5 MHz but LR
+  6 /A, LNR 0.05; ldo_1 negative PM at 1 mA in all 1731 rows; folded
+  cascode PM ≤ 24° at 10 mA, Iq ≥ 3.4 mA. Candidate sets for the
+  first two in `cairn/pitfalls.md`; the other two need the decks' PM
+  measurement checked before targets. Gate green with the 3 µs
+  settling target; that change and this record pushed together.
+
+## 2026-09-25 · Settling target 3 µs shipped; LDO variants' characterisation launched
+
+- Maintainer chose 3 µs: registry `tsettle` 2e-6 → 3e-6 with the
+  evidence in its comment, score test re-pinned ((19−3)/3, 4.5 µs =
+  0.5, 2.9 µs = 0), CHANGELOG vNext entry, ROADMAP item removed,
+  decision note under the sweep section in `cairn/pitfalls.md`.
+  Started the LDO variants' target work (`plan-t10`): per variant a
+  600-point Sobol characterisation plus `cmaes` under a stability-only
+  target set and under stability + 0.5 MHz, so the archive can be
+  re-scored under candidate targets before any are proposed.
+
 ## 2026-09-25 · The default on all 27 circuits, settling relaxed to 3 µs on the sweep
 
 - Maintainer asked for the whole registry under the shipped default,

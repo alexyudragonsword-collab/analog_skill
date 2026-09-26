@@ -25,6 +25,16 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   so on an installation that has run these circuits before, "Try
   next" offers the warm start first and closes both; a fresh archive
   needs the seeds.
+- **The amplifiers' settling target is 3 µs, was 2.**  The 2 µs was
+  ~15 time constants at the 1.2 MHz GBW target, chosen on one circuit.
+  The shipped default on all 27 circuits with 3 µs on the sweep
+  (`cairn/pitfalls.md`): 15 of 27 feasible, 11 of the 15 amplifiers;
+  two of those closed only because of the wider target
+  (`amp_qu2017_azc` at 2.67 µs, `amp_leung_nmcnr` at 2.98 µs — open
+  by 0.01 and 0.46 µs at 2 µs with everything else met), six of the
+  fifteen best points settle between 2 and 3 µs, nine under 1.8 µs,
+  and no row traded another target for the slack.  The counts quoted
+  elsewhere were measured at 2 µs and stand as measured.
 - **"Try next" keeps offering seeds while the seeds disagree.**  Three
   seeds used to be the limit before "twice the budget".  On NMCF one
   target set gave 0, 0.23 and 0.77 at three seeds: the seed picks the

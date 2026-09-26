@@ -1457,6 +1457,9 @@ to 2.6 µs on `fan` and still met all ten. Whether 2, 2.5 or 3 is the
 benchmark's number is the maintainer's call; ROADMAP has it with
 these numbers.
 
+*Decision, 2026-09-25:* 3 µs, in the registry (vNext); the counts in
+the sections above were measured at 2 µs and stand as measured.
+
 **The four LDO variants, measured for the first time under the fixed
 reader.** All four are far open at their shipped defaults on
 `ldo_basic`'s targets: negative phase margins on two, GBW at 100 mA
@@ -1467,6 +1470,50 @@ of their own at their own loads, and the sweep to set them starts
 from here. **The slow comparator** (`skill_comparator`, 228 minutes
 for 120 evaluations, four workers) ended 3 % and 1 % short on two
 targets; it stays registered and stays out of any routine sweep.
+
+### The four LDO variants, characterised: two can be given targets, two cannot yet
+
+First step of the variants' own targets, 2026-09-25/26 (`plan-t10`,
+seed 0): per variant a 600-point Sobol sample, `cmaes` 600 under a
+*stability-only* set (PM ≥ 60° at both loads and Vout error ≤ 2 mV;
+GBW, LR, LNR, PSRR, Iq relaxed to where they cannot bind) and the same
+plus GBW ≥ 0.5 MHz; then the whole archive of each (1200–2200
+simulated rows, the full-target runs included) re-scored under a grid
+of candidate sets. A first version of the relaxed set put PSRR's
+target at 0 dB, which divides by zero in the score and marked every
+point failed — the run reported "no metrics" at cost 95 before the
+first row said why; a relaxed target is a small number, never zero.
+
+| variant | stability-only | + 0.5 MHz | stable rows in archive | best among stable rows |
+|---|---|---|---|---|
+| ldo_simple (2 V → 1.8 V, 10 µA–10 mA) | **0** | 0.14 (PM 54° at 10 µA) | 3 | GBW 7.5 MHz, LR 6.1 /A, LNR 0.051, PSRR −40 dB, Iq 0.16 mA |
+| ldo_1 (1.8 V → 1.6 V, 1–100 mA) | 2.07 (PM −0.4° at 1 mA) | 3.20 | **0** | — |
+| ldo_2 (1.8 V → 1.6 V, 1–100 mA) | 10.0 (Vout −1.18 V) | **0** | 3 | GBW 1.13 MHz, LR 9e-6 /A, LNR 0.044, PSRR −44 dB, Iq 24 µA |
+| ldo_folded_cascode (2 V → 1.8 V, 10 µA–10 mA) | 0.89 (PM 24° at 10 mA) | 0.89 | **0** | — |
+
+Under `ldo_basic`'s grid (GBW 0.2–2 MHz × LR 0.1–1 /A × LNR 0.01–0.03
+× Iq 1–3 mA) no variant's archive holds a feasible point; the loosest
+corner is short by LNR on `ldo_2` (0.044 against 0.03), by PM at
+10 µA and LNR and LR on `ldo_simple`, by PM at both loads on `ldo_1`,
+by PM at 10 mA and Iq (3.4 mA at best) on the folded cascode.
+
+**Two can be given targets from this.** `ldo_2` regulates well (LR
+1e-5 /A, PSRR −44 dB, 24 µA quiescent) and is bound by line
+regulation, 0.044 against Basic LDO's 0.01: a set of GBW ≥ 1 MHz,
+LR ≤ 0.1 /A, LNR ≤ 0.05, PSRR ≤ −40 dB, Iq ≤ 1 mA has a stable point
+in the archive. `ldo_simple` is stable with GBW to spare and regulates
+poorly (LR 6 /A, LNR 0.05 — a "simple" LDO's numbers): a set with
+LNR ≤ 0.05 and LR ≤ 10 /A would close at 2 MHz, and whether those
+loose numbers are worth a target at all is the maintainer's call.
+**Two cannot.** `ldo_1` reports a negative phase margin at 1 mA in
+every one of 1731 simulated rows, Sobol and searched alike, and the
+folded cascode never exceeds 24° at 10 mA and never draws under 3.4
+mA: either the vendored sizings and bounds cannot stabilise those
+loops at those loads, or the decks' light-load / full-load PM
+measurement reads something else (a loop with no unity-gain crossing
+measures as a nonsense angle). That is a deck-reading question before
+it is a target question — the same kind that found the variants'
+mapping arithmetic — and it comes first for those two.
 
 ### The failure gate pushes the LDO off the edge its optimum sits on
 

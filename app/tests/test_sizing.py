@@ -145,9 +145,12 @@ def test_score_directions():
     # admitted is charged for what it actually costs, settling time
     assert sizing.score(spec_key, dict(perfect, phase_in_deg=156.0)) == 0.0
     slow = sizing.score(spec_key, dict(perfect, tsettle=19e-6))
-    assert slow == pytest.approx(8.5)           # (19 - 2) / 2
-    assert sizing.score(spec_key, dict(perfect, tsettle=3e-6)) == \
+    assert slow == pytest.approx(16 / 3)        # (19 - 3) / 3
+    assert sizing.score(spec_key, dict(perfect, tsettle=4.5e-6)) == \
         pytest.approx(0.5)
+    # 3 us since 2026-09-25: at 2 us two amplifiers sat open by 0.01 and
+    # 0.46 us with everything else met (cairn/pitfalls.md)
+    assert sizing.score(spec_key, dict(perfect, tsettle=2.9e-6)) == 0.0
     assert all(d.met for d in sizing.score_detail(
         spec_key, dict(perfect, phase_in_deg=59.86))) is False
 

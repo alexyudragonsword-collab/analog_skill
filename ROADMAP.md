@@ -31,6 +31,13 @@ like before touching anything.
 
 ## Open
 
+- The LDO variants' own targets, half answered (`cairn/pitfalls.md`,
+  "The four LDO variants, characterised"): ldo_2 and ldo_simple have
+  candidate sets waiting for the maintainer's yes; ldo_1 (negative
+  phase margin at 1 mA in every row) and the folded cascode (24° at
+  10 mA, 3.4 mA quiescent at best) need the decks' PM measurement
+  read before any target is set — a loop with no unity-gain crossing
+  measures as a nonsense angle, and that has to be ruled out first.
 - The LDO variants' benchmark conditions. Their mapping is fixed
   (vNext), and the honest defaults show what the vendored decks ask:
   the line-regulation sweep starts *at* the regulated output for
@@ -77,16 +84,6 @@ like before touching anything.
   (`t_step`, `v_step`) since settling time became a target; the amp
   panel is a 2x2 grid with no free cell, so it needs a fifth panel or a
   tab.
-- Whether 2 µs is the right settling target across all fifteen
-  AnalogGym amplifiers. It is ~15 time constants at the shared 1.2 MHz
-  GBW target and was chosen on the reference amplifier's four
-  sizings. The 27-circuit sweep at 3 µs (2026-09-25, `cairn/
-  pitfalls.md`) is the evidence: two amplifiers close at 3 µs that
-  2 µs leaves open by 0.01 and 0.46 µs with everything else met
-  (`amp_qu2017_azc`, `amp_leung_nmcnr`), six of the fifteen best
-  points settle between 2 and 3 µs, nine under 1.8 µs, and no row
-  traded another target for the slack. 2, 2.5 or 3 µs in the registry
-  is the maintainer's call; the registry still says 2.
 - Ranking models or prompts for the finish needs several runs per
   cell: the model call is not repeatable (two sonnet runs from one
   point, 37% and nothing). Three proposals a round now use that spread
