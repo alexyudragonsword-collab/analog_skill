@@ -1515,6 +1515,47 @@ measures as a nonsense angle). That is a deck-reading question before
 it is a target question — the same kind that found the variants'
 mapping arithmetic — and it comes first for those two.
 
+**Read, 2026-09-26: the decks are right, the circuits are what they
+are.** All four variant decks break the loop the way Basic LDO's does
+(`Lfb`/`Cfb` of 1 T between the feedback pin and the amplifier input,
+`signal_in` driving the input) and measure the same thing: `meas ac
+phase_margin find vp(vout1) when vdb(vout1)=0`. On an `ldo_1`
+evaluation the log shows both measurements succeeding with a real
+crossing — GBW 31 kHz and 20° at 100 mA, 207 kHz and −22° at 1 mA —
+so the reader is handed a genuine angle, not a failed `meas`. What
+the archives say once the non-regulating rows are set aside (1205 of
+1221 on `ldo_1`, 752 of 1164 on the folded cascode): `ldo_1` reaches
+119° at 100 mA and 174° at 1 mA on *different* rows and never 45° at
+both on one, its best joint point 27° / 1.6°; the folded cascode
+never exceeds 38° at 10 mA. `ldo_1`'s variable list is nine device
+sizes, a bias and the fixed load capacitor — no compensation element
+at all — so its two-stage-plus-pass loop can be made stable at one
+end of a 100:1 load range or the other, not both; the folded cascode
+carries an RC (`M_Cfb`, `M_Rfb`) and still tops out at 38° with a
+250-finger pass device on 10 mA. Neither is a target question: a
+target of 60° at both loads on either is a target for a circuit the
+vendored netlist and bounds do not contain. They keep Basic LDO's
+targets and stand in the registry as the benchmark's own unstable
+variants; ROADMAP has the two ways out (ask upstream, or a
+compensation variable — which would mean editing a vendored netlist,
+which this project does not do).
+
+*Decision and verification, 2026-09-26:* `ldo_2` GBW ≥ 0.5 MHz, LNR
+≤ 0.06; `ldo_simple` LR ≤ 10 /A, LNR ≤ 0.06, PSRR ≤ −35 dB; the rest
+Basic LDO's (vNext, `_LDO_TARGETS`). A first cut at the numbers the
+best rows reached (1 MHz, 0.05) was 13 % and 7 % outside any archived
+point and two cold seeds each ended at 1.27 / 1.60 and 0.44 / 0.34;
+the shipped numbers keep a 10–15 % margin at the archive's best point
+(`ldo_2`: GBW 0.58 MHz at 0.5, LNR 0.044 at 0.06, PSRR −41 at −40;
+`ldo_simple`: LNR 0.054 at 0.06, PSRR −39.7 at −35, PM 60.5° at 60 —
+the one tight margin, on a stability target that is not for
+loosening). Cold at two seeds under the shipped numbers: `ldo_2` 1.46
+/ 1.48, both seeds in a basin with GBW near 10 kHz and every other
+target met; `ldo_simple` 0.71 / 0.16, PM at 10 mA 32° and 54°. The
+archives hold cost-0 points for both, so the warm start closes them
+wherever a run has touched them; a fresh install needs the seeds.
+The NMCF finding again: the target set is reachable and the seed
+decides a cold run.
 ### The failure gate pushes the LDO off the edge its optimum sits on
 
 The third-ranked item of the capability review: the archive's failure

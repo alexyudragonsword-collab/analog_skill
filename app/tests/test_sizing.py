@@ -1089,6 +1089,19 @@ def test_two_amplifiers_carry_their_own_power_cap():
     assert keys == [m.key for m in sizing.SIZING['amp_hoilee_affc'].metrics]
 
 
+def test_two_ldo_variants_carry_their_own_targets():
+    """ldo_2 is bound by line regulation and ldo_simple regulates like a
+    simple LDO (cairn/pitfalls.md); the other three LDOs keep Basic
+    LDO's numbers, and the metric list itself is the same everywhere."""
+    def targets(key):
+        return {m.key: m.target for m in sizing.SIZING[key].metrics}
+    basic, two, simple = (targets(k) for k in ('ldo_basic', 'ldo_2',
+                                                'ldo_simple'))
+    assert two == dict(basic, gbw_maxload=5e5, lnr=0.06)
+    assert simple == dict(basic, lr=10.0, lnr=0.06, psrr_maxload=-35.0)
+    assert targets('ldo_1') == targets('ldo_folded_cascode') == basic
+
+
 # ── what to try next, from the measured order ────────────────────────────────
 _PERFECT = {'dcgain': 120, 'gain_bandwidth_product': 2e6, 'phase_in_deg': 70,
             'dcpsrp': -80, 'dcpsrn': -80, 'cmrrdc': -80, 'power': 0.1e-3,

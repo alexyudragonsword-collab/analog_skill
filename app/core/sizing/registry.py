@@ -153,6 +153,23 @@ _LDO_VARIANTS = {'ldo_simple': 'ldo_simple', 'ldo_1': 'ldo_1_ACDC',
                  'ldo_2': 'ldo_2_ACDC',
                  'ldo_folded_cascode': 'ldo_folded_cascode'}
 
+#: where a variant's own targets differ from Basic LDO's, from the
+#: characterisation in cairn/pitfalls.md ("The four LDO variants,
+#: characterised"): ldo_2 regulates well and is bound by line
+#: regulation (0.044 at best, stable); ldo_simple is stable with GBW
+#: to spare and regulates like a simple LDO (LR 6 /A, LNR 0.05, PSRR
+#: -40 dB at best).  Set where the archive's best point keeps a 10-15 %
+#: margin on every metric but the stability ones — a first cut at the
+#: exact numbers (1 MHz, 0.05) was 13 % and 7 % outside what any point
+#: reached and no cold seed closed it.  The maintainer's call,
+#: 2026-09-26.  ldo_1 and the folded cascode keep Basic LDO's: the
+#: decks measure a real 0 dB crossing and no sizing in 1200-1700
+#: simulated rows holds 45 degrees at both loads (ldo_1 has no
+#: compensation element among its variables).
+_LDO_TARGETS = {'ldo_2': {'gbw_maxload': 5e5, 'lnr': 0.06},
+                'ldo_simple': {'lr': 10.0, 'lnr': 0.06,
+                               'psrr_maxload': -35.0}}
+
 
 # circuit-skills (PTM) circuits wired into the same optimizer via their
 # plot-free simulate_*() metric paths.  The comparator additionally gets a
@@ -241,10 +258,13 @@ def _build_registry() -> dict[str, SizingSpec]:
         bench=bench)
     for v, prefix in _LDO_VARIANTS.items():
         bench = _LDO_BENCH[v]
+        own = _LDO_TARGETS.get(v, {})
+        metrics = [replace(m, target=own[m.key]) if m.key in own else m
+                   for m in _ldo_metrics_spec(bench)]
         reg[v] = SizingSpec(
             title=f'LDO — {v} (SKY130, {_ldo_conditions(bench)})',
             kind='ldo', netlist=f'{v}.txt', variables=f'{v}_vars.spice',
-            testbench=f'{v}_acdc.cir', metrics=_ldo_metrics_spec(bench),
+            testbench=f'{v}_acdc.cir', metrics=metrics,
             fixed=('M_CL',), eval_seconds=8.0, wrdata_prefix=prefix,
             bench=bench)
     for key, cfg in _SKILL_CIRCUITS.items():

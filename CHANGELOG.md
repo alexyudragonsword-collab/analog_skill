@@ -25,6 +25,29 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
   so on an installation that has run these circuits before, "Try
   next" offers the warm start first and closes both; a fresh archive
   needs the seeds.
+- **Two LDO variants carry their own targets; two are recorded as the
+  benchmark's own unstable ones.**  The four variants had used Basic
+  LDO's targets since v1.4 and were open by orders of magnitude in
+  every sweep.  Characterised (`cairn/pitfalls.md`, "The four LDO
+  variants, characterised"): `ldo_2` regulates well and is bound by
+  line regulation, `ldo_simple` is stable with bandwidth to spare and
+  regulates like a simple LDO, so `ldo_2` now asks GBW ≥ 0.5 MHz and
+  LNR ≤ 0.06 and `ldo_simple` LR ≤ 10 /A, LNR ≤ 0.06 and PSRR ≤ −35
+  dB, everything else Basic LDO's — set where the archive's best point
+  keeps a 10–15 % margin on every metric but the stability ones, after
+  a first cut at the exact numbers reached was 7–13 % outside anything
+  measured.  Both archives hold a cost-0 point under the new numbers;
+  cold searches at two seeds did not reach them (`ldo_2` 1.46 / 1.48,
+  settling in a 10 kHz basin with everything else met; `ldo_simple`
+  0.71 / 0.16, phase margin at 10 mA short), the same seed-picks-the-
+  basin shape as `amp_leung_nmcf`, so on an installation that has run
+  them "Try next" offers the warm start first.  `ldo_1` and
+  `ldo_folded_cascode` keep Basic LDO's targets: their decks measure a
+  real crossing, `ldo_1` has no compensation element among its
+  variables and holds 45° at both ends of its 100:1 load range on no
+  row of 1200, the folded cascode never exceeds 38° at 10 mA.  They
+  read as open in every sweep for a reason that is not the search;
+  ROADMAP has the two ways out.
 - **The amplifiers' settling target is 3 µs, was 2.**  The 2 µs was
   ~15 time constants at the 1.2 MHz GBW target, chosen on one circuit.
   The shipped default on all 27 circuits with 3 µs on the sweep

@@ -31,13 +31,16 @@ like before touching anything.
 
 ## Open
 
-- The LDO variants' own targets, half answered (`cairn/pitfalls.md`,
-  "The four LDO variants, characterised"): ldo_2 and ldo_simple have
-  candidate sets waiting for the maintainer's yes; ldo_1 (negative
-  phase margin at 1 mA in every row) and the folded cascode (24° at
-  10 mA, 3.4 mA quiescent at best) need the decks' PM measurement
-  read before any target is set — a loop with no unity-gain crossing
-  measures as a nonsense angle, and that has to be ruled out first.
+- ldo_1 and ldo_folded_cascode cannot meet a stability target at both
+  loads with the netlists and bounds as vendored (`cairn/pitfalls.md`,
+  "The four LDO variants, characterised"): the decks measure a real
+  crossing, ldo_1 has no compensation element among its variables and
+  the folded cascode tops out at 38° at 10 mA. They keep Basic LDO's
+  targets and read as open in every sweep. Two ways out, neither
+  taken: report upstream to AnalogGym, or expose a compensation
+  element — which would edit a vendored netlist, which this project
+  does not do. Until one is, the README's "27 circuits" carries two
+  the search cannot close for a reason that is not the search.
 - The LDO variants' benchmark conditions. Their mapping is fixed
   (vNext), and the honest defaults show what the vendored decks ask:
   the line-regulation sweep starts *at* the regulated output for

@@ -2,6 +2,21 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-26 · ldo_2 and ldo_simple get their own targets; ldo_1 and the folded cascode are the benchmark's unstable ones
+
+- Maintainer said do it. Decks read (read-only): all four break the
+  loop like Basic and measure a real 0 dB crossing; ldo_1 has no
+  compensation element among its variables and holds 45° at both
+  loads on no row, the folded cascode tops out at 38° — they keep
+  Basic's targets, ROADMAP lists the two ways out. `_LDO_TARGETS` in
+  the registry: ldo_2 GBW 0.5 MHz / LNR 0.06, ldo_simple LR 10 / LNR
+  0.06 / PSRR −35, chosen with a 10–15 % archive margin after the
+  exact numbers (1 MHz, 0.05; `plan-t11`) closed at no seed. Cold
+  verification (`plan-t12`): ldo_2 1.46 / 1.48 (10 kHz basin),
+  ldo_simple 0.71 / 0.16; archives hold cost-0 points for both. Test
+  pins the two variants' targets and the other three's. CHANGELOG
+  vNext, pitfalls decision note, ROADMAP.
+
 ## 2026-09-26 · LDO variants characterised: ldo_2 and ldo_simple can take targets, ldo_1 and the folded cascode cannot yet
 
 - `plan-t10` done (12 runs; the first relaxed set had PSRR at 0 dB,
