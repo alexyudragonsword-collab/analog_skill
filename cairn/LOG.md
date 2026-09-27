@@ -2,6 +2,21 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-27 · LDO load step shipped: two targets, a fifth wave panel, a guard on the transient
+
+- Maintainer picked the first two open items. `load_step` (post-step
+  1 % settling, droop; 1 µs edge, 100 µs window), rendered into every
+  LDO deck as a PWL source on the DC instance and a `tran` before
+  `.endc`, guarded by the AC result carried in shell variables; the
+  reader rejects an aborted trace (a flat stub read as a perfect step
+  and an ldo_2 search converged on it). Targets 20 µs and Vout/5 on
+  all five LDOs; step panel for amps and LDOs (2×3 grid). Searches:
+  Basic 0.66 (droop 182 mV, GBW 1.1 of 2 MHz), ldo_2 2.27, ldo_simple
+  0.39 (step targets met); LDO evaluations 1.5–2× slower, eval_seconds 14.
+  Tests: load_step unit, deck rendering, stub rejection, variants'
+  evaluate. CHANGELOG opens vNext; two ROADMAP items closed; table
+  and the three lessons in `cairn/pitfalls.md`.
+
 ## 2026-09-27 · v1.9 cut
 
 - vNext → v1.9 with a lead paragraph: two amplifier power caps, Try

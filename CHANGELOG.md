@@ -5,6 +5,41 @@ development milestones and were never tagged — v1.4 is the first release;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
+## vNext — unreleased
+
+- **The LDOs get a load step: two new targets and a fifth wave panel.**
+  When the phase-margin ceiling went (v1.6) the note said the honest
+  replacement was a transient; the amplifiers got theirs then and the
+  LDOs did not.  Every LDO evaluation now steps the DC instance's load
+  from the bench's minimum to its maximum in 1 µs, five µs in, and
+  watches 100 µs: `tsettle_load` is the return to within 1 % of the
+  post-step level (the static shift is load regulation's metric — a
+  simple LDO shifts 6 % over its step and would never "settle" against
+  the pre-step level), `droop` the deepest dip below it, and a window
+  whose last tenth still spans more than the band counts whole.  The
+  targets are 20 µs and a fifth of the output, round numbers set on
+  the five circuits: at their defaults Basic LDO dips 1.0 V and
+  recovers in 13 µs, `ldo_2` 0.38 V and does not settle in 100 µs,
+  `ldo_simple` 0.31 V in 0.4 µs — loops the AC metrics called perfect
+  and a transient calls slow.  The first searches under them: Basic
+  LDO 0.66 (droop 182 mV, settled in 3.7 µs, GBW 1.1 of 2 MHz — the
+  trade the metric exists to expose), `ldo_2` 2.27, `ldo_simple`
+  0.39 (droop 192 mV, settled in 0.2 µs — both step targets met; phase margin at 10 mA 49° and PSRR −31 dB short).  The step is added to the rendered deck (a PWL
+  source on the DC instance's output and a `tran` before `.endc`), so
+  the vendored decks are untouched, and only where the AC part found a
+  loop worth stepping — GBW above 10 kHz, both margins above 10° —
+  because on a hopeless point the transient spends 20–50 s failing to
+  converge and, aborted, once left a flat stub that read as a perfect
+  step (an `ldo_2` search converged on such points, 69 minutes for
+  600 evaluations); skipped or aborted, the two metrics are absent and
+  score as misses.  Cost where it runs: LDO evaluations take 1.5 to 2
+  times longer (Basic LDO's 600-evaluation search 9 → 16 minutes,
+  `ldo_2` 12 → 54, its small output capacitor making every transient
+  slow); the tab's estimate says 14 s per LDO evaluation now.  The
+  waves panel gains a fifth cell for the step response on amplifiers
+  (the 100 mV follower step it has measured since v1.6) and LDOs (the
+  load step).  Two ROADMAP items close.
+
 ## v1.9 — 2026-09-27
 
 A targets release. v1.8 settled the search; this one settles what the

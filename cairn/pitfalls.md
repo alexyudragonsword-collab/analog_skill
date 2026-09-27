@@ -1556,6 +1556,58 @@ archives hold cost-0 points for both, so the warm start closes them
 wherever a run has touched them; a fresh install needs the seeds.
 The NMCF finding again: the target set is reachable and the seed
 decides a cold run.
+### The LDO load step: the transient the AC metrics were missing, and what it costs
+
+Built 2026-09-27 (`evaluation.load_step`, the deck rendering, a fifth
+wave panel). Three things worth keeping from getting it right.
+
+**The edge and the window are the metric.** At a 100 ns edge a 50 mA
+step into the decks' ~0.5 nF on-chip capacitor is the edge, not the
+loop: Basic LDO dips 1.1 V, `ldo_2` 0.65 V; at 1 µs `ldo_2` dips 0.38
+V, at 5 µs 0.27 V and the loop is hidden. 1 µs is the usual load-step
+edge and the one shipped. A 40 µs window was too short — Basic LDO's
+archive best ramps back for 40 µs after a 0.9 V dip — so it is 100 µs.
+And settling is to the *post-step* level: against the pre-step level
+`ldo_simple`, which shifts 6 % over its step (LR 6 /A), never settles,
+and that is load regulation's finding, not the transient's.
+
+**Measured at the shipped defaults and the archives' bests:**
+
+| circuit | default: droop / settle | archive best under its targets | note |
+|---|---|---|---|
+| ldo_basic | 1.02 V / 13.0 µs | 0.92 V / 39.1 µs | AC-perfect, transient slow (a large Miller cap slews) |
+| ldo_simple | 0.31 V / 0.4 µs | 0.38 V / 0.3 µs | fast, poorly regulated |
+| ldo_2 | 0.38 V / never (a 30 mV wobble outlasts 100 µs) | 0.18 V / never | 9 pF of output capacitor |
+| ldo_1 | 10.8 V / — | 2.3 V / — | the ideal current sink pulls a dead output negative |
+| ldo_folded_cascode | 0.22 V / 0.7 µs | 0.42 V / never | |
+
+**An aborted transient reads as a perfect step, and hopeless points
+are the slow ones.** On a point with no crossing or a negative margin
+`tran` spends 20–50 s shrinking its timestep and aborts, leaving a
+stub of 199 rows inside 3 ns — flat, so `load_step` reported 0 µs and
+0 V. The first `ldo_2` search under the new targets found that: 597
+evaluations, 69 minutes, converged on GBW 6 kHz with a "perfect" step.
+Two fixes: the reader wants the trace to reach 90 % of the window or
+reports nothing (absent metrics score as misses), and the transient
+runs only where the AC part found a loop worth stepping — GBW above
+10 kHz and both margins above 10°, carried across ngspice's plot
+changes as shell variables (`set pm1 = $&phase_margin1`: a `meas`
+result is a vector of its plot and the later `dc`/`op` analyses
+change the current plot, which is why a first guard written against
+the vectors was always false). With the guard: Basic LDO's search 9
+→ 16 minutes, `ldo_2`'s 12 → 54 — its transients are slow on healthy
+points too, and a coarser `tran` step did not help there (it is
+convergence-bound, not step-bound); the cost is accepted and the tab's
+estimate raised to 14 s per LDO evaluation.
+
+**First searches under the two targets** (seed 0, 600 evaluations):
+Basic LDO 0.66 — droop 182 mV, settled in 3.7 µs, PM 95/98, and GBW
+1.1 of 2 MHz, the trade the metric exists to expose; `ldo_2` 2.27
+(droop 0.48 V, GBW 85 kHz, PSRR −30 dB); `ldo_simple`
+0.39 (droop 192 mV, settled in 0.2 µs — both step targets met; phase margin at 10 mA 49° and PSRR −31 dB short). Basic LDO, feasible under the AC-only targets at
+every recent seed, is open again by GBW: the number the ceiling used
+to stand in for now has a price the search can see.
+
 ### The failure gate pushes the LDO off the edge its optimum sits on
 
 The third-ranked item of the capability review: the archive's failure

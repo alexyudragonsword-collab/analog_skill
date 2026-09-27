@@ -287,6 +287,64 @@ def test_ldo_bench_table_matches_the_decks():
         assert b.vout == (4 * b.tb_vref if divided else b.tb_vref), key
 
 
+def test_load_step_settles_to_the_post_step_level_and_flags_ringing():
+    """Recovery is measured against where the output ends up (the static
+    shift is load regulation's metric, and ldo_simple shifts 6 % over
+    its step); a step to a new level that holds is settled at once; an
+    output still ringing at the end of the window has not settled at
+    all; droop is the dip below the pre-step level."""
+    from app.core.sizing.evaluation import (LOAD_STEP_AT, LOAD_STEP_STOP,
+                                            load_step)
+    t = np.linspace(0, LOAD_STEP_STOP, 4001)
+    dt = np.clip(t - LOAD_STEP_AT, 0, None)
+    v = 1.6 - 0.12 * np.exp(-dt / 1e-6) * (t >= LOAD_STEP_AT)
+    s = load_step(t, v)
+    assert abs(s['droop'] - 0.12) < 5e-3
+    # 0.12 e^{-x} = 0.016 -> x = ln(7.5) = 2.0 time constants
+    assert 1.9e-6 < s['tsettle_load'] < 2.2e-6
+    shifted = np.where(t >= LOAD_STEP_AT, 1.55, 1.6)     # 3 % low for good
+    s = load_step(t, shifted)
+    assert s['tsettle_load'] < 0.05e-6 and abs(s['droop'] - 0.05) < 1e-9
+    ring = 1.6 - 0.05 * np.sin(2 * np.pi * 1e6 * dt) * (t >= LOAD_STEP_AT)
+    assert load_step(t, ring)['tsettle_load'] == pytest.approx(
+        LOAD_STEP_STOP - LOAD_STEP_AT, rel=1e-3)
+    flat = np.full_like(t, 1.6)
+    assert load_step(t, flat) == {'tsettle_load': 0.0, 'droop': 0.0}
+
+
+def test_ldo_deck_gets_a_load_step_on_its_dc_instance(tmp_path):
+    """Every variant deck loads its DC copy through `Iload3 <out> 0`; the
+    rendered deck adds a PWL step source on that node (0 A in every DC
+    analysis) and a transient before .endc, so all five LDOs report a
+    load-step settling time without touching the vendored decks."""
+    from app.core.sizing import evaluation as ev
+    for key, node in (('ldo_basic', 'vout6'), ('ldo_simple', 'Vreg3'),
+                      ('ldo_1', 'vout6')):
+        spec = sizing.SIZING[key]
+        run = tmp_path / key
+        run.mkdir()
+        text = ev._render_testbench(spec, run).read_text()
+        b = spec.bench
+        assert f'Istep {node} 0 PWL(0 0 5e-06 0 6e-06 ' in text, key
+        assert f'{b.i_max - b.i_min:g})' in text, key
+        assert f'alter Iload3 dc={b.i_min:g}' in text, key
+        assert f'wrdata step.dat v({node})' in text, key
+        assert text.index('tran 2e-08 0.0001') < text.index('.endc')
+        # ...and only where the AC part found a loop worth stepping: an
+        # aborted transient on a hopeless point costs 20-50 s and leaves
+        # a flat stub
+        assert text.index('set pm1 = $&phase_margin1') < \
+            text.index('if $gbw1 > 1e4') < text.index('tran 2e-08 0.0001')
+    # a stub from an aborted transient reports nothing rather than a
+    # perfect step
+    from app.core.sizing.evaluation import _load_step_metrics
+    stub = tmp_path / 'stub'
+    stub.mkdir()
+    (stub / 'step.dat').write_text('\n'.join(
+        f'{i * 1e-11:.3e} 1.6' for i in range(200)) + '\n')
+    assert _load_step_metrics(stub) == {}
+
+
 def test_ldo_metric_fold_undoes_the_decks_arithmetic(tmp_path):
     """The deck prints vos = vout - 4*Vref and Power = -Ivdd*supply.  The
     reader reconstructs vout, takes the error against the circuit's own
@@ -321,6 +379,15 @@ def test_ldo_variant_evaluate():
         for k in ('pm_maxload', 'gbw_maxload', 'lnr', 'lr', 'iq',
                   'vos_maxload', 'vout_minload'):
             assert k in m, (key, k)
+        # the load step runs where the AC part found a loop worth
+        # stepping (ldo_simple, ldo_2 at their defaults) and is absent,
+        # scored as a miss, where it did not (ldo_1's negative margin at
+        # 1 mA, the folded cascode's 8 degrees at 10 mA)
+        stepped = (m['gbw_maxload'] > 1e4 and m['pm_maxload'] > 10
+                   and m['pm_minload'] > 10)
+        assert ('tsettle_load' in m) == stepped, (key, m)
+        if stepped:
+            assert 0 < m['droop'] < 2.0 and 0 <= m['tsettle_load'] <= 1e-4
         bench = sizing.SIZING[key].bench
         assert abs(m['vout_maxload'] - bench.vout) < 0.35, (key, m)
         assert abs(m['vout_minload'] - bench.vout) < 0.1, (key, m)
@@ -1098,8 +1165,13 @@ def test_two_ldo_variants_carry_their_own_targets():
     basic, two, simple = (targets(k) for k in ('ldo_basic', 'ldo_2',
                                                 'ldo_simple'))
     assert two == dict(basic, gbw_maxload=5e5, lnr=0.06)
-    assert simple == dict(basic, lr=10.0, lnr=0.06, psrr_maxload=-35.0)
-    assert targets('ldo_1') == targets('ldo_folded_cascode') == basic
+    # the load-step droop target is a fifth of each circuit's own output
+    assert simple == dict(basic, lr=10.0, lnr=0.06, psrr_maxload=-35.0,
+                          droop=pytest.approx(0.2 * 1.8))
+    assert basic['droop'] == pytest.approx(0.2 * 1.6)
+    assert targets('ldo_1') == basic
+    assert targets('ldo_folded_cascode') == dict(
+        basic, droop=pytest.approx(0.2 * 1.8))
 
 
 # ── what to try next, from the measured order ────────────────────────────────

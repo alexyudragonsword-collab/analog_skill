@@ -88,7 +88,7 @@ def _ldo_metrics_spec(bench: LdoBench) -> list:
     # phase margins are floors here too: the amplifiers' ceiling went when
     # settling time began measuring what over-compensation costs, and a
     # ceiling nothing measures is a guess on every circuit.  The LDO's
-    # honest replacement is a load-step settling metric (ROADMAP).
+    # honest replacement is the load step at the end of this list.
     hi, lo = _amps(bench.i_max), _amps(bench.i_min)
     return [
         MetricSpec('pm_maxload', f'Phase margin ({hi})', 'deg', 60.0,
@@ -106,6 +106,18 @@ def _ldo_metrics_spec(bench: LdoBench) -> list:
         MetricSpec('vos_maxload', f'Vout error ({hi})', 'V', 2e-3,
                    'absmin', 1.0),
         MetricSpec('iq', 'Quiescent current', 'A', 1e-3, 'min', 1.0),
+        # the load step the phase-margin ceiling stood in for: min load
+        # to max load in 1 us, the output's deepest dip and its return
+        # to within 1 % of where it ends up (evaluation.load_step).  At
+        # the shipped defaults Basic LDO dips 1.0 V and recovers in 13
+        # us, its archive best 0.9 V and 39 us — a loop the AC metrics
+        # call perfect and a transient calls slow.  20 us and a fifth of
+        # the output are round numbers set on those five circuits; the
+        # first search under them is in cairn/pitfalls.md.
+        MetricSpec('tsettle_load', 'Load-step settling (1%)', 's', 20e-6,
+                   'min', 1.0),
+        MetricSpec('droop', 'Load-step droop', 'V', 0.2 * bench.vout,
+                   'min', 1.0),
     ]
 
 
@@ -254,7 +266,7 @@ def _build_registry() -> dict[str, SizingSpec]:
         title=f'Basic LDO (SKY130, {_ldo_conditions(bench)})',
         kind='ldo', netlist='LDO_netlist.txt', variables='LDO_variables.txt',
         testbench='TB_LDO_ACDC.cir', metrics=_ldo_metrics_spec(bench),
-        fixed=('M_CL',), eval_seconds=8.0, wrdata_prefix='LDO_TB_ACDC',
+        fixed=('M_CL',), eval_seconds=14.0, wrdata_prefix='LDO_TB_ACDC',
         bench=bench)
     for v, prefix in _LDO_VARIANTS.items():
         bench = _LDO_BENCH[v]
@@ -265,7 +277,7 @@ def _build_registry() -> dict[str, SizingSpec]:
             title=f'LDO — {v} (SKY130, {_ldo_conditions(bench)})',
             kind='ldo', netlist=f'{v}.txt', variables=f'{v}_vars.spice',
             testbench=f'{v}_acdc.cir', metrics=metrics,
-            fixed=('M_CL',), eval_seconds=8.0, wrdata_prefix=prefix,
+            fixed=('M_CL',), eval_seconds=14.0, wrdata_prefix=prefix,
             bench=bench)
     for key, cfg in _SKILL_CIRCUITS.items():
         reg[f'skill_{key}'] = SizingSpec(

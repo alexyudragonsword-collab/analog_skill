@@ -74,14 +74,6 @@ like before touching anything.
   two runs per arm, on the eight-circuit protocol. The archive points
   of a CMA-ES run cluster along the directions it moved; a fit that
   is to predict a new direction's amount needs points along it.
-- A load-step settling metric for the LDOs, the honest replacement for
-  the ceiling that was removed: step the load 5 → 55 mA and measure
-  the output's settling and droop.  The testbench seam that carries
-  the amplifiers' step works the same way.
-- Show the step response in the waves panel. Capture carries it
-  (`t_step`, `v_step`) since settling time became a target; the amp
-  panel is a 2x2 grid with no free cell, so it needs a fifth panel or a
-  tab.
 - Ranking models or prompts for the finish needs several runs per
   cell: the model call is not repeatable (two sonnet runs from one
   point, 37% and nothing). Three proposals a round now use that spread

@@ -27,8 +27,21 @@ _WAVE_B2 = dict(color='#95a5a6', ls=':', lw=1.3)     # secondary pair
 _WAVE_A2 = dict(color='#148f77', lw=1.5)
 
 
+def _step_panel(ax, before, after, title, unit=1e3, ylabel='Vout (mV)'):
+    """The step response both kinds now carry: the amplifiers' 100 mV
+    follower step, the LDOs' load step.  Time in µs."""
+    for w, sty, lbl in ((before, _WAVE_B, 'default'),
+                        (after, _WAVE_A, 'optimized')):
+        if 't_step' in w:
+            ax.plot(w['t_step'] * 1e6, w['v_step'] * unit, label=lbl, **sty)
+    ax.set_xlabel('time (µs)'); ax.set_ylabel(ylabel)
+    ax.set_title(title, fontsize=10); ax.legend(fontsize=8)
+
+
 def _wave_panels_amp(axes, before, after):
-    (ax_g, ax_p), (ax_r, ax_t) = axes
+    (ax_g, ax_p, ax_s), (ax_r, ax_t, ax_x) = axes
+    _step_panel(ax_s, before, after, 'Step response (100 mV, follower)')
+    ax_x.axis('off')
     if 'freq' in before and 'freq' in after:
         ax_g.semilogx(before['freq'], before['adm_db'],
                       label='default', **_WAVE_B)
@@ -61,7 +74,10 @@ def _wave_panels_amp(axes, before, after):
 
 
 def _wave_panels_ldo(axes, before, after):
-    (ax_g, ax_p), (ax_r, ax_v) = axes
+    (ax_g, ax_p, ax_s), (ax_r, ax_v, ax_x) = axes
+    _step_panel(ax_s, before, after, 'Load step (min → max load)',
+                unit=1.0, ylabel='Vout (V)')
+    ax_x.axis('off')
     for w, sty, sty2, lbl in ((before, _WAVE_B, _WAVE_B2, 'default'),
                               (after, _WAVE_A, _WAVE_A2, 'optimized')):
         if 'lg_max' in w:
@@ -202,7 +218,11 @@ def render_wave_comparison(circuit: str, before: dict, after: dict) -> Path:
     matplotlib.use('Agg', force=False)
     import matplotlib.pyplot as plt
     kind = before.get('kind', 'amp')
-    if kind in ('amp', 'ldo', 'skill_ldo'):
+    if kind in ('amp', 'ldo'):
+        # four sweeps plus the step response; the sixth cell stays empty
+        fig, axes = plt.subplots(2, 3, figsize=(13.5, 7.0),
+                                 constrained_layout=True)
+    elif kind == 'skill_ldo':
         fig, axes = plt.subplots(2, 2, figsize=(9.6, 7.0),
                                  constrained_layout=True)
     else:

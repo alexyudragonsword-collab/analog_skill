@@ -72,8 +72,29 @@ def _render_testbench(spec: SizingSpec, run: Path,
     n_ac = 0                 # ldo: AC sweeps seen (0=maxload, 1=minload)
     pending_ac = False       # ldo: harvest the next plot line's vectors
     dc_injected = False      # ldo_basic: only the first VDD sweep
+    ldo_out = None           # ldo: the DC instance's output node
     for line in src.read_text().splitlines():
         ls = line.strip().lower()
+        if spec.kind == 'ldo' and ls == '.endc' and ldo_out and spec.bench:
+            # the load step: the DC instance sits at min load, the step
+            # source (0 A in every DC analysis) takes it to max load in
+            # LOAD_STEP_EDGE, and the output's dip and recovery are what
+            # the phase-margin ceiling stood in for (see load_step).
+            # Only where the AC part found a loop worth stepping: on a
+            # point with no crossing or a negative margin the transient
+            # spends 20-50 s failing to converge and, when it aborts,
+            # leaves a flat stub that once read as a perfect step (an
+            # ldo_2 search converged on exactly such points, 69 minutes
+            # for 600 evaluations).  Skipped, the step metrics are absent
+            # and score as misses, which those points are anyway.
+            b = spec.bench
+            out_lines += ['if $gbw1 > 1e4',
+                          '  if $pm1 > 10',
+                          '    if $pm2 > 10',
+                          f'      alter Iload3 dc={b.i_min:g}',
+                          f'      tran {LOAD_STEP_TSTEP:g} {LOAD_STEP_STOP:g}',
+                          f'      wrdata step.dat v({ldo_out})',
+                          '    end', '  end', 'end']
         if ls.startswith('.include'):
             inc = line.split(None, 1)[1].strip().strip('"')
             base = inc.rsplit('/', 1)[-1]
@@ -118,6 +139,21 @@ def _render_testbench(spec: SizingSpec, run: Path,
         elif spec.subckt and spec.subckt != 'HoiLee_AFFC_Pin_3':
             line = re.sub(r'\bHoiLee_AFFC_Pin_3\b', spec.subckt, line)
         out_lines.append(line)
+        if spec.kind == 'ldo' and ls.startswith('meas ac phase_margin'):
+            # a meas result is a vector of the plot it was measured in and
+            # the later dc/op analyses change the current plot; a shell
+            # variable ($&vec) survives them for the guard at the end
+            n = ls.split()[2][-1]
+            out_lines += [f'set pm{n} = $&phase_margin{n}',
+                          f'set gbw{n} = $&gain_bandwidth_product{n}']
+        if spec.kind == 'ldo' and ls.startswith('iload3 ') and spec.bench:
+            # every variant deck loads its DC instance through `Iload3
+            # <out> 0 ...`; the node name differs (vout6 / Vreg3)
+            ldo_out = line.split()[1]
+            b = spec.bench
+            out_lines.append(
+                f'Istep {ldo_out} 0 PWL(0 0 {LOAD_STEP_AT:g} 0 '
+                f'{LOAD_STEP_AT + LOAD_STEP_EDGE:g} {b.i_max - b.i_min:g})')
         if spec.kind == 'amp' and ls.startswith('ac dec'):
             if dump_waves:              # from the AC plot, before tran replaces it
                 out_lines.append('wrdata waves_ac.dat vdb(opout) vp(opout) '
@@ -154,6 +190,19 @@ STEP_INSTANCE = (
 
 STEP_SIZE, STEP_AT, STEP_BAND = 0.1, 1e-6, 0.01      # V, s, fraction
 
+#: the LDOs' load step: min load to max load in LOAD_STEP_EDGE at
+#: LOAD_STEP_AT, watched to LOAD_STEP_STOP; settled means within
+#: LOAD_STEP_BAND of the post-step output (1 % of Vout).  The edge is
+#: the usual 1 us of a load-step test: at 100 ns a 50 mA step into the
+#: decks' ~0.5 nF on-chip capacitor is the edge, not the loop (Basic
+#: LDO dips 1.1 V either way; ldo_2 0.65 V at 100 ns, 0.38 V at 1 us,
+#: 0.27 V at 5 us), and at 5 us the loop is hidden.  100 us of
+#: window: the well-regulated points recover over tens of us (Basic
+#: LDO's archive best ramps back for 40 us after a 0.9 V dip).
+LOAD_STEP_AT, LOAD_STEP_EDGE = 5e-6, 1e-6
+LOAD_STEP_TSTEP, LOAD_STEP_STOP = 20e-9, 100e-6
+LOAD_STEP_BAND = 0.01
+
 
 def settling(t: np.ndarray, v: np.ndarray) -> dict[str, float]:
     """tsettle (s) and overshoot (fraction) of a step response.
@@ -171,6 +220,47 @@ def settling(t: np.ndarray, v: np.ndarray) -> dict[str, float]:
     last = float(t[outside[-1]]) if outside.size else STEP_AT
     return {'tsettle': max(last - STEP_AT, 0.0),
             'overshoot': (float(v.max()) - final) / STEP_SIZE}
+
+
+def load_step(t: np.ndarray, v: np.ndarray) -> dict[str, float]:
+    """tsettle_load (s) and droop (V) of an LDO output after a load step.
+
+    Settling is to within LOAD_STEP_BAND (1 % of Vout) of the output's
+    post-step level — the mean of the window's last tenth — so it
+    measures the loop's recovery and not the static shift, which is the
+    load-regulation metric's job (ldo_simple shifts 6 % over its step
+    and would never "settle" against the pre-step level).  A window
+    whose last tenth still spans more than the band is ringing or
+    drifting, and the whole window counts.  droop is the deepest dip
+    below the pre-step level.
+    """
+    before = v[t < LOAD_STEP_AT * 0.9]
+    v0 = float(before.mean()) if before.size else float(v[0])
+    tail = v[t >= LOAD_STEP_STOP - (LOAD_STEP_STOP - LOAD_STEP_AT) / 10]
+    final = float(tail.mean()) if tail.size else float(v[-1])
+    band = LOAD_STEP_BAND * max(abs(v0), 1e-3)
+    if tail.size and float(tail.max() - tail.min()) > band:
+        last = float(t[-1])
+    else:
+        outside = np.where(np.abs(v - final) > band)[0]
+        last = float(t[outside[-1]]) if outside.size else LOAD_STEP_AT
+    after = v[t >= LOAD_STEP_AT]
+    droop = v0 - float(after.min()) if after.size else 0.0
+    return {'tsettle_load': max(last - LOAD_STEP_AT, 0.0),
+            'droop': max(droop, 0.0)}
+
+
+def _load_step_metrics(run: Path) -> dict[str, float]:
+    """Absent when the transient did not run or did not reach the end of
+    its window: an aborted `tran` ("timestep too small") leaves a stub
+    of a few nanoseconds that is flat, and flat once read as settled."""
+    try:
+        d = np.loadtxt(run / 'step.dat', ndmin=2)
+        if d.shape[0] < 10 or d[-1, 0] < 0.9 * LOAD_STEP_STOP:
+            return {}
+        return load_step(d[:, 0], d[:, 1])
+    except (OSError, ValueError):
+        return {}
 
 
 def _step_metrics(run: Path) -> dict[str, float]:
@@ -425,6 +515,9 @@ def capture_waves(circuit: str, values: dict, tag: str) -> dict:
         vd = _read_wave_file(run / 'waves_dc.dat')
     if vd and len(vd) >= 2:
         out.update(vin=vd[0], vout=vd[1])
+    step = _read_wave_file(run / 'step.dat')
+    if step and len(step) >= 2:
+        out.update(t_step=step[0], v_step=step[1])
     return out
 
 
@@ -531,6 +624,7 @@ def _ldo_metrics(run: Path, meas: dict, spec: SizingSpec) -> dict:
         if v:
             out[f'psrr_{load}'], out[f'dcgain_{load}'] = v
     out.update(meas)
+    out.update(_load_step_metrics(run))
     return out
 
 
