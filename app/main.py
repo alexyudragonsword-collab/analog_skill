@@ -135,6 +135,10 @@ def _start() -> int:
     stage('Unpacking bundled assets (first run, one time only)…'
           if paths.first_run_expected() else 'Preparing workspace…')
     paths.init_runtime()
+    # a fresh store gets the shipped starter rows, so the Sizing tab's
+    # "best known point" and Try next's warm start work before any search
+    from app.core.sizing import archive
+    archive.seed_starter()
 
     from PySide6.QtGui import QIcon
     if icon_path.is_file():

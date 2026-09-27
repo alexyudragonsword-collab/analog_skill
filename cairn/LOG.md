@@ -2,6 +2,17 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-27 · Starter archive shipped; macOS packaging declined
+
+- Maintainer: do items 1 and 2, drop macOS packaging. `tools/
+  build_starter_archive.py` (30 best per circuit + 5 per metric, 1 380
+  rows, 1.9 MB under `app/resources/starter_archive/`, bundled with the
+  existing resources), `archive.seed_starter()` on first start from
+  `main.py`, test that every built-in circuit's file fits its
+  variables and that NMCF and Ramos seed a cost-0 point. README,
+  CONTRIBUTING, CHANGELOG vNext; macOS packaging moved to Decided
+  against; section in `cairn/pitfalls.md`. Release next.
+
 ## 2026-09-27 · Failure gate from a characterised archive: no win, item closed
 
 - Item 4 of the agreed order (`plan-t15`, 12 runs): gate on vs off

@@ -6,6 +6,8 @@ import shutil
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
+import json
+
 import numpy as np
 import pytest
 
@@ -1470,6 +1472,36 @@ def test_cmaes_surrogate_solves_the_bowl_with_fewer_evaluations(
     run = sizing.optimize('skill_bootstrap', variables, budget=200,
                           algo='cmaes_surrogate', workers=1)
     assert run.best_cost < 1e-3, run.best_cost
+
+
+def test_starter_archive_seeds_a_fresh_store(monkeypatch, tmp_path):
+    """A fresh installation has no archive, and on four circuits a cold
+    600-evaluation search does not reach the shipped targets where a
+    warm start from the archive's best does; the shipped starter rows
+    close that gap.  Every built-in circuit has a file whose rows fit
+    its variables; seeding fills only the circuits that have nothing,
+    and the two amplifiers open at every cold seed have a cost-0 point
+    under their caps in what ships."""
+    from app.core.sizing import archive
+    for key, spec in sizing.SIZING.items():
+        if spec.pkg == 'user':
+            continue
+        f = archive.starter_dir() / f'{key}.jsonl'
+        assert f.is_file(), key
+        names = {v.name for v in sizing.parse_variables(key)}
+        rows = [json.loads(line) for line in f.read_text().splitlines()]
+        assert rows and all(set(r['values']) == names and r['metrics']
+                            for r in rows), key
+    monkeypatch.setattr(sizing.archive, 'archive_dir', lambda: tmp_path)
+    (tmp_path / 'amp_fan_smc.jsonl').write_text('{"values": {}, '
+                                                '"metrics": {}}\n')
+    seeded = archive.seed_starter()
+    assert 'amp_leung_nmcf' in seeded and 'amp_fan_smc' not in seeded
+    assert (tmp_path / 'amp_fan_smc.jsonl').read_text().count('\n') == 1
+    for key in ('amp_leung_nmcf', 'amp_ramos_pfc'):
+        names = [v.name for v in sizing.parse_variables(key)]
+        assert sizing.archive_best(key, names, None)['cost'] == 0.0, key
+    assert archive.seed_starter() == []            # nothing left to seed
 
 
 def test_archive_records_every_evaluation_and_rescores_on_new_targets(

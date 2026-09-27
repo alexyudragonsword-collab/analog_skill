@@ -115,8 +115,6 @@ No one has committed to these; they are recorded so the thought is not lost.
 - Sizing contracts beyond the amplifier one. Importing a custom design
   currently requires `.subckt <name> gnda vdda vinn vinp vout`; LDOs and other
   topologies have no import path.
-- macOS packaging. The test matrix runs on macOS, but no macOS build job
-  exists — only Windows and Linux artifacts are produced.
 - Let `init_runtime()` honour an `ANALOG_WORK_DIR` that is already set.
   Today it assigns one derived from `repo_root()`, so the scratch tree is
   fixed per checkout and a long-running experiment cannot coexist with the
@@ -223,6 +221,10 @@ Reopening these is fine, but start from the reasoning, not from zero.
   stops being a snapshot, and dated analyses in this repository cite these
   files as fetched. The discrepancy is noted in both READMEs instead, where
   a reader of *this* project will actually meet it.
+- **macOS packaging** (maintainer, 2026-09-27). The test matrix runs
+  on macOS and stays; no macOS build job will be added — Windows and
+  Linux packages only. Removed from the ideas list so it is not
+  re-proposed.
 - **The failure gate as a default, or behind Characterise** (measured
   2026-09-24 from an empty archive and 2026-09-27 from a characterised
   one, `cairn/pitfalls.md`). From 14 000 archived rows on `ldo_basic`

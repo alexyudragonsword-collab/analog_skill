@@ -107,6 +107,7 @@ Two generators, both needing `schemdraw`:
 ```bash
 python tools/gen_schematics.py           # Circuits tab (circuit-skills)
 python tools/gen_sizing_schematics.py    # Sizing tab (20 AnalogGym circuits)
+python tools/build_starter_archive.py [<user-data dir>]   # refresh app/resources/starter_archive
 ```
 
 The sizing generator asserts netlist fidelity: `Sheet.save()` parses the device

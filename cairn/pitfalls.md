@@ -1638,6 +1638,33 @@ stays off, the knob stays for the record, and the ROADMAP item closes
 — if it is ever revisited it needs `ldo_simple` at three seeds first,
 and the reason to expect a different answer.
 
+### A starter archive: the cold-start finding, turned into a file
+
+Four times in a week the same shape: the targets are reachable, the
+archive holds a cost-0 point, the cold 600-evaluation search does not
+get there at most seeds, and the warm start from the archive does —
+`amp_leung_nmcf` (0 / 1.00 / 1.44 / 1.11 cold under its cap),
+`amp_ramos_pfc` (0.49 / 0.22 / 0.002), `ldo_2` (1.46 / 1.48),
+`ldo_simple` (0.71 / 0.16). Every one of those archives existed only
+on the machine that ran the campaigns; a fresh installation had
+nothing, and *Try next* could only offer seeds. 2026-09-27 the rows
+ship: `tools/build_starter_archive.py` keeps, per built-in circuit,
+the 30 best under the shipped targets and the 5 best under each metric
+alone (a user who edits one target still finds a point near it), 1 380
+rows and 1.9 MB in `app/resources/starter_archive/`, and
+`archive.seed_starter()` copies them into the user store on first
+start for circuits with no archive of their own. The per-metric
+selection is what a first cut got wrong: 25 best per metric per
+circuit made 4.4 MB of mostly redundant rows.
+
+Two things it does not do. It does not make a cold search close those
+circuits — the search is unchanged; it makes the warm start available,
+which *Try next* offers first whenever the archive's best beats the
+run. And it is a snapshot of this project's own campaigns under this
+release's targets; when the targets move, the rows are re-scored
+under the new ones like any archive, and a new campaign is the time
+to regenerate the file.
+
 ### The failure gate pushes the LDO off the edge its optimum sits on
 
 The third-ranked item of the capability review: the archive's failure

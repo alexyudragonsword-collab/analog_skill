@@ -7,6 +7,20 @@ vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 
 ## vNext — unreleased
 
+- **A starter archive ships with the app.**  On `amp_leung_nmcf`,
+  `amp_ramos_pfc`, `ldo_2` and `ldo_simple` the shipped targets are
+  reachable — the archive holds a cost-0 point for each — and a cold
+  600-evaluation search does not reach them at most seeds, while "Try
+  next"'s warm start from the archive's best point does; a fresh
+  installation had no archive to start from.  Now
+  `app/resources/starter_archive/` carries, for every built-in circuit,
+  the 30 best archived evaluations under the shipped targets plus the
+  five best under each metric alone (1 380 rows, 1.9 MB), and the app
+  copies them into the user store on first start for every circuit
+  that has no archive of its own (`archive.seed_starter`; a user's own
+  rows are never touched).  The Sizing tab's "best known point" and Try
+  next's warm step therefore work from the first run.  Regenerate with
+  `tools/build_starter_archive.py` after a campaign worth keeping.
 - **The LDOs get a load step: two new targets and a fifth wave panel.**
   When the phase-margin ceiling went (v1.6) the note said the honest
   replacement was a transient; the amplifiers got theirs then and the

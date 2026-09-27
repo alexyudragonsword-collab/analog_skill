@@ -14,6 +14,7 @@ import json
 import threading
 from pathlib import Path
 
+from app import paths
 from app.core.sizing.assets import _user_data_root
 from app.core.sizing.scoring import score
 
@@ -59,6 +60,40 @@ def load(circuit: str) -> list[dict]:
 
 def size(circuit: str) -> int:
     return len(load(circuit))
+
+
+def starter_dir() -> Path:
+    """The starter archive shipped with the app (tools/build_starter_
+    archive.py): the best archived evaluations per built-in circuit."""
+    return paths.resources_dir() / 'starter_archive'
+
+
+def seed_starter() -> list[str]:
+    """Copy the starter rows into the user store for every circuit that
+    has no archive of its own yet; returns the circuits seeded.
+
+    Measured reason (cairn/pitfalls.md): on amp_leung_nmcf, amp_ramos_pfc,
+    ldo_2 and ldo_simple a cold 600-evaluation search does not reach the
+    shipped targets at most seeds, while a warm start from the archive's
+    best point does — and a fresh installation had no archive.  A user's
+    own rows are never touched: a circuit with any archive keeps it.
+    Never raises; a read-only install or a full disk must not stop the
+    app from starting."""
+    seeded = []
+    try:
+        src = starter_dir()
+        if not src.is_dir():
+            return seeded
+        for f in sorted(src.glob('*.jsonl')):
+            dst = archive_path(f.stem)
+            if dst.exists():
+                continue
+            with _lock:
+                dst.write_bytes(f.read_bytes())
+            seeded.append(f.stem)
+    except OSError:
+        pass
+    return seeded
 
 
 def best(circuit: str, names: list[str],
