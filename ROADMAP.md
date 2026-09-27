@@ -41,15 +41,14 @@ like before touching anything.
   element — which would edit a vendored netlist, which this project
   does not do. Until one is, the README's "27 circuits" carries two
   the search cannot close for a reason that is not the search.
-- The LDO variants' benchmark conditions. Their mapping is fixed
-  (vNext), and the honest defaults show what the vendored decks ask:
-  the line-regulation sweep starts *at* the regulated output for
-  `ldo_simple` / `ldo_folded_cascode` (1.8 V in for 1.8 V out) and
-  20 mV above it for `ldo_1` / `ldo_2` at 100 mA, so the LNR window
-  includes dropout and the 0.01 target is a pass-device-width contest
-  before it is a regulation one. Whether to keep Basic_LDO's targets on
-  the variants, or give each its own (LNR window, GBW at 10 mA), is a
-  design call to make with a sweep of the four at the new numbers.
+- The LDO variants' LNR window. The decks sweep line regulation from
+  *at* the regulated output (`ldo_simple`, `ldo_folded_cascode`: 1.8 V
+  in for 1.8 V out) or 20 mV above it (`ldo_1`, `ldo_2` at 100 mA), so
+  the window includes dropout and LNR is partly a pass-device-width
+  contest. The two variants that got their own targets (v1.9) have LNR
+  at 0.06 for that reason; a window that starts above dropout would be
+  a deck change, which this project does not make to vendored files —
+  so the number stays and the reason is recorded here.
 - The metric models, end to end in the app. Shipped in vNext as two
   menu entries (Characterise, Model proposals) behind the existing
   Optimize button; measured only through the scratch scripts so far.
@@ -75,10 +74,6 @@ like before touching anything.
   two runs per arm, on the eight-circuit protocol. The archive points
   of a CMA-ES run cluster along the directions it moved; a fit that
   is to predict a new direction's amount needs points along it.
-- Whether the settling target should be 2 or 2.5 µs. Four amplifiers
-  end within 0.5 µs of 2 µs with everything else met; 2.5 would make
-  two of them feasible. Set on one circuit; the sweep table is the
-  evidence for the call.
 - A load-step settling metric for the LDOs, the honest replacement for
   the ceiling that was removed: step the load 5 → 55 mA and measure
   the output's settling and droop.  The testbench seam that carries
