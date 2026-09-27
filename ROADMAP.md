@@ -59,13 +59,6 @@ like before touching anything.
   5 of 24. Decision: the proposals stay a menu entry and are not
   offered by "Try next". (The frozen builds carry scikit-learn: build
   run 104 passed all six jobs.)
-- The failure gate on a characterised circuit. `CMAES_FAIL_GATE` lost
-  from an empty archive (three seeds of four on ldo_basic: the LDO's
-  optimum sits at the edge of its dead region) and won once from a
-  1024-point archive (1.05 → 0.34). Measure the characterised case at
-  several seeds, and a threshold of 0.1 instead of 0.3, before it is
-  offered as a default or wired into "Try next" after a Characterise
-  run.
 - The sensitivity-informed finish, split. `FINISH_SENSITIVITY` bundles
   two changes — sensitivity lines in the prompt and a scan centred on
   the local fit's amount — and lost to the plain finish as a bundle
@@ -230,6 +223,12 @@ Reopening these is fine, but start from the reasoning, not from zero.
   stops being a snapshot, and dated analyses in this repository cite these
   files as fetched. The discrepancy is noted in both READMEs instead, where
   a reader of *this* project will actually meet it.
+- **The failure gate as a default, or behind Characterise** (measured
+  2026-09-24 from an empty archive and 2026-09-27 from a characterised
+  one, `cairn/pitfalls.md`). From 14 000 archived rows on `ldo_basic`
+  it lost two seeds of three at the shipped threshold and broke even
+  at a lower one; one `ldo_simple` seed won large and is one seed.
+  `CMAES_FAIL_GATE` stays off; the knob stays for the record.
 - **IPOP restarts from a fresh point on the stall signal** (asked in
   this file, measured 2026-09-24, `cairn/pitfalls.md`). On the two
   amplifiers open at every seed no fresh restart at population 32, 64

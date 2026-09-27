@@ -1608,6 +1608,36 @@ Basic LDO 0.66 — droop 182 mV, settled in 3.7 µs, PM 95/98, and GBW
 every recent seed, is open again by GBW: the number the ceiling used
 to stand in for now has a price the search can see.
 
+### The failure gate on a characterised circuit: still no win
+
+The measurement the gate's section below asked for, 2026-09-27
+(`plan-t15`): `CMAES_FAIL_GATE` on, from the archives the LDO work had
+built (13 800 rows on `ldo_basic`, 6 100 on `ldo_simple`), against
+off, under the load-step targets, three seeds on Basic and one on
+`ldo_simple`, at the shipped threshold 0.3 and the lower 0.1 the
+ROADMAP proposed. Redraw counts are the gate's own notes.
+
+| circuit / seed | off | gate, p_ok 0.3 (redraws) | gate, p_ok 0.1 (redraws) |
+|---|---|---|---|
+| ldo_basic s0 | 0.662 | **0.619** (325) | 0.727 (142) |
+| ldo_basic s1 | 0.616 | 0.981 (273) | **0.360** (230) |
+| ldo_basic s2 | **0.566** | 0.906 (154) | 0.851 (94) |
+| ldo_basic mean | **0.615** | 0.835 | 0.646 |
+| ldo_simple s0 | 0.392 | **0.090** (594) | 0.401 |
+
+At 0.3 the gate loses two Basic seeds of three and the mean by a
+third, redrawing a quarter to a half of every population from a
+classifier fed 14 000 rows; at 0.1 it wins one seed and loses two and
+comes out even. `ldo_simple`'s one seed at 0.3 is a large win (0.39 →
+0.09, nine of ten met) on 594 redraws — one seed, on a circuit whose
+seeds disagree by that much on their own (0.71 / 0.16 at two seeds
+under the same targets a day earlier). Read together with the
+empty-archive result below (worse on three seeds of four): a
+characterised archive does not turn the gate into a win either. It
+stays off, the knob stays for the record, and the ROADMAP item closes
+— if it is ever revisited it needs `ldo_simple` at three seeds first,
+and the reason to expect a different answer.
+
 ### The failure gate pushes the LDO off the edge its optimum sits on
 
 The third-ranked item of the capability review: the archive's failure

@@ -2,6 +2,16 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-27 · Failure gate from a characterised archive: no win, item closed
+
+- Item 4 of the agreed order (`plan-t15`, 12 runs): gate on vs off
+  from the 13 800-row ldo_basic archive and the 6 100-row ldo_simple
+  one, thresholds 0.3 and 0.1, load-step targets. Basic means 0.615
+  off / 0.835 at 0.3 / 0.646 at 0.1 over three seeds; ldo_simple one
+  seed 0.39 / 0.09 / 0.40. Stays off; ROADMAP item moved to Decided
+  against; table in `cairn/pitfalls.md`. Item 7 done as a draft
+  report to AnalogGym (delivered to the maintainer, not posted).
+
 ## 2026-09-27 · LDO load step shipped: two targets, a fifth wave panel, a guard on the transient
 
 - Maintainer picked the first two open items. `load_step` (post-step
