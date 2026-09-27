@@ -2,6 +2,12 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-27 · v1.10 cut
+
+- vNext → v1.10 (load step targets and panel, starter archive) with a
+  lead paragraph; version 1.10; release by workflow_dispatch with
+  `release_tag` v1.10.
+
 ## 2026-09-27 · Starter archive shipped; macOS packaging declined
 
 - Maintainer: do items 1 and 2, drop macOS packaging. `tools/

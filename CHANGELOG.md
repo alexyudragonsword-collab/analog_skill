@@ -5,7 +5,15 @@ development milestones and were never tagged — v1.4 is the first release;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
-## vNext — unreleased
+## v1.10 — 2026-09-27
+
+Two things the measurements of the last week asked for. The LDOs get
+the transient the phase-margin ceiling once stood in for — a load step
+with a settling time and a droop as targets, and a fifth wave panel
+that shows it for amplifiers and LDOs alike. And the app ships a
+starter archive, so the warm start that closes the circuits a cold
+search leaves open works on a fresh installation, not only on the
+machine that ran the campaigns.
 
 - **A starter archive ships with the app.**  On `amp_leung_nmcf`,
   `amp_ramos_pfc`, `ldo_2` and `ldo_simple` the shipped targets are
