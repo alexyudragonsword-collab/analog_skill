@@ -2,6 +2,13 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-27 · v1.9 cut
+
+- vNext → v1.9 with a lead paragraph: two amplifier power caps, Try
+  next's disagreeing-seeds rule, settling 3 µs, two LDO variants'
+  targets, two recorded as unstable as vendored. Version 1.9. Release
+  by workflow_dispatch with `release_tag` v1.9.
+
 ## 2026-09-26 · ldo_2 and ldo_simple get their own targets; ldo_1 and the folded cascode are the benchmark's unstable ones
 
 - Maintainer said do it. Decks read (read-only): all four break the

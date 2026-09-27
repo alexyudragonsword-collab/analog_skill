@@ -5,7 +5,17 @@ development milestones and were never tagged — v1.4 is the first release;
 vendored skill trees (`ngspice/`, `gmoverid/`, `transistor-models/`,
 `circuit-skills/`, `analoggym/`) are archived as-is and never modified.
 
-## vNext — unreleased
+## v1.9 — 2026-09-27
+
+A targets release. v1.8 settled the search; this one settles what the
+search is asked for, on the evidence of sweeping every circuit and
+every seed the search left open. Two amplifiers whose power cap sat
+inside their feasible boundary get their own, the amplifiers' settling
+target moves from 2 to 3 µs on a 27-circuit sweep, two LDO variants get
+targets a simple regulator can meet, and two are recorded as unstable
+as vendored. One behaviour change: "Try next" keeps offering seeds
+while the seeds disagree, because on the amplifiers nobody closed the
+seed picks the basin.
 
 - **Two amplifiers carry their own power cap.**  Sweeps at three seeds
   (`cairn/pitfalls.md`, "Two amplifiers nobody closes") put
