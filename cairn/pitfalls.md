@@ -1665,6 +1665,18 @@ release's targets; when the targets move, the rows are re-scored
 under the new ones like any archive, and a new campaign is the time
 to regenerate the file.
 
+*Verified on the v1.10 Linux PyInstaller package, 2026-09-28:* a
+`--smoke` start with an empty home seeds 27 files into
+`.local/share/analog-studio/AnalogStudio/data/sizing_archive`; a
+second start leaves them byte-identical, an appended user row
+included; the Sizing tab against that store shows "best under these
+targets costs 0.0000" for `amp_leung_nmcf` and `amp_ramos_pfc`. The
+LDO rows are thin on purpose: every evaluation before the load step
+lacks its two metrics and scores them as misses, so their best known
+points (Basic 0.36, `ldo_simple` 0.09, `ldo_2` 1.62) come from the
+handful of runs since — the next LDO campaign is the time to
+regenerate the file.
+
 ### The failure gate pushes the LDO off the edge its optimum sits on
 
 The third-ranked item of the capability review: the archive's failure

@@ -2,6 +2,16 @@
 
 This file records substantive progress in reverse-chronological order — newest entry at the top, right below this line. Keep each entry short — summary and pointer only; conclusions settle into `cairn/<topic>.md`.
 
+## 2026-09-28 · v1.10 verified as a user: the starter archive seeds a fresh install
+
+- Downloaded the Linux PyInstaller package, ran `--smoke` with an
+  empty home: 27 starter files seeded into the user store, exit 0; a
+  second start left them untouched (hashes equal, an appended row
+  kept); the Sizing tab on that store shows cost-0 best known points
+  for NMCF and Ramos. LDO starter rows are thin (pre-load-step rows
+  lack the two new metrics) — noted under the starter section in
+  `cairn/pitfalls.md`. No code change.
+
 ## 2026-09-27 · v1.10 cut
 
 - vNext → v1.10 (load step targets and panel, starter archive) with a
